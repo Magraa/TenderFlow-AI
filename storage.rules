@@ -1,0 +1,87 @@
+// Firebase Storage Security Rules
+// Version: 1.0.0
+// Description: Production-ready storage rules for Tender Automation
+
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Helper function to validate file size (max 2MB)
+    function isFileSizeValid() {
+      return request.resource.size < 2 * 1024 * 1024; // 2MB
+    }
+    
+    // Helper function to validate file type (images only)
+    function isImageTypeValid() {
+      return request.resource.contentType.matches('image/.*');
+    }
+    
+    // Helper function to validate file name (alphanumeric, dashes, underscores, dots only)
+    function isFileNameValid() {
+      return request.resource.name.matches('^[a-zA-Z0-9._-]+$');
+    }
+    
+    // ==========================================
+    // Firms Images
+    // ==========================================
+    match /firms/{firmId}/{imageType}/{fileName} {
+      // Allow authenticated users to read images
+      allow read: if isAuthenticated();
+      
+      // Allow authenticated users to upload images
+      allow write: if isAuthenticated() &&
+                          isFileSizeValid() &&
+                          isImageTypeValid() &&
+                          isFileNameValid() &&
+                          imageType in ['letterhead', 'signature', 'stamp'];
+      
+      // Prevent overwriting existing files (optional, for safety)
+      // Uncomment if you want to prevent accidental overwrites
+      // allow write: if isAuthenticated() && 
+      //                     isFileSizeValid() && 
+      //                     isImageTypeValid() && 
+      //                     !exists(/databases/(database)/documents/firms/$(firmId)/images/$(fileName));
+    }
+    
+    // ==========================================
+    // Temporary Uploads (for preview)
+    // ==========================================
+    match /temp/{userId}/{fileName} {
+      // Allow authenticated users to read their own temp files
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+      
+      // Allow authenticated users to write their own temp files
+      allow write: if isAuthenticated() && 
+                          request.auth.uid == userId &&
+                          isFileSizeValid() &&
+                          isImageTypeValid();
+      
+      // Auto-delete temp files after 24 hours (using metadata)
+      // Note: This requires Cloud Functions, not just storage rules
+    }
+    
+    // ==========================================
+    // System Files (logs, backups, etc.)
+    // ==========================================
+    match /system/{fileName} {
+      // Allow only authenticated admin users to read/write system files
+      // You can add custom claims for admin role
+      allow read, write: if isAuthenticated() && 
+                                request.auth.token.admin == true;
+    }
+    
+    // ==========================================
+    // Default Deny Rule
+    // ==========================================
+    match /{allPaths=**} {
+      // Deny all other access by default
+      allow read, write: if false;
+    }
+  }
+}

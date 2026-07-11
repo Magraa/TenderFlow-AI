@@ -42,9 +42,26 @@ type ExposedKeys =
   | 'createDocumentVersion'
   | 'getDocumentVersions'
   | 'deleteDocumentVersions'
+  | 'deleteDocumentVersion'
+  | 'updateDocumentVersion'
   | 'exportDatabase'
   | 'importDatabase'
-  | 'clearDatabase';
+  | 'clearDatabase'
+  | 'createPurposeMapping'
+  | 'getPurposeByCategory'
+  | 'listPurposeMappings'
+  | 'updatePurposeMapping'
+  | 'deletePurposeMapping'
+  | 'createItemHindiMapping'
+  | 'getItemHindiMapping'
+  | 'listItemHindiMappings'
+  | 'updateItemHindiMapping'
+  | 'deleteItemHindiMapping'
+  | 'createVendorHindiMapping'
+  | 'getVendorHindiMapping'
+  | 'listVendorHindiMappings'
+  | 'updateVendorHindiMapping'
+  | 'deleteVendorHindiMapping';
 
 type DbAdapter = {
   [K in ExposedKeys]: LocalAdapter[K] extends (...args: infer A) => infer R ? (...args: A) => Promise<Awaited<R>> : never;
@@ -104,9 +121,32 @@ export const db: DbAdapter = {
   createDocumentVersion: async (...args) => (await getAdapter()).createDocumentVersion(...args),
   getDocumentVersions: async (...args) => (await getAdapter()).getDocumentVersions(...args),
   deleteDocumentVersions: async (...args) => (await getAdapter()).deleteDocumentVersions(...args),
+  deleteDocumentVersion: async (...args) => (await getAdapter()).deleteDocumentVersion(...args),
+  updateDocumentVersion: async (...args) => (await getAdapter()).updateDocumentVersion(...args),
 
   // Backup
   exportDatabase: async (...args) => (await getAdapter()).exportDatabase(...args),
   importDatabase: async (...args) => (await getAdapter()).importDatabase(...args),
   clearDatabase: async (...args) => (await getAdapter()).clearDatabase(...args),
+
+  // Purpose Mappings
+  createPurposeMapping: async (...args) => (await getAdapter()).createPurposeMapping(...args),
+  getPurposeByCategory: async (...args) => (await getAdapter()).getPurposeByCategory(...args),
+  listPurposeMappings: async (...args) => (await getAdapter()).listPurposeMappings(...args),
+  updatePurposeMapping: async (...args) => (await getAdapter()).updatePurposeMapping(...args),
+  deletePurposeMapping: async (...args) => (await getAdapter()).deletePurposeMapping(...args),
+
+  // Item Hindi Mappings
+  createItemHindiMapping: async (...args) => (await getAdapter()).createItemHindiMapping(...args),
+  getItemHindiMapping: async (...args) => (await getAdapter()).getItemHindiMapping(...args),
+  listItemHindiMappings: async (...args) => (await getAdapter()).listItemHindiMappings(...args),
+  updateItemHindiMapping: async (...args) => (await getAdapter()).updateItemHindiMapping(...args),
+  deleteItemHindiMapping: async (...args) => (await getAdapter()).deleteItemHindiMapping(...args),
+
+  // Vendor Hindi Mappings
+  createVendorHindiMapping: async (...args) => (await getAdapter()).createVendorHindiMapping(...args),
+  getVendorHindiMapping: async (...args) => (await getAdapter()).getVendorHindiMapping(...args),
+  listVendorHindiMappings: async (...args) => (await getAdapter()).listVendorHindiMappings(...args),
+  updateVendorHindiMapping: async (...args) => (await getAdapter()).updateVendorHindiMapping(...args),
+  deleteVendorHindiMapping: async (...args) => (await getAdapter()).deleteVendorHindiMapping(...args),
 };

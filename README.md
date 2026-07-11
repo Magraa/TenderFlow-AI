@@ -1,408 +1,613 @@
 # Magra Tender Automation Panel
 
-Local-first Tender Automation Platform for preparing government-style tender documents with firm-specific branding, bilingual drafting, manual item pricing, GST slab control, and print-ready A4 output.
-
-This project is designed to work fully offline today and migrate to Firebase/Supabase/OpenAI later without rewriting UI flows.
+Professional government tender document automation system with firm-specific branding, bilingual support, AI-powered drafting, and print-ready A4 document generation.
 
 ---
 
-## 1) Why this exists
+## 1) What This Is
 
-Tender teams usually lose time on repeated work:
-- Re-entering vendor/firms and tender details
-- Formatting quotations and supply orders every time
-- Aligning text manually on letterheads
-- Re-checking GST totals and bill calculations
-- Managing multiple document variants for the same tender
+Magra Tender Automation is a comprehensive government tender management platform that eliminates repetitive work in tender document preparation. It provides:
 
-This system solves that with a single local panel where users can:
-- Create a tender once
-- Add items manually (with fixed GST slabs)
-- Generate all required document variants
-- Keep each firm’s letterhead and style isolated
-- Edit documents quickly in a rich editor
-- Export/print directly
+- **One-time tender creation** - Enter tender details and items once
+- **Multi-document generation** - Automatically create Vigyapti (Tender Notice), Quotation (Main/Alternate), Supply Order, and Firm Bill
+- **Firm-specific branding** - Each firm has its own letterhead, style profile, and AI prompts
+- **Bilingual support** - Seamless Hindi/English language switching
+- **Master dictionaries** - Reusable purpose mappings and Hindi transliteration for consistent professional language
+- **Document versioning** - Track all changes with version snapshots
+- **A4 layout engine** - Precise letterhead positioning with print-safe guides
 
 ---
 
-## 2) Product direction (what we are building)
+## 2) Complete Architecture
 
-Target workflow:
-1. Admin configures firms with pre-created letterhead assets.
-2. Tender operator creates a tender with manual items.
-3. System generates multiple document types (main/alternate quotations, vigyapti, supply order, main bill).
-4. Documents render in A4 layout with strict letterhead scope.
-5. Operator edits content in TipTap and exports PDF/print.
-6. Local version history and reusable layout/style controls keep output consistent.
+### Tech Stack
 
-Long-term target:
-- Cloud sync + multi-user + audit trails
-- AI-assisted drafting using firm-specific prompts
-- Production-grade PDF engine and distribution workflows
+| Layer | Technology |
+|-------|------------|
+| **Framework** | Next.js 15 (App Router) |
+| **Language** | TypeScript (strict mode) |
+| **Styling** | Tailwind CSS |
+| **Editor** | TipTap (WYSIWYG) |
+| **Database** | IndexedDB (client-side) |
+| **AI Providers** | Google Gemini, OpenAI, Groq, NVIDIA NIM |
+| **PDF Rendering** | A4 layout engine + print-to-PDF |
 
----
+### Service Layer Architecture
 
-## 3) Current integration status
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     UI Layer (app/*)                        │
+│  - Dashboard, Tender Creation, Document Preview, Editor     │
+└───────────────────────┬─────────────────────────────────────┘
+                        │
+┌───────────────────────▼─────────────────────────────────────┐
+│                   Service Layer (services/*)                │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
+│  │ dataService  │  │documentService│  │aiDraftService│     │
+│  └──────────────┘  └──────────────┘  └──────────────┘     │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
+│  │layoutEngine  │  │aiFormatter   │  │mappingService│     │
+│  └──────────────┘  └──────────────┘  └──────────────┘     │
+└───────────────────────┬─────────────────────────────────────┘
+                        │
+┌───────────────────────▼─────────────────────────────────────┐
+│                   Data Layer (data/*)                       │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
+│  │  db.ts       │  │schema.ts     │  │storageService│     │
+│  └──────────────┘  └──────────────┘  └──────────────┘     │
+└─────────────────────────────────────────────────────────────┘
+```
 
-### Core stack
-- Next.js 15 (App Router)
-- TypeScript (strict)
-- Tailwind CSS
-- TipTap editor
-- LocalStorage persistence layer
-- Service-based architecture for backend swapping
+### Service Responsibilities
 
-### Implemented domain features
-- Local-first data storage with migration-friendly normalization
-- Tender creation with manual line-item entry
-- Fixed GST slabs: `0, 5, 9, 12, 18`
-- Firm management using upload-first letterhead model
-- Letterhead fit modes: `contain`, `cover`, `stretch`
-- `contentStartY` + `pagePaddingLeft` alignment controls
-- A4 layout engine with safe-zone/page/bleed guides
-- Document types:
-  - `vigyapti`
-  - `quotation_main`
-  - `quotation_alt_1`
-  - `quotation_alt_2`
-  - `supply_aadesh`
-  - `firm_bill`
-- Strict letterhead scope enforcement
-- Document option toggles:
-  - Show letterhead background
-  - Show safe margin guide
-  - Lock header position
-  - Include signature
-  - Include stamp
-- Document version snapshots (local)
-- Duplicate document layout to sibling docs in same tender
-- AI formatter + template fallback path
-- Bilingual default templates (`default`, `english`, `hindi`)
-
-### Cloud/AI-ready interfaces already in place
-- `dataService` abstraction isolates UI from storage engine
-- `documentService` centralizes generation/version/layout logic
-- `aiDraftService` prompt stacking and fallback orchestration
-- `templateLoader` decouples content fallback from UI/editor
-- `layoutEngine` contains all layout constants/rules (no hardcoded UI positioning)
+| Service | Purpose |
+|---------|---------|
+| `dataService` | Thin CRUD interface for all data operations |
+| `db.ts` | IndexedDB wrapper with automatic schema migrations |
+| `documentService` | Document generation orchestration and versioning |
+| `aiDraftService` | AI prompt engineering, generation, and fallback |
+| `aiFormatter` | HTML sanitization and normalization |
+| `layoutEngine` | A4 page composition with letterhead and guides |
+| `mappingService` | Purpose mappings and Hindi transliteration management |
+| `governmentTemplates` | Structured template generation for Vigyapti/Supply Aadesh |
+| `aiClient` | Unified AI provider integration (Gemini, OpenAI, Groq, NVIDIA) |
 
 ---
 
-## 4) Letterhead policy (critical business rule)
+## 3) Complete Document Generation Flow
 
-Letterhead must be applied only for firm-bound docs.
+```mermaid
+graph TB
+    A[User clicks Generate] --> B[documentService.generateAndPersistDocument]
+    B --> C{Document Exists?}
+    C -->|Yes| D[Create Version Snapshot]
+    C -->|No| E[Create New Document Record]
+    D --> F[aiDraftService.generateDraft]
+    E --> F
+    F --> G[aiContextGenerator.buildPromptStack]
+    G --> H[AI Provider API Call]
+    H --> I{Response Valid?}
+    I -->|Yes| J[Return AI HTML]
+    I -->|No| K[Fallback Template]
+    K --> L[aiFormatter.sanitizeAIHTML]
+    J --> L
+    L --> M[layoutEngine.applyLetterheadLayoutPages]
+    M --> N[Save Document + Version]
+    N --> O[Return Document to UI]
+```
 
-Current scope rule:
-- Uses letterhead:
-  - `quotation_main`
-  - `quotation_alt_1`
-  - `quotation_alt_2`
-  - `supply_aadesh`
-  - `firm_bill`
-- Does not use letterhead by default:
-  - `vigyapti` (global/public notice)
+### Detailed Flow Steps
 
-The system also auto-corrects stale old docs where a global doc accidentally retained firm-letterhead flags from earlier data.
+1. **Prompt Construction** (`aiDraftService`)
+   - System prompt + Style profile + Doc type + Firm instructions
+   - Purpose library lookup for professional procurement language
 
----
+2. **AI Generation** (`aiClient`)
+   - Supports multiple providers: Gemini, OpenAI, Groq, NVIDIA
+   - Falls back to mock for development
+   - Returns structured HTML
 
-## 5) Architecture overview
+3. **Template Fallback** (if AI fails)
+   - `governmentTemplates.generateVigyapti()`
+   - `governmentTemplates.generateSupplyAadesh()`
+   - `simulateAIDraftHTML()` for basic documents
 
-### Layering model
+4. **Layout Composition** (`layoutEngine`)
+   - Letterhead background (if doc type requires)
+   - Safe zone guide
+   - Page boundary guide
+   - Print bleed margin
+   - Signature and stamp layers
 
-1. UI layer (`app/*`, `components/*`)
-- Collects user input
-- Displays preview/editor
-- Calls service layer only
-
-2. Service layer (`services/*`)
-- Business logic and orchestration
-- Document generation and fallback
-- Layout rendering and content sanitation
-- Versioning and reusable workflows
-
-3. Data layer (`data/schema.ts`, `services/storageService.ts`)
-- Firestore-like collections in localStorage
-- UUID entities + timestamps
-- Backward-compatible normalization/migrations
-
-### Why this design
-- Offline-first reliability
-- Easy backend replacement (Firebase/Supabase)
-- Testable business logic independent from UI
-- Safer evolution of document rules over time
-
----
-
-## 6) Key services
-
-### `services/dataService.ts`
-Thin interface used by UI; delegates CRUD to storage implementation.
-
-### `services/storageService.ts`
-LocalStorage DB engine with:
-- schema hydration
-- timestamping
-- UUID creation
-- normalization of legacy fields to new schema
-
-### `services/layoutEngine.ts`
-Responsible for:
-- A4 wrappers
-- absolute layer composition (page, letterhead, content)
-- fit mode handling
-- safe margin / page boundary / print bleed guides
-- grid snapping utilities
-- item table paging for long documents
-
-### `services/aiDraftService.ts`
-Responsible for:
-- prompt stack composition:
-  - global system prompt
-  - firm style profile hint
-  - document-type prompt
-  - firm-specific prompt
-- AI output shaping
-- default template fallback when response invalid
-- letterhead-aware layout composition
-
-### `services/aiFormatter.ts`
-Responsible for:
-- forcing structured `.doc-body` HTML
-- stripping dangerous tags
-- spacing normalization
-- width/font normalization
-- overflow warning detection
-
-### `services/templateLoader.ts`
-Responsible for:
-- selecting proper language template
-- falling back to default templates if needed
-
-### `services/documentService.ts`
-Responsible for:
-- document generation and persistence
-- document version snapshots
-- layout duplication
-- letterhead-scope enforcement at orchestration level
-
-### `services/firmService.ts`
-Responsible for:
-- firm validation/defaulting
-- firm duplication
-- style duplication
-- letterhead preview render
+5. **Versioning** (`documentService`)
+   - Saves previous content as version
+   - Assigns new version number
+   - Updates lastModified timestamp
 
 ---
 
-## 7) Data model (current)
+## 4) Document Types
 
-See `types/index.ts` for exact source of truth.
+| Type | Letterhead | Description |
+|------|------------|-------------|
+| `vigyapti` | No | Public tender notice |
+| `quotation_main` | Yes | Main firm quotation |
+| `quotation_alt_1` | Yes | Alternate quotation A |
+| `quotation_alt_2` | Yes | Alternate quotation B |
+| `supply_aadesh` | Yes | Formal supply order |
+| `firm_bill` | Yes | Tax bill/invoice |
 
-Main entities:
-- `Tender`
-- `Firm`
-- `TenderItem`
-- `TenderDocument`
-- `DocumentVersion`
-- `Settings`
+### Letterhead Policy
 
-Highlights:
-- Firm now includes:
-  - `fitLetterheadMode`
-  - `contentStartY`
-  - `pagePaddingLeft`
-  - prompt fields per doc type
-  - `firmStyleProfile`
-- Document includes:
-  - preview/layout toggles
-  - overflow warning text
-  - version references
-- Tender supports draft/final status and alternate firms.
+Letterhead is automatically applied only to firm-bound documents:
+- **Uses letterhead**: quotation_main, quotation_alt_1, quotation_alt_2, supply_aadesh, firm_bill
+- **No letterhead**: vigyapti (public notice)
+
+Old documents with incorrect letterhead flags are auto-corrected.
 
 ---
 
-## 8) Document generation flow
+## 5) AI Integration
 
-1. User selects doc type in tender screen.
-2. UI calls `documentService.generateAndPersistDocument(...)`.
-3. `documentService` resolves defaults and version handling.
-4. `aiDraftService` builds prompt stack + base content.
-5. `aiFormatter` sanitizes/normalizes HTML.
-6. If AI response invalid -> `templateLoader` provides fallback template.
-7. `layoutEngine` renders final A4 layered HTML.
-8. Document saved and version snapshot updated.
+### Supported Providers
 
-Editor updates:
-- TipTap edits call `documentService.updateDocumentContent(...)`
-- Previous content is versioned before update.
+| Provider | Free Tier | Best For | API Key Required |
+|----------|-----------|----------|------------------|
+| **Google Gemini** | ✅ Yes | General use, Indian languages | ✅ Yes |
+| **Groq** | ✅ Yes | Fast generation (Llama 3) | ✅ Yes |
+| **NVIDIA NIM** | ✅ Yes | Open source models | ✅ Yes |
+| **OpenAI** | ❌ No | High quality output | ✅ Yes |
+| **Mock** | ✅ Yes | Development/testing | ❌ No |
 
----
-
-## 9) Manage Firms capabilities
-
-Implemented in `app/manage-firms/page.tsx`.
-
-Supports:
-- Required letterhead upload
-- Optional signature and stamp uploads
-- Language default selection
-- Style profile selection
-- Fit mode selection (`contain/cover/stretch`)
-- `contentStartY` slider + numeric input
-- Snap-to-grid alignment
-- `pagePaddingLeft` control
-- Firm-specific prompt fields:
-  - quotation
-  - supply order
-  - vigyapti
-  - bill (optional, gated by toggle)
-- Live A4 preview with guides:
-  - safe zone
-  - page boundary
-  - print bleed
-- Duplicate firm profile
-- Duplicate style settings from another firm
-
----
-
-## 10) Current pages and responsibilities
-
-- `app/dashboard/page.tsx`
-  - Tender list, status overview, entry point.
-
-- `app/tenders/new/page.tsx` + `components/forms/createTenderForm.tsx`
-  - Tender creation and manual item capture.
-
-- `app/tenders/[id]/page.tsx`
-  - Multi-document generation, editing, preview, toggles, version history.
-
-- `app/manage-firms/page.tsx`
-  - Firm branding/layout/prompt administration.
-
-- `app/settings/page.tsx`
-  - Organization-level defaults and firm summary entry point.
-
----
-
-## 11) Setup and run
+### Environment Configuration
 
 ```bash
+# Choose your provider
+NEXT_PUBLIC_AI_PROVIDER=gemini  # gemini, openai, groq, nvidia, mock
+
+# Get API key from your provider
+NEXT_PUBLIC_AI_API_KEY=your_api_key_here
+
+# Select model (provider-specific)
+NEXT_PUBLIC_AI_MODEL=gemini-1.5-flash
+```
+
+### AI Prompt Stack
+
+```
+1. System Prompt (always same)
+   "You write procurement documents in structured HTML..."
+
+2. Style Profile (firm-specific)
+   "Use strict official structure, numbered sections, formal tone."
+
+3. Document Type
+   "Generate a quotation for the main firm."
+
+4. Firm Instructions (optional)
+   [Custom AI prompt from firm settings]
+```
+
+### Purpose Library Integration
+
+The AI generation uses procurement purpose mappings to professionalize language:
+
+```
+Category: "fire_fighting"
+↓
+Purpose: "अग्निशमन एवं जल आपूर्ति कार्य हेतु आवश्यक सामग्री"
+↓
+Document: "नगर परिषद द्वारा [Purpose] क्रय किया जाना प्रस्तावित है"
+```
+
+### Hindi Transliteration
+
+English item names are automatically transliterated to Hindi:
+
+```
+Input: "Fire Hose Nozzle"
+↓
+AI API Call (first time only)
+↓
+Output: "अग्निशमन होज नोज़ल"
+↓
+Saved in itemHindiMappings for reuse
+```
+
+---
+
+## 6) Master Dictionaries
+
+### Purpose Mappings
+
+Category-based professional procurement purposes:
+
+```
+Category: "fire_fighting"
+  → Hindi: "अग्निशमन एवं जल आपूर्ति कार्य हेतु आवश्यक सामग्री"
+  → English: "Materials required for fire fighting and water supply work"
+
+Category: "water_supply"
+  → Hindi: "जल आपूर्ति एवं पाइप लाइन निर्माण कार्य हेतु आवश्यक सामग्री"
+```
+
+### Hindi Mappings
+
+| Type | Example | Usage |
+|------|---------|-------|
+| **Item Hindi** | "Fire Hose Nozzle" → "अग्निशमन होज नोज़ल" | In item tables |
+| **Vendor Hindi** | "M/s ABC Traders" → "एम/एस एबीसी ट्रेडर्स" | In firm details |
+
+### Management Interface
+
+Available in the application for:
+- View all mappings
+- Add new mappings
+- Edit existing mappings
+- Bulk import/export (JSON)
+
+---
+
+## 7) Firm Management
+
+### Configuration Fields
+
+| Field | Purpose |
+|-------|---------|
+| **Letterhead Upload** | Firm branding background image |
+| **Signature Upload** | Digital signature (optional) |
+| **Stamp Upload** | Digital stamp (optional) |
+| **Fit Mode** | `contain`, `cover`, or `stretch` for letterhead |
+| **Header Spacing** | Distance from top for content (px) |
+| **Footer Spacing** | Reserved space at bottom (px) |
+| **Page Margin** | Left/right margins (px) |
+| **Style Profile** | `govt_formal`, `minimal_business`, `bilingual`, `table_heavy` |
+| **Default Language** | Hindi or English |
+| **AI Prompts** | Custom instructions for each document type |
+| **Firm Details** | Address, GST, mobile, contact person |
+| **Bank Details** | Account, IFSC, branch for bill generation |
+
+### Live A4 Preview
+
+Real-time preview with:
+- Letterhead background
+- Safe zone guide (orange dashed)
+- Page boundary (dashed)
+- Print bleed margin (dotted)
+- Signature/stamp positioning
+
+---
+
+## 8) Tender Creation Flow
+
+```mermaid
+graph LR
+    A[Create New Tender] --> B[Basic Details]
+    B --> C[Add Items]
+    C --> D[Review & Save]
+    D --> E[Select Firm]
+    E --> F[Generate Documents]
+    F --> G[Edit Preview]
+    G --> H[Export PDF/Print]
+```
+
+### Steps
+
+1. **Basic Details**
+   - Tender title and number
+   - Department profile
+   - Main and alternate firms
+   - Language preference
+   - Place and district
+
+2. **Add Items**
+   - Product name, description
+   - Quantity and rate
+   - GST percentage (0, 5, 9, 12, 18)
+   - Estimated amount (for Vigyapti)
+   - Category assignment (for purpose mapping)
+
+3. **Generate Documents**
+   - Select document types
+   - Choose language
+   - Adjust letterhead toggles
+   - Preview output
+
+4. **Edit & Export**
+   - Rich text editor for content refinement
+   - Toggle letterhead, guides, signature, stamp
+   - Print directly or export to PDF
+
+---
+
+## 9) Data Model
+
+### Main Entities
+
+```typescript
+interface Tender {
+  id, createdAt, updatedAt
+  title, tenderNumber, departmentProfileId
+  mainFirmId, alternateFirms: string[]
+  items: TenderItem[]
+  language, status: 'draft' | 'final'
+  placeName, districtName
+  publishDate, submissionDate, openingDate
+  estimatedBudget, estimatedAmount
+}
+
+interface Firm {
+  id, createdAt, updatedAt
+  name, headerImagePath
+  signatureImagePath?, stampImagePath?
+  defaultLanguage, fitLetterheadMode
+  headerSpacing, footerSpacing, pageMargin
+  firmStyleProfile: 'govt_formal' | 'minimal_business' | 'bilingual' | 'table_heavy'
+  aiPromptQuotation, aiPromptBill?
+  firmCity, firmAddress, gstNumber
+  mobileNumber, contactPerson
+  bankName, bankBranch, ifscCode, accountNumber
+  panNumber, billInstructions
+}
+
+interface TenderItem {
+  id, createdAt, updatedAt
+  tenderId, productName, description
+  category, quantity, unit, rate
+  gstPercent: 0 | 5 | 9 | 12 | 18
+  estimatedAmount?, totalAmount
+}
+
+interface TenderDocument {
+  id, createdAt, updatedAt
+  tenderId, docType
+  contentHTML, pdfPath
+  currentVersion, versions: DocumentVersion[]
+  showLetterheadBackground, showSafeMarginGuide
+  lockHeaderPosition, includeSignature, includeStamp
+  footerNotes, overflowWarning
+}
+
+interface PurposeMapping {
+  id, createdAt, updatedAt
+  category, professionalPurpose, language
+  usageCount, isAutoGenerated
+}
+
+interface HindiMapping {
+  id, createdAt, updatedAt
+  englishName, hindiName, type: 'item' | 'vendor'
+  usageCount, isAutoGenerated
+}
+```
+
+---
+
+## 10) Setup and Run
+
+### Prerequisites
+
+- Node.js 18+ 
+- npm or yarn
+
+### Installation
+
+```bash
+# Clone the repository
+git clone <repository-url>
+cd "e:\Magra Automation"
+
+# Install dependencies
 npm install
+
+# Configure environment
+cp .env.example .env
+# Edit .env with your settings
+
+# Run development server
 npm run dev
 ```
 
-Production:
+### Production Build
+
 ```bash
+# Type checking
 npm run type-check
+
+# Build production bundle
 npm run build
+
+# Start production server
 npm start
 ```
 
-Open:
-- `http://localhost:3000/dashboard`
+### Open Application
+
+```
+http://localhost:3000/dashboard
+```
 
 ---
 
-## 12) Data backends
+## 11) Data Storage
 
-Default backend is local/offline (`localStorage`).
+### Default Backend (Client-Side)
 
-### A) Local (default)
+- **Storage**: IndexedDB
+- **Key**: `tender-automation-db`
+- **Persistence**: Browser-local (survives refresh)
+- **Offline**: Fully offline capable
 
-Storage key:
-- `tender-automation-db`
+### Cloud Backend (Optional - Firebase)
 
-Properties:
-- Fully browser-local
-- No server dependency for core workflows
-- Auto-normalizes old data fields to new schema on load
+Set environment variables:
 
-Backup methods are available through `dataService.backup`.
+```bash
+NEXT_PUBLIC_DATA_BACKEND=firestore
+NEXT_PUBLIC_FIREBASE_API_KEY=your_api_key
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
+NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
+```
 
----
-
-### B) Firestore (cloud + offline cache)
-
-1) Set backend selector:
-- `NEXT_PUBLIC_DATA_BACKEND=firestore`
-
-2) Set Firebase web config (client SDK):
-- `NEXT_PUBLIC_FIREBASE_API_KEY`
-- `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`
-- `NEXT_PUBLIC_FIREBASE_PROJECT_ID`
-- `NEXT_PUBLIC_FIREBASE_APP_ID`
-- Optional: `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`
-- Optional: `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`
-
-3) Optional runtime knobs:
-- `NEXT_PUBLIC_FIRESTORE_NAMESPACE` (defaults to `default`)
-- `NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST` (e.g. `127.0.0.1:8080`)
-
-Notes:
-- IndexedDB persistence is enabled best-effort (works offline; multi-tab may disable persistence in one tab).
-- Firestore data is stored under `tap/<namespace>/...` collections.
+Firestore collections: `tap/<namespace>/tenders`, `tap/<namespace>/firms`, etc.
 
 ---
 
-## 13) Known constraints (current)
+## 12) Key Features
 
-- PDF endpoint is still a placeholder-quality path for production-grade rendering.
-- HTML preview uses iframe render and depends on generated HTML quality.
-- Image optimization warning remains in firm preview due to `<img>` usage.
-- AI generation currently template-driven (not connected to remote model provider).
+### ✅ Implemented
 
----
+- Local-first data storage with IndexedDB
+- Multi-firm support with individual branding
+- Letterhead fit modes: contain, cover, stretch
+- Fixed GST slabs: 0, 5, 9, 12, 18
+- Document versioning with snapshots
+- A4 layout engine with print-safe guides
+- Bilingual support (Hindi/English)
+- AI-powered document generation
+- Purpose library for professional language
+- Hindi transliteration for items and vendors
+- Master dictionaries management
+- Document layout duplication across documents
+- Export to PDF via print dialog
+- Backup/restore functionality
 
-## 14) Future scope (recommended roadmap)
+### 🚧 In Progress
 
-### A) Cloud and collaboration
-- Firebase/Supabase persistence adapter
-- Multi-device sync
-- Role-based access (admin/operator/reviewer)
-- Conflict-aware offline sync
+- Production-grade PDF engine (Puppeteer)
+- Firebase/Supabase cloud sync
+- Multi-user collaboration
 
-### B) AI integration maturity
-- OpenAI/Anthropic provider adapters
-- Prompt versioning per firm
-- Model fallback chain
-- Structured output validation with schema checks
+### 📋 Planned
 
-### C) Document and workflow operations
-- True server-grade PDF pipeline (Puppeteer/Playwright)
-- Approval workflow (Draft → Review → Final)
 - Digital signature workflows
-- Tender package exports (zip bundle)
-- Document diff and side-by-side version comparison
-
-### D) Layout intelligence
-- Real header-height auto detection
-- Interactive drag/drop anchors for content layer
-- Per-document layout presets
-- Auto overflow pagination warnings before save
-
-### E) Audit and observability
-- Action logs (who changed what and when)
-- Event timeline per tender
-- Metrics dashboard (turnaround time, doc generation frequency)
+- Tender package export (zip bundle)
+- Document diff and version comparison
+- Approval workflows (Draft → Review → Final)
+- Audit logs and activity timeline
 
 ---
 
-## 15) Developer guidance
+## 13) Project Structure
 
-If you add a new feature:
-1. Extend `types/index.ts` first.
-2. Update normalization in `services/storageService.ts`.
-3. Add business logic in service layer.
-4. Keep UI dumb (consume service APIs only).
-5. Verify:
-   - `npm run type-check`
-   - `npm run build`
-
-Do not hardcode layout rules in components; keep layout logic in `services/layoutEngine.ts`.
+```
+e:\Magra Automation
+├── app/                          # Next.js App Router pages
+│   ├── dashboard/               # Tender list and overview
+│   ├── tenders/                 # Tender creation and management
+│   │   ├── new/                # New tender form
+│   │   └── [id]/               # Tender documents and editor
+│   ├── manage-firms/           # Firm branding configuration
+│   ├── settings/               # System settings
+│   ├── api/                    # API routes
+│   │   └── pdf/               # PDF generation endpoints
+│   ├── layout.tsx              # Root layout
+│   ├── page.tsx                # Landing page
+│   └── providers.tsx           # React context providers
+├── components/                  # React components
+│   ├── forms/                  # Form components
+│   │   ├── createTenderForm.tsx
+│   │   └── professionalTenderForm.tsx
+│   ├── editors/                # Rich text editor
+│   │   └── richTextEditor.tsx
+│   ├── ui/                     # shadcn/ui components
+│   └── documentViewer.tsx      # Document preview
+├── services/                   # Business logic layer
+│   ├── dataService.ts          # Data CRUD interface
+│   ├── db.ts                   # IndexedDB wrapper
+│   ├── documentService.ts      # Document orchestration
+│   ├── aiDraftService.ts       # AI generation
+│   ├── aiFormatter.ts          # HTML sanitization
+│   ├── layoutEngine.ts         # A4 layout
+│   ├── mappingService.ts       # Purpose & Hindi mappings
+│   ├── governmentTemplates.ts  # Template generation
+│   ├── aiClient.ts             # AI provider integration
+│   └── firmService.ts          # Firm operations
+├── types/                      # TypeScript types
+├── data/                       # Schema definitions
+├── public/                     # Static assets
+├── .env.example                # Environment template
+└── package.json
+```
 
 ---
 
-## 16) Project goal in one line
+## 14) Developer Guide
 
-Build a production-grade tender office automation engine where every firm can generate documents in its own style, on its own letterhead, with consistent structure, editable output, and cloud migration readiness.
+### Adding a New Feature
+
+1. **Extend types/index.ts** - Define new data structures
+2. **Update db.ts** - Add database operations
+3. **Extend dataService.ts** - Add CRUD interface
+4. **Add business logic** - Services layer
+5. **Update UI components** - Frontend integration
+
+### Key Rules
+
+- ❌ Don't hardcode layout in components → use `layoutEngine`
+- ✅ Keep UI dumb → consume services only
+- ✅ All layout rules in `layoutEngine.ts`
+- ✅ Business logic in service layer
+- ✅ Verify: `npm run type-check` and `npm run build`
+
+### Useful Commands
+
+```bash
+# Type checking
+npm run type-check
+
+# Build
+npm run build
+
+# Development server
+npm run dev
+
+# Test (if implemented)
+npm test
+```
+
+---
+
+## 15) API Endpoints
+
+### PDF Generation
+
+```
+POST /api/pdf/generate
+Content-Type: application/json
+
+{
+  "documentId": "uuid",
+  "firmId": "uuid",
+  "language": "hindi"
+}
+
+Response: { pdfPath: "https://..." }
+```
+
+---
+
+## 16) Contributing
+
+1. Fork the repository
+2. Create feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open Pull Request
+
+---
+
+## 17) License
+
+This project is proprietary to Magra Automation.
+
+---
+
+## 18) Contact
+
+For support or inquiries, contact the development team.
+
+---
+
+**Built with Next.js, TypeScript, and AI.**

@@ -7,7 +7,7 @@ import { Firm, FirmStyleProfile, LetterheadFitMode } from '@/types';
 import { dataService } from '@/services/dataService';
 import { firmService } from '@/services/firmService';
 import { layoutEngine } from '@/services/layoutEngine';
-import { uploadFirmImage, deleteFirmImage } from '@/services/imageUploadService';
+import { uploadFirmImage } from '@/services/imageUploadService';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -50,6 +50,17 @@ const EMPTY_FORM: FirmFormState = {
   aiPromptQuotation: '',
   aiPromptBill: '',
   firmStyleProfile: 'govt_formal',
+  firmCity: '',
+  firmAddress: '',
+  gstNumber: '',
+  mobileNumber: '',
+  contactPerson: '',
+  bankName: '',
+  bankBranch: '',
+  ifscCode: '',
+  accountNumber: '',
+  panNumber: '',
+  billInstructions: '',
 };
 
 function clampNumber(value: number, min: number, max: number): number {
@@ -70,15 +81,6 @@ function useDebouncedValue<T>(value: T, delayMs: number): T {
   }, [value, delayMs]);
 
   return debounced;
-}
-
-function fileToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
-    reader.onerror = () => reject(new Error('Failed to read file.'));
-    reader.readAsDataURL(file);
-  });
 }
 
 function getFitStyle(mode: LetterheadFitMode) {
@@ -347,6 +349,7 @@ export default function ManageFirmsPage() {
   const [previewZoom, setPreviewZoom] = useState(1);
   const [mobilePreviewOpen, setMobilePreviewOpen] = useState(false);
   const [aiSectionOpen, setAiSectionOpen] = useState(false);
+  const [billSectionOpen, setBillSectionOpen] = useState(false);
   const [formData, setFormData] = useState<FirmFormState>({ ...EMPTY_FORM });
   const initialFormDataRef = useRef<FirmFormData>({ ...EMPTY_FORM });
 
@@ -385,6 +388,7 @@ export default function ManageFirmsPage() {
     setPreviewZoom(1);
     setMobilePreviewOpen(false);
     setAiSectionOpen(false);
+    setBillSectionOpen(false);
     setDialogOpen(true);
   };
 
@@ -410,6 +414,17 @@ export default function ManageFirmsPage() {
       aiPromptQuotation: firm.aiPromptQuotation,
       aiPromptBill: firm.aiPromptBill || '',
       firmStyleProfile: firm.firmStyleProfile,
+      firmCity: firm.firmCity || '',
+      firmAddress: firm.firmAddress || '',
+      gstNumber: firm.gstNumber || '',
+      mobileNumber: firm.mobileNumber || '',
+      contactPerson: firm.contactPerson || '',
+      bankName: firm.bankName || '',
+      bankBranch: firm.bankBranch || '',
+      ifscCode: firm.ifscCode || '',
+      accountNumber: firm.accountNumber || '',
+      panNumber: firm.panNumber || '',
+      billInstructions: firm.billInstructions || '',
     };
     setEditingFirm(firm);
     setStyleSourceId('');
@@ -422,6 +437,7 @@ export default function ManageFirmsPage() {
     setPreviewZoom(1);
     setMobilePreviewOpen(false);
     setAiSectionOpen(false);
+    setBillSectionOpen(false);
     setDialogOpen(true);
   };
 
@@ -483,29 +499,6 @@ export default function ManageFirmsPage() {
     }
   };
 
-  const handleDeleteImage = async (field: 'headerImagePath' | 'signatureImagePath' | 'stampImagePath') => {
-    const currentUrl = formData[field];
-    if (!currentUrl || currentUrl.startsWith('data:')) {
-      // Local data URL, just clear it
-      setFormData((prev) => ({ ...prev, [field]: '' }));
-      return;
-    }
-    
-    try {
-      // Delete from Firebase Storage
-      await deleteFirmImage(currentUrl);
-      
-      // Clear form field
-      setFormData((prev) => ({ ...prev, [field]: '' }));
-      
-      // Clear file info
-      setFormData((prev) => ({ ...prev, [`${field}FileInfo`]: undefined }));
-    } catch (deleteError) {
-      const message = deleteError instanceof Error ? deleteError.message : 'Failed to delete image.';
-      setError(message);
-    }
-  };
-
   const handleApplyStyle = () => {
     if (!styleSourceFirm) return;
     setFormData((previous) => ({
@@ -525,6 +518,17 @@ export default function ManageFirmsPage() {
       aiPromptQuotation: styleSourceFirm.aiPromptQuotation,
       aiPromptBill: styleSourceFirm.aiPromptBill || '',
       firmStyleProfile: styleSourceFirm.firmStyleProfile,
+      firmCity: styleSourceFirm.firmCity || '',
+      firmAddress: styleSourceFirm.firmAddress || '',
+      gstNumber: styleSourceFirm.gstNumber || '',
+      mobileNumber: styleSourceFirm.mobileNumber || '',
+      contactPerson: styleSourceFirm.contactPerson || '',
+      bankName: styleSourceFirm.bankName || '',
+      bankBranch: styleSourceFirm.bankBranch || '',
+      ifscCode: styleSourceFirm.ifscCode || '',
+      accountNumber: styleSourceFirm.accountNumber || '',
+      panNumber: styleSourceFirm.panNumber || '',
+      billInstructions: styleSourceFirm.billInstructions || '',
     }));
     setSuccess('Style profile copied from selected firm.');
     setTimeout(() => setSuccess(''), 1800);
@@ -699,6 +703,58 @@ export default function ManageFirmsPage() {
                         ))}
                       </select>
                     </div>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="firm-city">City</Label>
+                      <Input
+                        id="firm-city"
+                        value={formData.firmCity || ''}
+                        onChange={(event) => setFormData({ ...formData, firmCity: event.target.value })}
+                        placeholder="e.g., New Delhi"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="firm-address">Address</Label>
+                      <Input
+                        id="firm-address"
+                        value={formData.firmAddress || ''}
+                        onChange={(event) => setFormData({ ...formData, firmAddress: event.target.value })}
+                        placeholder="e.g., 123 Main Street"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="gst-number">GST Number</Label>
+                      <Input
+                        id="gst-number"
+                        value={formData.gstNumber || ''}
+                        onChange={(event) => setFormData({ ...formData, gstNumber: event.target.value })}
+                        placeholder="e.g., 22AAAAA0000A1Z5"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="mobile-number">Mobile Number</Label>
+                      <Input
+                        id="mobile-number"
+                        value={formData.mobileNumber || ''}
+                        onChange={(event) => setFormData({ ...formData, mobileNumber: event.target.value })}
+                        placeholder="e.g., 9876543210"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="contact-person">Contact Person</Label>
+                    <Input
+                      id="contact-person"
+                      value={formData.contactPerson || ''}
+                      onChange={(event) => setFormData({ ...formData, contactPerson: event.target.value })}
+                      placeholder="e.g., John Doe"
+                    />
                   </div>
                 </div>
 
@@ -1044,6 +1100,87 @@ export default function ManageFirmsPage() {
                           className="min-h-[84px] w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
                           value={formData.aiPromptBill}
                           onChange={(event) => setFormData({ ...formData, aiPromptBill: event.target.value })}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <h3 className="text-sm font-semibold">Bill Details</h3>
+                      <p className="text-xs text-slate-600">
+                        Bank account information for firm bill generation.
+                      </p>
+                    </div>
+                    <Button type="button" variant="outline" size="sm" onClick={() => setBillSectionOpen((v) => !v)}>
+                      {billSectionOpen ? 'Hide' : 'Edit'}
+                    </Button>
+                  </div>
+
+                  {billSectionOpen && (
+                    <div className="mt-3 space-y-3">
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label htmlFor="bank-name">Bank Name</Label>
+                          <Input
+                            id="bank-name"
+                            value={formData.bankName || ''}
+                            onChange={(event) => setFormData({ ...formData, bankName: event.target.value })}
+                            placeholder="e.g., State Bank of India"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="bank-branch">Branch</Label>
+                          <Input
+                            id="bank-branch"
+                            value={formData.bankBranch || ''}
+                            onChange={(event) => setFormData({ ...formData, bankBranch: event.target.value })}
+                            placeholder="e.g., Connaught Place"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label htmlFor="ifsc-code">IFSC Code</Label>
+                          <Input
+                            id="ifsc-code"
+                            value={formData.ifscCode || ''}
+                            onChange={(event) => setFormData({ ...formData, ifscCode: event.target.value })}
+                            placeholder="e.g., SBIN0001234"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="account-number">Account Number</Label>
+                          <Input
+                            id="account-number"
+                            value={formData.accountNumber || ''}
+                            onChange={(event) => setFormData({ ...formData, accountNumber: event.target.value })}
+                            placeholder="e.g., 1234567890"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="pan-number">PAN Number</Label>
+                        <Input
+                          id="pan-number"
+                          value={formData.panNumber || ''}
+                          onChange={(event) => setFormData({ ...formData, panNumber: event.target.value })}
+                          placeholder="e.g., ABCDE1234F"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="bill-instructions">Bill Instructions (Optional)</Label>
+                        <textarea
+                          id="bill-instructions"
+                          className="min-h-[84px] w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                          value={formData.billInstructions || ''}
+                          onChange={(event) => setFormData({ ...formData, billInstructions: event.target.value })}
+                          placeholder="Additional instructions for bill generation..."
                         />
                       </div>
                     </div>

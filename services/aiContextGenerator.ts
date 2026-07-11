@@ -1,4 +1,5 @@
 ﻿import { TenderItem } from '@/types';
+import { getPurposeByCategory, consolidatePurposesByCategory, getHindiItemName } from './mappingService';
 
 /**
  * AI Context Generator
@@ -28,10 +29,21 @@ function hindiItemNounPhrase(productName: string): string {
 }
 
 /**
+ * Get Hindi name for item using mapping service
+ */
+async function getHindiItemNameForSummary(productName: string): Promise<string> {
+  try {
+    return await getHindiItemName(productName);
+  } catch {
+    return hindiItemNounPhrase(productName);
+  }
+}
+
+/**
  * Generate a human-readable Hindi government phrase describing the tender purpose
  * This is a simplified version - in production, this would call an AI service
  */
-function generateTenderPurpose(items: TenderItem[], language: 'hindi' | 'english' = 'hindi'): ContextGenerationResult {
+async function generateTenderPurpose(items: TenderItem[], language: 'hindi' | 'english' = 'hindi'): Promise<ContextGenerationResult> {
   if (items.length === 0) {
     return {
       purposeLine: language === 'hindi' ? 'विभिन्न सामग्री' : 'various materials',
@@ -66,16 +78,17 @@ function generateTenderPurpose(items: TenderItem[], language: 'hindi' | 'english
 
   let itemSummary = '';
   if (items.length === 1) {
-    itemSummary = language === 'hindi' ? hindiItemNounPhrase(items[0].productName) : items[0].productName;
+    itemSummary = language === 'hindi' ? await getHindiItemNameForSummary(items[0].productName) : items[0].productName;
   } else if (items.length <= 3) {
     itemSummary =
       language === 'hindi'
-        ? items.map((i) => hindiItemNounPhrase(i.productName)).join(', ')
+        ? (await Promise.all(items.map((i) => getHindiItemNameForSummary(i.productName)))).join(', ')
         : items.map((i) => i.productName).join(', ');
   } else {
+    const firstItemName = language === 'hindi' ? await getHindiItemNameForSummary(items[0].productName) : items[0].productName;
     itemSummary =
       language === 'hindi'
-        ? `${hindiItemNounPhrase(items[0].productName)} एवं अन्य ${items.length - 1} सामग्री`
+        ? `${firstItemName} एवं अन्य ${items.length - 1} सामग्री`
         : `${items[0].productName} and ${items.length - 1} other items`;
   }
 
@@ -83,7 +96,7 @@ function generateTenderPurpose(items: TenderItem[], language: 'hindi' | 'english
 
   const subjectLine =
     language === 'hindi'
-      ? `${workType} ${items.length === 1 ? hindiItemNounPhrase(items[0].productName) : 'सामग्री'} सप्लाई करने बावत ।`
+      ? `${workType} ${items.length === 1 ? await getHindiItemNameForSummary(items[0].productName) : 'सामग्री'} सप्लाई करने बावत ।`
       : `Regarding supply of ${items.length === 1 ? items[0].productName : 'materials'} ${workType}.`;
 
   return { purposeLine, subjectLine, itemSummary };
@@ -91,13 +104,13 @@ function generateTenderPurpose(items: TenderItem[], language: 'hindi' | 'english
 /**
  * Generate intro paragraph for Vigyapti
  */
-function generateVigyaptiIntro(
+export async function generateVigyaptiIntro(
   placeName: string,
   _districtName: string,
   items: TenderItem[],
   language: 'hindi' | 'english' = 'hindi'
-): string {
-  const context = generateTenderPurpose(items, language);
+): Promise<string> {
+  const context = await generateTenderPurpose(items, language);
 
   if (language === 'hindi') {
     return `एतद् द्वारा सर्व संबंधित वाणिज्य कर विभाग में पंजीकृत फर्मों को सूचित किया जाता है कि नगर परिषद ${placeName} द्वारा ${context.purposeLine} क्रय किया जाना प्रस्तावित है।`;
@@ -109,11 +122,11 @@ function generateVigyaptiIntro(
 /**
  * Generate subject line for Supply Aadesh
  */
-function generateSupplyAadeshSubject(
+export async function generateSupplyAadeshSubject(
   items: TenderItem[],
   language: 'hindi' | 'english' = 'hindi'
-): string {
-  const context = generateTenderPurpose(items, language);
+): Promise<string> {
+  const context = await generateTenderPurpose(items, language);
   
   if (language === 'hindi') {
     return `विषय:- ${context.subjectLine}`;
@@ -125,12 +138,12 @@ function generateSupplyAadeshSubject(
 /**
  * Generate body paragraph for Supply Aadesh
  */
-function generateSupplyAadeshBody(
+export async function generateSupplyAadeshBody(
   _firmName: string,
   items: TenderItem[],
   language: 'hindi' | 'english' = 'hindi'
-): string {
-  const context = generateTenderPurpose(items, language);
+): Promise<string> {
+  const context = await generateTenderPurpose(items, language);
 
   if (language === 'hindi') {
     return `विशेषान्तर्गत आपको अवगत कराया जाता है कि आपके द्वारा प्रस्तुत ${context.itemSummary} के संबंध में कोटेशन दिनांक ............. के माध्यम से सप्लाई हेतु निवेदन किया गया था, जो दर न्यूनतम होने से कार्यालय द्वारा दर स्वीकृत की गई है।\n\nअतः आप निम्न सामग्री की सप्लाई को सात दिवस में प्रस्तुत करें।`;
@@ -138,9 +151,70 @@ function generateSupplyAadeshBody(
     return `Dear Sir/Madam,\n\nWith reference to the rates submitted by you for ${context.itemSummary}, you are hereby informed that your firm has been selected for the supply of the following materials. Please ensure timely delivery within the specified timeframe.`;
   }
 }
+
+/**
+ * Generate professional purpose line using category-based mapping
+ * For single category
+ */
+export async function generatePurposeLineByCategory(
+  category: string,
+  language: 'hindi' | 'english' = 'hindi'
+): Promise<string> {
+  return await getPurposeByCategory(category, language);
+}
+
+/**
+ * Generate professional purpose line using category-based mapping
+ * For multiple items (consolidates purposes by category)
+ */
+export async function generatePurposeLineByCategoryForItems(
+  items: TenderItem[],
+  language: 'hindi' | 'english' = 'hindi'
+): Promise<string> {
+  return await consolidatePurposesByCategory(items, language);
+}
+
+/**
+ * Generate Vigyapti intro using professional purposes
+ */
+export async function generateVigyaptiIntroWithPurpose(
+  placeName: string,
+  _districtName: string,
+  items: TenderItem[],
+  language: 'hindi' | 'english' = 'hindi'
+): Promise<string> {
+  const purpose = await generatePurposeLineByCategoryForItems(items, language);
+  
+  if (language === 'hindi') {
+    return `एतद् द्वारा सर्व संबंधित वाणिज्य कर विभाग में पंजीकृत फर्मों को सूचित किया जाता है कि नगर परिषद ${placeName} द्वारा ${purpose} क्रय किया जाना प्रस्तावित है।`;
+  }
+  
+  return `All concerned firms registered with the Commercial Tax Department are hereby informed that the Municipal Council ${placeName} proposes to purchase ${purpose}.`;
+}
+
+/**
+ * Generate Supply Aadesh subject using professional purposes
+ */
+export async function generateSupplyAadeshSubjectWithPurpose(
+  items: TenderItem[],
+  language: 'hindi' | 'english' = 'hindi'
+): Promise<string> {
+  const purpose = await generatePurposeLineByCategoryForItems(items, language);
+  
+  if (language === 'hindi') {
+    return `विषय:- ${purpose} सप्लाई करने बावत ।`;
+  } else {
+    return `Subject: Regarding supply of ${purpose}.`;
+  }
+}
+
 export const aiContextGenerator = {
   generateTenderPurpose,
   generateVigyaptiIntro,
   generateSupplyAadeshSubject,
   generateSupplyAadeshBody,
+  generatePurposeLineByCategory,
+  generatePurposeLineByCategoryForItems,
+  generateVigyaptiIntroWithPurpose,
+  generateSupplyAadeshSubjectWithPurpose,
 };

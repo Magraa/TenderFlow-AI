@@ -1,4 +1,4 @@
-import { DepartmentProfile, DocumentVersion, Firm, Settings, Tender, TenderDocument, TenderItem } from '@/types';
+import { DepartmentProfile, DocumentVersion, Firm, HindiMapping, PurposeMapping, Settings, Tender, TenderDocument, TenderItem } from '@/types';
 import { db } from '@/services/db';
 
 export const dataService = {
@@ -52,6 +52,42 @@ export const dataService = {
     create: (data: Omit<DocumentVersion, 'id' | 'createdAt' | 'updatedAt'>) => db.createDocumentVersion(data),
     listByDocument: (documentId: string) => db.getDocumentVersions(documentId),
     deleteByDocument: (documentId: string) => db.deleteDocumentVersions(documentId),
+    delete: (documentId: string, versionId: string) => db.deleteDocumentVersion(documentId, versionId),
+    update: (
+      documentId: string,
+      versionId: string,
+      data: Partial<Omit<DocumentVersion, 'id' | 'createdAt' | 'documentId'>>
+    ) => db.updateDocumentVersion(documentId, versionId, data),
+  },
+
+  // Purpose Mappings
+  purposeMappings: {
+    create: (data: Omit<PurposeMapping, 'id' | 'createdAt' | 'updatedAt'>) => db.createPurposeMapping(data),
+    get: (category: string, language: 'hindi' | 'english') => db.getPurposeByCategory(category, language),
+    list: () => db.listPurposeMappings(),
+    update: (id: string, data: Partial<Omit<PurposeMapping, 'id' | 'createdAt'>>) =>
+      db.updatePurposeMapping(id, data),
+    delete: (id: string) => db.deletePurposeMapping(id),
+  },
+
+  // Item Hindi Mappings
+  itemHindiMappings: {
+    create: (data: Omit<HindiMapping, 'id' | 'createdAt' | 'updatedAt'>) => db.createItemHindiMapping(data),
+    get: (englishName: string) => db.getItemHindiMapping(englishName),
+    list: () => db.listItemHindiMappings(),
+    update: (id: string, data: Partial<Omit<HindiMapping, 'id' | 'createdAt'>>) =>
+      db.updateItemHindiMapping(id, data),
+    delete: (id: string) => db.deleteItemHindiMapping(id),
+  },
+
+  // Vendor Hindi Mappings
+  vendorHindiMappings: {
+    create: (data: Omit<HindiMapping, 'id' | 'createdAt' | 'updatedAt'>) => db.createVendorHindiMapping(data),
+    get: (englishName: string) => db.getVendorHindiMapping(englishName),
+    list: () => db.listVendorHindiMappings(),
+    update: (id: string, data: Partial<Omit<HindiMapping, 'id' | 'createdAt'>>) =>
+      db.updateVendorHindiMapping(id, data),
+    delete: (id: string) => db.deleteVendorHindiMapping(id),
   },
 
   backup: {

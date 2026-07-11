@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { DocumentVersion, Firm, Tender, TenderDocType, TenderDocument } from '@/types';
+import { DocumentVersion, Firm, Settings, Tender, TenderDocType, TenderDocument } from '@/types';
 import { dataService } from '@/services/dataService';
 import { documentService } from '@/services/documentService';
 import { pdfService } from '@/services/pdfService';
@@ -27,7 +27,7 @@ const DOC_CONFIGS: Record<TenderDocType, { label: string; description: string }>
   quotation_main: { label: 'Quotation Main', description: 'Main firm quotation in tender language.' },
   quotation_alt_1: { label: 'Quotation Alt A', description: 'Alternate firm A quotation in firm language.' },
   quotation_alt_2: { label: 'Quotation Alt B', description: 'Alternate firm B quotation in firm language.' },
-  supply_aadesh: { label: 'Supply Aadesh', description: 'Firm-specific supply order.' },
+  supply_aadesh: { label: 'Supply Aadesh', description: 'Government supply order (no letterhead).' },
   firm_bill: { label: 'Main Firm Bill', description: 'Bill format for main firm only.' },
 };
 
@@ -49,7 +49,9 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
   const [altFirmA, setAltFirmA] = useState<Firm | null>(null);
   const [altFirmB, setAltFirmB] = useState<Firm | null>(null);
   const [documents, setDocuments] = useState<TenderDocument[]>([]);
+  const [settings, setSettings] = useState<Settings | null>(null);
   const [historyByDocumentId, setHistoryByDocumentId] = useState<Record<string, DocumentVersion[]>>({});
+  const [pendingContentByDocumentId, setPendingContentByDocumentId] = useState<Record<string, string>>({});
   const [activeTab, setActiveTab] = useState<TenderDocType>('vigyapti');
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -57,10 +59,17 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [autoFixed, setAutoFixed] = useState<Record<string, boolean>>({});
+  const autoSaveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   useEffect(() => {
     params.then((resolved) => setId(resolved.id));
   }, [params]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(autoSaveTimers.current).forEach((timer) => clearTimeout(timer));
+    };
+  }, []);
 
   useEffect(() => {
     if (!id) return;
@@ -78,11 +87,12 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
       const altAId = currentTender.alternateFirms?.[0] || '';
       const altBId = currentTender.alternateFirms?.[1] || '';
 
-      const [currentMainFirm, altA, altB, docs] = await Promise.all([
+      const [currentMainFirm, altA, altB, docs, loadedSettings] = await Promise.all([
         dataService.firms.get(currentTender.mainFirmId),
         altAId ? dataService.firms.get(altAId) : Promise.resolve(null),
         altBId ? dataService.firms.get(altBId) : Promise.resolve(null),
         dataService.documents.listByTender(id),
+        dataService.settings.get(),
       ]);
 
       if (cancelled) return;
@@ -91,6 +101,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
       setAltFirmA(altA || null);
       setAltFirmB(altB || null);
       setDocuments(docs);
+      setSettings(loadedSettings);
       setLoading(false);
     })();
 
@@ -253,15 +264,66 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
     }
   }, [activeTab, documents, generating, autoFixed, tender, mainFirm, altFirmA, altFirmB]);
 
+  const saveDocumentContent = async (documentId: string, contentHTML: string, changeNote: string) => {
+    setSaving(true);
+    try {
+      const updated = await documentService.updateDocumentContent(documentId, contentHTML, changeNote);
+      if (updated) {
+        setDocuments((previous) => previous.map((document) => (document.id === updated.id ? updated : document)));
+        const versions = await documentService.getDocumentHistory(updated.id);
+        setHistoryByDocumentId((previous) => ({ ...previous, [updated.id]: versions }));
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleEditorChange = async (contentHTML: string) => {
     const current = getDocument(activeTab);
     if (!current) return;
+
+    setPendingContentByDocumentId((previous) => ({ ...previous, [current.id]: contentHTML }));
+
+    if (!settings?.versioningSettings.enabled || !settings.versioningSettings.autoSaveEnabled) {
+      return;
+    }
+
+    if (autoSaveTimers.current[current.id]) {
+      clearTimeout(autoSaveTimers.current[current.id]);
+    }
+
+    autoSaveTimers.current[current.id] = setTimeout(() => {
+      saveDocumentContent(current.id, contentHTML, 'Auto-save after editor changes').then(() => {
+        setPendingContentByDocumentId((previous) => {
+          const next = { ...previous };
+          delete next[current.id];
+          return next;
+        });
+      });
+      delete autoSaveTimers.current[current.id];
+    }, settings.versioningSettings.autoSaveInterval * 60 * 1000);
+  };
+
+  const handleManualSave = async () => {
+    const current = getDocument(activeTab);
+    if (!current) return;
+    const pendingContent = pendingContentByDocumentId[current.id];
+    if (!pendingContent || pendingContent === current.contentHTML) {
+      setSuccess('No content changes to save.');
+      setTimeout(() => setSuccess(''), 1800);
+      return;
+    }
+
     setSaving(true);
     try {
-      const updated = await documentService.updateDocumentContent(current.id, contentHTML, 'TipTap manual edit');
-      if (updated) {
-        setDocuments((previous) => previous.map((document) => (document.id === updated.id ? updated : document)));
-      }
+      await saveDocumentContent(current.id, pendingContent, 'Manual editor save');
+      setPendingContentByDocumentId((previous) => {
+        const next = { ...previous };
+        delete next[current.id];
+        return next;
+      });
+      setSuccess('Document version saved.');
+      setTimeout(() => setSuccess(''), 1800);
     } finally {
       setSaving(false);
     }
@@ -413,6 +475,13 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
                 const current = getDocument(docType);
                 const targetFirm = getFirmForDocType(docType);
                 const docHistory = current ? historyByDocumentId[current.id] || [] : [];
+                const pendingContent = current ? pendingContentByDocumentId[current.id] : '';
+                const versioningSettings = settings?.versioningSettings;
+                const manualSaveMode = Boolean(
+                  current &&
+                    versioningSettings &&
+                    (!versioningSettings.enabled || !versioningSettings.autoSaveEnabled)
+                );
                 const usesLetterhead = documentService.documentUsesLetterhead(docType);
                 return (
                   <TabsContent key={docType} value={docType} className="mt-6 space-y-4">
@@ -441,6 +510,22 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
 
                     {current && (
                       <div className="space-y-3 rounded-md border border-slate-200 p-3 text-sm">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span
+                            className={`rounded-full px-2 py-1 text-xs ${
+                              versioningSettings?.enabled ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+                            }`}
+                          >
+                            Versioning {versioningSettings?.enabled ? 'enabled' : 'disabled'}
+                          </span>
+                          {versioningSettings?.enabled && (
+                            <span className="rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-600">
+                              {versioningSettings.autoSaveEnabled
+                                ? `Auto-save every ${versioningSettings.autoSaveInterval} min`
+                                : 'Manual save mode'}
+                            </span>
+                          )}
+                        </div>
                         <div className="flex flex-wrap gap-4">
                           {usesLetterhead && (
                             <label className="flex items-center gap-2">
@@ -533,11 +618,41 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
                         <div>
                           <p className="mb-2 text-sm font-medium">Edit Content (TipTap)</p>
                           <RichTextEditor initialContent={current.contentHTML} onChange={handleEditorChange} />
-                          {saving && <p className="mt-2 text-xs text-slate-500">Saving version...</p>}
+                          <div className="mt-2 flex items-center gap-2">
+                            {manualSaveMode && (
+                              <Button
+                                type="button"
+                                size="sm"
+                                onClick={handleManualSave}
+                                loading={saving}
+                                disabled={saving || !pendingContent || pendingContent === current.contentHTML}
+                              >
+                                Save Version
+                              </Button>
+                            )}
+                            {saving && <p className="text-xs text-slate-500">Saving version...</p>}
+                            {manualSaveMode && pendingContent && pendingContent !== current.contentHTML && (
+                              <p className="text-xs text-amber-600">Unsaved document changes</p>
+                            )}
+                          </div>
                         </div>
                         <div>
                           <p className="mb-2 text-sm font-medium">Preview</p>
-                          <DocumentViewer content={current.contentHTML} docType={docType} />
+                          <DocumentViewer 
+                            content={current.contentHTML} 
+                            docType={docType} 
+                            tender={tender}
+                            mainFirm={mainFirm || undefined}
+                            targetFirm={getFirmForDocType(docType) || undefined}
+                            tenderLanguage={getLanguageForDocType(docType)}
+                            versioningSettings={versioningSettings}
+                            versions={docHistory}
+                            onManualSave={manualSaveMode ? handleManualSave : undefined}
+                            onLanguageChange={() => {
+                              // Regenerate document when language changes
+                              generateDocument(docType);
+                            }}
+                          />
                         </div>
                       </div>
                     ) : (

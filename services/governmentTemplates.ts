@@ -1,5 +1,6 @@
 import { Firm, TenderItem } from '@/types';
 import { aiContextGenerator } from './aiContextGenerator';
+import { consolidatePurposesByCategory, getHindiItemName, getHindiVendorName } from './mappingService';
 
 /**
  * Government Document Template Generator
@@ -61,33 +62,37 @@ function isMunicipalCorporation(departmentName: string): boolean {
   );
 }
 
-function generateMunicipalCorporationVigyapti(context: VigyaptiContext): string {
+async function generateMunicipalCorporationVigyapti(context: VigyaptiContext): Promise<string> {
   const place = normalizeOfficePlace(context.placeName);
   const district = normalizeDistrict(context.districtName);
-  const purpose = aiContextGenerator.generateTenderPurpose(context.items, 'hindi').purposeLine;
+  const purpose = await consolidatePurposesByCategory(context.items, context.language);
   const submissionDate = context.submissionDate || '................';
   const openingDate = context.openingDate || 'उसी दिन';
 
-  const itemsRows =
-    context.items.length > 0
-      ? context.items
-          .map(
-            (item, index) => `
+  const itemsRowsPromises = context.items.length > 0
+    ? context.items.map(async (item, index) => {
+        const itemName = context.language === 'hindi' 
+          ? await getHindiItemName(item.productName)
+          : item.productName;
+        return `
         <tr>
           <td class="mc-vigyapti-center mc-vigyapti-serial">${index + 1}.</td>
-          <td class="mc-vigyapti-item"><strong>${escapeHTML(item.productName)}</strong></td>
+          <td class="mc-vigyapti-item"><strong>${escapeHTML(itemName)}</strong></td>
           <td class="mc-vigyapti-amount">${formatTenderAmount(item)}</td>
         </tr>
-      `
-          )
-          .join('')
-      : `
+      `;
+      })
+    : [
+        `
         <tr>
           <td class="mc-vigyapti-center mc-vigyapti-serial">1.</td>
           <td class="mc-vigyapti-item"><strong>सामग्री</strong></td>
           <td class="mc-vigyapti-amount">0</td>
         </tr>
-      `;
+      `
+      ];
+
+  const itemsRows = (await Promise.all(itemsRowsPromises)).join('');
 
   return `
     <div class="mc-vigyapti-doc">
@@ -234,34 +239,43 @@ function generateMunicipalCorporationVigyapti(context: VigyaptiContext): string 
   `;
 }
 
-function generateMunicipalCorporationSupplyAadesh(context: SupplyAadeshContext): string {
+async function generateMunicipalCorporationSupplyAadesh(context: SupplyAadeshContext): Promise<string> {
   const place = normalizeOfficePlace(context.placeName);
   const district = normalizeDistrict(context.districtName);
 
-  const subject = aiContextGenerator.generateSupplyAadeshSubject(context.items, 'hindi');
-  const body = aiContextGenerator.generateSupplyAadeshBody(context.firm.name, context.items, 'hindi');
+  const subject = await aiContextGenerator.generateSupplyAadeshSubjectWithPurpose(context.items, context.language);
+  const body = await aiContextGenerator.generateSupplyAadeshBody(context.firm.name, context.items, context.language);
 
-  const rows =
-    context.items.length > 0
-      ? context.items
-          .map((item) => {
-            const qtyUnit = `${item.quantity} ${item.unit || ''}`.trim();
-            return `
+  // Get Hindi names for firm information when language is Hindi
+  const firmName = context.language === 'hindi' ? await getHindiVendorName(context.firm.name) : context.firm.name;
+  const firmCity = context.firm.firmCity ? (context.language === 'hindi' ? await getHindiVendorName(context.firm.firmCity) : context.firm.firmCity) : null;
+  const firmAddress = context.firm.firmAddress ? (context.language === 'hindi' ? await getHindiVendorName(context.firm.firmAddress) : context.firm.firmAddress) : null;
+
+  const rowsPromises = context.items.length > 0
+    ? context.items.map(async (item) => {
+        const itemName = context.language === 'hindi'
+          ? await getHindiItemName(item.productName)
+          : item.productName;
+        const qtyUnit = `${item.quantity} ${item.unit || ''}`.trim();
+        return `
           <tr>
-            <td class="mc-sa-cell mc-sa-item">${escapeHTML(item.productName)}</td>
+            <td class="mc-sa-cell mc-sa-item">${escapeHTML(itemName)}</td>
             <td class="mc-sa-cell mc-sa-qty">${escapeHTML(qtyUnit)}</td>
             <td class="mc-sa-cell mc-sa-rate">Rs.</td>
           </tr>
         `;
-          })
-          .join('')
-      : `
+      })
+    : [
+        `
         <tr>
           <td class="mc-sa-cell mc-sa-item">सामग्री</td>
           <td class="mc-sa-cell mc-sa-qty">0</td>
           <td class="mc-sa-cell mc-sa-rate">Rs.</td>
         </tr>
-      `;
+      `
+      ];
+
+  const rows = (await Promise.all(rowsPromises)).join('');
 
   return `
     <div class="mc-sa-doc">
@@ -376,9 +390,9 @@ function generateMunicipalCorporationSupplyAadesh(context: SupplyAadeshContext):
 
       <div class="mc-sa-to">
         <p><strong>प्रति,</strong></p>
-        <p class="mc-sa-firm-name">${escapeHTML(context.firm.name)}</p>
-        ${context.firm.firmCity ? `<p class="mc-sa-firm-subline">${escapeHTML(context.firm.firmCity)}</p>` : ''}
-        ${context.firm.firmAddress ? `<p class="mc-sa-firm-subline">${escapeHTML(context.firm.firmAddress)}</p>` : ''}
+        <p class="mc-sa-firm-name">${escapeHTML(firmName)}</p>
+        ${firmCity ? `<p class="mc-sa-firm-subline">${escapeHTML(firmCity)}</p>` : ''}
+        ${firmAddress ? `<p class="mc-sa-firm-subline">${escapeHTML(firmAddress)}</p>` : ''}
       </div>
 
       <p class="mc-sa-subject">${escapeHTML(subject)}</p>
@@ -402,7 +416,7 @@ function generateMunicipalCorporationSupplyAadesh(context: SupplyAadeshContext):
 /**
  * Generate items table HTML for government documents
  */
-function generateItemsTable(items: TenderItem[], language: 'hindi' | 'english'): string {
+async function generateItemsTable(items: TenderItem[], language: 'hindi' | 'english'): Promise<string> {
   const headers =
     language === 'hindi'
       ? ['क्र.', 'सामग्री का नाम', 'विवरण', 'मात्रा', 'इकाई', 'दर (₹)', 'अनुमानित राशि (₹)']
@@ -420,12 +434,18 @@ function generateItemsTable(items: TenderItem[], language: 'hindi' | 'english'):
       <tbody>
   `;
 
-  items.forEach((item, index) => {
+  for (let index = 0; index < items.length; index++) {
+    const item = items[index];
+    // Get Hindi name when language is Hindi
+    const itemName = language === 'hindi' 
+      ? await getHindiItemName(item.productName)
+      : item.productName;
+    
     const estimatedAmount = item.estimatedAmount || item.quantity * item.rate;
     tableHTML += `
       <tr>
         <td style="border: 1px solid #000; padding: 8px; text-align: center;">${index + 1}</td>
-        <td style="border: 1px solid #000; padding: 8px;">${escapeHTML(item.productName)}</td>
+        <td style="border: 1px solid #000; padding: 8px;">${escapeHTML(itemName)}</td>
         <td style="border: 1px solid #000; padding: 8px;">${escapeHTML(item.description || '-')}</td>
         <td style="border: 1px solid #000; padding: 8px; text-align: center;">${item.quantity}</td>
         <td style="border: 1px solid #000; padding: 8px; text-align: center;">${escapeHTML(item.unit || 'Nos')}</td>
@@ -433,7 +453,7 @@ function generateItemsTable(items: TenderItem[], language: 'hindi' | 'english'):
         <td style="border: 1px solid #000; padding: 8px; text-align: right;">₹${estimatedAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
       </tr>
     `;
-  });
+  }
 
   const totalAmount = items.reduce((sum, item) => {
     const amt = item.estimatedAmount || item.quantity * item.rate;
@@ -457,7 +477,7 @@ function generateItemsTable(items: TenderItem[], language: 'hindi' | 'english'):
 /**
  * Generate Vigyapti (विज्ञप्ति) - Tender Notice
  */
-export function generateVigyapti(context: VigyaptiContext): string {
+export async function generateVigyapti(context: VigyaptiContext): Promise<string> {
   const { placeName, districtName, departmentName, tenderNumber, publishDate, submissionDate, openingDate, items, language } = context;
 
   if (language === 'hindi' && isMunicipalCorporation(departmentName)) {
@@ -467,8 +487,8 @@ export function generateVigyapti(context: VigyaptiContext): string {
   const officePlace = normalizeOfficePlace(placeName);
   const district = normalizeDistrict(districtName);
 
-  const aiIntro = aiContextGenerator.generateVigyaptiIntro(officePlace, district, items, language);
-  const itemsTable = generateItemsTable(items, language);
+  const aiIntro = await aiContextGenerator.generateVigyaptiIntroWithPurpose(officePlace, district, items, language);
+  const itemsTable = await generateItemsTable(items, language);
 
   const termsHindi = `
     <div style="margin-top: 20px;">
@@ -557,7 +577,7 @@ export function generateVigyapti(context: VigyaptiContext): string {
 /**
  * Generate Supply Aadesh (सप्लाई आदेश) - Supply Order
  */
-export function generateSupplyAadesh(context: SupplyAadeshContext): string {
+export async function generateSupplyAadesh(context: SupplyAadeshContext): Promise<string> {
   const { placeName, districtName, departmentName, firm, items, language } = context;
 
   if (language === 'hindi' && isMunicipalCorporation(departmentName)) {
@@ -567,9 +587,9 @@ export function generateSupplyAadesh(context: SupplyAadeshContext): string {
   const officePlace = normalizeOfficePlace(placeName);
   const district = normalizeDistrict(districtName);
 
-  const aiSubject = aiContextGenerator.generateSupplyAadeshSubject(items, language);
-  const aiBody = aiContextGenerator.generateSupplyAadeshBody(firm.name, items, language);
-  const itemsTable = generateItemsTable(items, language);
+  const aiSubject = await aiContextGenerator.generateSupplyAadeshSubjectWithPurpose(items, language);
+  const aiBody = await aiContextGenerator.generateSupplyAadeshBody(firm.name, items, language);
+  const itemsTable = await generateItemsTable(items, language);
 
   const totalAmount = items.reduce((sum, item) => {
     const amt = item.estimatedAmount || item.quantity * item.rate;
@@ -597,9 +617,9 @@ export function generateSupplyAadesh(context: SupplyAadeshContext): string {
 
       <div style="margin: 20px 0;">
         <p><strong>${language === 'hindi' ? 'प्रति,' : 'To,'}</strong></p>
-        <p style="margin-left: 20px; font-weight: bold;">${escapeHTML(firm.name)}</p>
-        ${firm.firmCity ? `<p style="margin-left: 20px;">${escapeHTML(firm.firmCity)}</p>` : ''}
-        ${firm.firmAddress ? `<p style="margin-left: 20px;">${escapeHTML(firm.firmAddress)}</p>` : ''}
+        <p style="margin-left: 20px; font-weight: bold;">${escapeHTML(language === 'hindi' ? await getHindiVendorName(firm.name) : firm.name)}</p>
+        ${firm.firmCity ? `<p style="margin-left: 20px;">${escapeHTML(language === 'hindi' ? await getHindiVendorName(firm.firmCity) : firm.firmCity)}</p>` : ''}
+        ${firm.firmAddress ? `<p style="margin-left: 20px;">${escapeHTML(language === 'hindi' ? await getHindiVendorName(firm.firmAddress) : firm.firmAddress)}</p>` : ''}
         ${firm.gstNumber ? `<p style="margin-left: 20px;"><strong>${language === 'hindi' ? 'जी.एस.टी. नंबर' : 'GST No.'}:</strong> ${escapeHTML(firm.gstNumber)}</p>` : ''}
         ${firm.mobileNumber ? `<p style="margin-left: 20px;"><strong>${language === 'hindi' ? 'मोबाइल' : 'Mobile'}:</strong> ${escapeHTML(firm.mobileNumber)}</p>` : ''}
       </div>

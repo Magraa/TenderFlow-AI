@@ -1,6 +1,13 @@
-import { Firm, Tender, TenderDocType, TenderDocument } from '@/types';
+import { DocumentVersion, Firm, Tender, TenderDocType, TenderDocument } from '@/types';
 import { aiDraftService, DraftResponse } from './aiDraftService';
 import { dataService } from './dataService';
+import {
+  compressContent,
+  createLineDiff,
+  defaultVersioningSettings,
+  normalizeVersioningSettings,
+  paginateVersions,
+} from './versioningSettings';
 
 export interface GenerateDocumentRequest {
   tender: Tender;
@@ -48,14 +55,93 @@ function ensureDocumentDefaults(
   };
 }
 
-async function saveDocumentVersion(documentId: string, contentHTML: string, changeNote: string): Promise<number> {
-  const existing = await dataService.documentVersions.listByDocument(documentId);
-  const nextVersion = existing.length > 0 ? Math.max(...existing.map((entry) => entry.versionNumber)) + 1 : 1;
+async function getVersioningSettings() {
+  try {
+    const settings = await dataService.settings.get();
+    return normalizeVersioningSettings(settings.versioningSettings);
+  } catch (error) {
+    console.warn('Unable to read versioning settings; using defaults.', error);
+    return defaultVersioningSettings;
+  }
+}
+
+function sortVersionsAscending(versions: DocumentVersion[]): DocumentVersion[] {
+  return [...versions].sort((left, right) => {
+    if (left.versionNumber !== right.versionNumber) return left.versionNumber - right.versionNumber;
+    return new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime();
+  });
+}
+
+async function cleanupOldVersions(
+  documentId: string,
+  maxVersions: number,
+  versionRetentionDays: number
+): Promise<DocumentVersion[]> {
+  const versions = sortVersionsAscending(await dataService.documentVersions.listByDocument(documentId));
+  const cutoff = Date.now() - versionRetentionDays * 24 * 60 * 60 * 1000;
+  let kept = versions.filter((version) => new Date(version.createdAt).getTime() >= cutoff);
+
+  if (maxVersions <= 0) {
+    kept = [];
+  }
+  if (kept.length > maxVersions) {
+    kept = kept.slice(kept.length - maxVersions);
+  }
+
+  const keepIds = new Set(kept.map((version) => version.id));
+  await Promise.all(
+    versions
+      .filter((version) => !keepIds.has(version.id))
+      .map((version) => dataService.documentVersions.delete(documentId, version.id))
+  );
+
+  const renumbered = await Promise.all(
+    kept.map((version, index) => {
+      const nextVersionNumber = index + 1;
+      if (version.versionNumber === nextVersionNumber) return Promise.resolve(version);
+      return dataService.documentVersions.update(documentId, version.id, { versionNumber: nextVersionNumber });
+    })
+  );
+
+  return renumbered.filter((version): version is DocumentVersion => Boolean(version));
+}
+
+async function createVersionWithSettings(
+  documentId: string,
+  contentHTML: string,
+  changeNote = 'Auto-saved version'
+): Promise<number | null> {
+  const settings = await getVersioningSettings();
+  if (!settings.enabled) {
+    console.info(`Versioning disabled; skipped version for document ${documentId}.`);
+    return null;
+  }
+  if (settings.changeNotesRequired && !changeNote.trim()) {
+    throw new Error('Change notes are required before saving a document version.');
+  }
+
+  const existing = sortVersionsAscending(await dataService.documentVersions.listByDocument(documentId));
+  const latest = existing[existing.length - 1];
+  if (latest?.contentHTML === contentHTML) {
+    return latest.versionNumber;
+  }
+
+  const cleanupLimit = Math.max(0, settings.maxVersions - 1);
+  const cleaned = await cleanupOldVersions(documentId, cleanupLimit, settings.versionRetentionDays);
+  const nextVersion = cleaned.length > 0 ? Math.max(...cleaned.map((entry) => entry.versionNumber)) + 1 : 1;
+  const previousContent = cleaned[cleaned.length - 1]?.contentHTML || '';
+  const shouldCompress = cleaned.some((version) => {
+    const ageMs = Date.now() - new Date(version.createdAt).getTime();
+    return ageMs > settings.versionRetentionDays * 24 * 60 * 60 * 1000;
+  });
+
   await dataService.documentVersions.create({
     documentId,
     versionNumber: nextVersion,
-    contentHTML,
+    contentHTML: shouldCompress ? compressContent(contentHTML) : contentHTML,
     changeNote,
+    contentDiff: settings.enableVersionComparison ? createLineDiff(previousContent, contentHTML) : undefined,
+    isCompressed: shouldCompress,
   });
   return nextVersion;
 }
@@ -92,7 +178,7 @@ async function generateAndPersistDocument(request: GenerateDocumentRequest): Pro
   });
 
   if (existing) {
-    const nextVersion = await saveDocumentVersion(existing.id, existing.contentHTML, 'Auto version before regeneration');
+    const nextVersion = await createVersionWithSettings(existing.id, existing.contentHTML, 'Auto version before regeneration');
     const updated = await dataService.documents.update(existing.id, {
       ...defaults,
       showLetterheadBackground: usesLetterhead ? defaults.showLetterheadBackground : false,
@@ -100,7 +186,7 @@ async function generateAndPersistDocument(request: GenerateDocumentRequest): Pro
       includeStamp: usesLetterhead ? defaults.includeStamp : false,
       contentHTML: draft.html,
       overflowWarning: draft.metadata.overflowWarning || '',
-      currentVersion: nextVersion,
+      currentVersion: nextVersion ?? existing.currentVersion,
       lastModified: new Date().toISOString(),
     });
     if (!updated) throw new Error('Failed to update document');
@@ -116,7 +202,11 @@ async function generateAndPersistDocument(request: GenerateDocumentRequest): Pro
     contentHTML: draft.html,
     overflowWarning: draft.metadata.overflowWarning || '',
   });
-  await saveDocumentVersion(created.id, created.contentHTML, 'Initial generated version');
+  const nextVersion = await createVersionWithSettings(created.id, created.contentHTML, 'Initial generated version');
+  if (nextVersion !== null && nextVersion !== created.currentVersion) {
+    const updated = await dataService.documents.update(created.id, { currentVersion: nextVersion });
+    if (updated) return { document: updated, draft };
+  }
   return { document: created, draft };
 }
 
@@ -127,14 +217,19 @@ async function updateDocumentContent(
 ): Promise<TenderDocument | null> {
   const existing = await dataService.documents.get(documentId);
   if (!existing) return null;
-  const nextVersion = await saveDocumentVersion(documentId, existing.contentHTML, changeNote);
+  if (existing.contentHTML === contentHTML) return existing;
+  const nextVersion = await createVersionWithSettings(documentId, existing.contentHTML, changeNote);
   return (
     (await dataService.documents.update(documentId, {
       contentHTML,
-      currentVersion: nextVersion,
+      currentVersion: nextVersion ?? existing.currentVersion,
       lastModified: new Date().toISOString(),
     })) || null
   );
+}
+
+async function manuallySaveVersion(documentId: string, contentHTML: string, changeNote = 'Manual saved version'): Promise<number | null> {
+  return createVersionWithSettings(documentId, contentHTML, changeNote);
 }
 
 async function duplicateDocumentLayout(sourceDocumentId: string): Promise<number> {
@@ -161,10 +256,20 @@ function getDocumentHistory(documentId: string): ReturnType<typeof dataService.d
   return dataService.documentVersions.listByDocument(documentId);
 }
 
+async function getPaginatedDocumentHistory(documentId: string, page = 1, pageSize = 20) {
+  const versions = await dataService.documentVersions.listByDocument(documentId);
+  return paginateVersions(versions, page, pageSize);
+}
+
 export const documentService = {
   documentUsesLetterhead,
   generateAndPersistDocument,
   updateDocumentContent,
+  manuallySaveVersion,
   duplicateDocumentLayout,
   getDocumentHistory,
+  getPaginatedDocumentHistory,
+  createVersionWithSettings,
+  cleanupOldVersions,
+  getVersioningSettings,
 };

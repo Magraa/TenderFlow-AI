@@ -14,8 +14,9 @@ import {
   where,
   writeBatch,
 } from 'firebase/firestore';
-import { DepartmentProfile, DocumentVersion, Firm, Settings, Tender, TenderDocument, TenderItem } from '@/types';
+import { DepartmentProfile, DocumentVersion, Firm, HindiMapping, PurposeMapping, Settings, Tender, TenderDocument, TenderItem } from '@/types';
 import { getFirebaseFirestore } from '@/services/firebase/firebaseClient';
+import { normalizeSettingsVersioning } from '@/services/versioningSettings';
 import { v4 as uuid } from 'uuid';
 
 type IsoString = string;
@@ -24,11 +25,27 @@ function nowIso(): IsoString {
   return new Date().toISOString();
 }
 
+/**
+ * Remove undefined values from an object to make it Firestore-compatible
+ */
+function removeUndefinedValues<T extends Record<string, any>>(obj: T): T {
+  const result = {} as T;
+  for (const [key, value] of Object.entries(obj)) {
+    if (value !== undefined) {
+      result[key as keyof T] = value;
+    }
+  }
+  return result;
+}
+
 type Collections = {
   tenders: Tender;
   firms: Firm;
   documents: TenderDocument;
   departmentProfiles: DepartmentProfile;
+  purposeMappings: PurposeMapping;
+  itemHindiMappings: HindiMapping;
+  vendorHindiMappings: HindiMapping;
 };
 
 type CollectionName = keyof Collections;
@@ -67,6 +84,10 @@ function settingsDocPath(): string {
   return `tap/${process.env.NEXT_PUBLIC_FIRESTORE_NAMESPACE || 'default'}/settings/default`;
 }
 
+function mappingsCollectionPath(type: 'purpose' | 'item' | 'vendor'): string {
+  return `tap/${process.env.NEXT_PUBLIC_FIRESTORE_NAMESPACE || 'default'}/${type}HindiMappings`;
+}
+
 export class FirestoreDB {
   private firestore = getFirebaseFirestore();
 
@@ -85,8 +106,11 @@ export class FirestoreDB {
     const createdAt = nowIso();
     const entity = withTimestamps({ ...(data as any), id: uuid(), createdAt, updatedAt: createdAt });
 
+    // Remove undefined values before saving to Firestore
+    const cleanData = removeUndefinedValues(entity);
+
     await setDoc(this.docRef(name, entity.id), {
-      ...entity,
+      ...cleanData,
       _serverUpdatedAt: serverTimestamp(),
       _serverCreatedAt: serverTimestamp(),
     });
@@ -118,7 +142,10 @@ export class FirestoreDB {
     const updatedAt = nowIso();
     const merged = { ...(existing.data() as any), ...(data as any), id, updatedAt };
 
-    await updateDoc(ref, { ...(data as any), updatedAt, _serverUpdatedAt: serverTimestamp() } as any);
+    // Remove undefined values before updating Firestore
+    const cleanData = removeUndefinedValues({ ...(data as any), updatedAt, _serverUpdatedAt: serverTimestamp() });
+
+    await updateDoc(ref, cleanData as any);
     return merged as Collections[TName];
   }
 
@@ -204,7 +231,7 @@ export class FirestoreDB {
     if (!snap.exists()) {
       // Minimal safe defaults; the local adapter has richer defaults seeded in schema.
       const createdAt = nowIso();
-      const defaults: Settings = {
+      const defaults: Settings = normalizeSettingsVersioning({
         id: 'default',
         organizationName: 'Organization',
         departmentAddress: '',
@@ -216,19 +243,19 @@ export class FirestoreDB {
         tenderNumberPrefix: 'TEND-',
         createdAt,
         updatedAt: createdAt,
-      };
+      });
       await setDoc(ref, { ...defaults, _serverUpdatedAt: serverTimestamp(), _serverCreatedAt: serverTimestamp() });
       return defaults;
     }
-    return snap.data() as Settings;
+    return normalizeSettingsVersioning(snap.data() as Settings);
   }
 
   async updateSettings(data: Partial<Omit<Settings, 'id' | 'createdAt'>>): Promise<Settings> {
     const ref = doc(this.firestore, settingsDocPath());
     return runTransaction(this.firestore, async (tx) => {
       const snap = await tx.get(ref);
-      const base = snap.exists() ? (snap.data() as Settings) : await this.getSettings();
-      const updated: Settings = { ...base, ...data, id: 'default', updatedAt: nowIso() };
+      const base = snap.exists() ? normalizeSettingsVersioning(snap.data() as Settings) : await this.getSettings();
+      const updated: Settings = normalizeSettingsVersioning({ ...base, ...data, id: 'default', updatedAt: nowIso() });
       tx.set(ref, { ...updated, _serverUpdatedAt: serverTimestamp() }, { merge: true });
       return updated;
     });
@@ -351,6 +378,33 @@ export class FirestoreDB {
     return true;
   }
 
+  async deleteDocumentVersion(documentId: string, versionId: string): Promise<boolean> {
+    const ref = doc(this.versionsCollection(documentId), versionId);
+    const existing = await getDoc(ref);
+    if (!existing.exists()) return false;
+    await deleteDoc(ref);
+    return true;
+  }
+
+  async updateDocumentVersion(
+    documentId: string,
+    versionId: string,
+    data: Partial<Omit<DocumentVersion, 'id' | 'createdAt' | 'documentId'>>
+  ): Promise<DocumentVersion | undefined> {
+    const ref = doc(this.versionsCollection(documentId), versionId);
+    const existing = await getDoc(ref);
+    if (!existing.exists()) return undefined;
+    const updated: DocumentVersion = {
+      ...(existing.data() as DocumentVersion),
+      ...data,
+      id: versionId,
+      documentId,
+      updatedAt: nowIso(),
+    };
+    await updateDoc(ref, removeUndefinedValues({ ...data, updatedAt: updated.updatedAt, _serverUpdatedAt: serverTimestamp() }));
+    return updated;
+  }
+
   // Backup helpers
   async exportDatabase(): Promise<string> {
     const [tenders, firms, documents, departmentProfiles, settings] = await Promise.all([
@@ -438,5 +492,171 @@ export class FirestoreDB {
       await this.deleteDocumentVersions(document.id);
     }
   }
-}
 
+  // Purpose Mappings
+  async createPurposeMapping(data: Omit<PurposeMapping, 'id' | 'createdAt' | 'updatedAt'>): Promise<PurposeMapping> {
+    const createdAt = nowIso();
+    const mapping: PurposeMapping = {
+      ...data,
+      id: uuid(),
+      createdAt,
+      updatedAt: createdAt,
+    };
+    const ref = doc(this.firestore, mappingsCollectionPath('purpose'), mapping.id);
+    await setDoc(ref, removeUndefinedValues({ ...mapping, _serverUpdatedAt: serverTimestamp(), _serverCreatedAt: serverTimestamp() }));
+    return mapping;
+  }
+
+  async getPurposeByCategory(category: string, language: 'hindi' | 'english'): Promise<PurposeMapping | undefined> {
+    const q = query(
+      collection(this.firestore, mappingsCollectionPath('purpose')),
+      where('category', '==', category),
+      where('language', '==', language)
+    );
+    const snap = await getDocs(q);
+    if (snap.empty) return undefined;
+    return snap.docs[0].data() as PurposeMapping;
+  }
+
+  async listPurposeMappings(): Promise<PurposeMapping[]> {
+    const q = query(collection(this.firestore, mappingsCollectionPath('purpose')), orderBy('updatedAt', 'desc'));
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => d.data() as PurposeMapping);
+  }
+
+  async updatePurposeMapping(
+    id: string,
+    data: Partial<Omit<PurposeMapping, 'id' | 'createdAt'>>
+  ): Promise<PurposeMapping | undefined> {
+    const ref = doc(this.firestore, mappingsCollectionPath('purpose'), id);
+    const existing = await getDoc(ref);
+    if (!existing.exists()) return undefined;
+    const merged = { ...(existing.data() as any), ...(data as any), id, updatedAt: nowIso() };
+    await updateDoc(ref, removeUndefinedValues({ ...data, updatedAt: serverTimestamp() }));
+    return merged as PurposeMapping;
+  }
+
+  async deletePurposeMapping(id: string): Promise<boolean> {
+    const ref = doc(this.firestore, mappingsCollectionPath('purpose'), id);
+    const existing = await getDoc(ref);
+    if (!existing.exists()) return false;
+    await deleteDoc(ref);
+    return true;
+  }
+
+  // Item Hindi Mappings
+  async createItemHindiMapping(data: Omit<HindiMapping, 'id' | 'createdAt' | 'updatedAt'>): Promise<HindiMapping> {
+    const createdAt = nowIso();
+    const mapping: HindiMapping = {
+      ...data,
+      id: uuid(),
+      createdAt,
+      updatedAt: createdAt,
+    };
+    const ref = doc(this.firestore, mappingsCollectionPath('item'), mapping.id);
+    await setDoc(ref, removeUndefinedValues({ ...mapping, _serverUpdatedAt: serverTimestamp(), _serverCreatedAt: serverTimestamp() }));
+    return mapping;
+  }
+
+  async getItemHindiMapping(englishName: string): Promise<HindiMapping | undefined> {
+    const q = query(
+      collection(this.firestore, mappingsCollectionPath('item')),
+      where('englishName', '==', englishName)
+    );
+    const snap = await getDocs(q);
+    if (snap.empty) return undefined;
+    return snap.docs[0].data() as HindiMapping;
+  }
+
+  async listItemHindiMappings(): Promise<HindiMapping[]> {
+    const q = query(collection(this.firestore, mappingsCollectionPath('item')), orderBy('updatedAt', 'desc'));
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => d.data() as HindiMapping);
+  }
+
+  async updateItemHindiMapping(
+    id: string,
+    data: Partial<Omit<HindiMapping, 'id' | 'createdAt'>>
+  ): Promise<HindiMapping | undefined> {
+    const ref = doc(this.firestore, mappingsCollectionPath('item'), id);
+    const existing = await getDoc(ref);
+    if (!existing.exists()) return undefined;
+    const merged = { ...(existing.data() as any), ...(data as any), id, updatedAt: nowIso() };
+    await updateDoc(ref, removeUndefinedValues({ ...data, updatedAt: serverTimestamp() }));
+    return merged as HindiMapping;
+  }
+
+  async deleteItemHindiMapping(id: string): Promise<boolean> {
+    const ref = doc(this.firestore, mappingsCollectionPath('item'), id);
+    const existing = await getDoc(ref);
+    if (!existing.exists()) return false;
+    await deleteDoc(ref);
+    return true;
+  }
+
+  // Vendor Hindi Mappings
+  async createVendorHindiMapping(data: Omit<HindiMapping, 'id' | 'createdAt' | 'updatedAt'>): Promise<HindiMapping> {
+    const createdAt = nowIso();
+    const mapping: HindiMapping = {
+      ...data,
+      id: uuid(),
+      createdAt,
+      updatedAt: createdAt,
+    };
+    const ref = doc(this.firestore, mappingsCollectionPath('vendor'), mapping.id);
+    await setDoc(ref, removeUndefinedValues({ ...mapping, _serverUpdatedAt: serverTimestamp(), _serverCreatedAt: serverTimestamp() }));
+    return mapping;
+  }
+
+  async getVendorHindiMapping(englishName: string): Promise<HindiMapping | undefined> {
+    const q = query(
+      collection(this.firestore, mappingsCollectionPath('vendor')),
+      where('englishName', '==', englishName)
+    );
+    const snap = await getDocs(q);
+    if (snap.empty) return undefined;
+    return snap.docs[0].data() as HindiMapping;
+  }
+
+  async listVendorHindiMappings(): Promise<HindiMapping[]> {
+    const q = query(collection(this.firestore, mappingsCollectionPath('vendor')), orderBy('updatedAt', 'desc'));
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => d.data() as HindiMapping);
+  }
+
+  async updateVendorHindiMapping(
+    id: string,
+    data: Partial<Omit<HindiMapping, 'id' | 'createdAt'>>
+  ): Promise<HindiMapping | undefined> {
+    const ref = doc(this.firestore, mappingsCollectionPath('vendor'), id);
+    const existing = await getDoc(ref);
+    if (!existing.exists()) return undefined;
+    const merged = { ...(existing.data() as any), ...(data as any), id, updatedAt: nowIso() };
+    await updateDoc(ref, removeUndefinedValues({ ...data, updatedAt: serverTimestamp() }));
+    return merged as HindiMapping;
+  }
+
+  async deleteVendorHindiMapping(id: string): Promise<boolean> {
+    const ref = doc(this.firestore, mappingsCollectionPath('vendor'), id);
+    const existing = await getDoc(ref);
+    if (!existing.exists()) return false;
+    await deleteDoc(ref);
+    return true;
+  }
+
+  // Index configuration for purposeMappings collection
+  getPurposeMappingsIndexes(): Array<{ fields: string[]; order: 'ASCENDING' | 'DESCENDING' }> {
+    return [
+      { fields: ['category', 'language'], order: 'ASCENDING' },
+      { fields: ['createdAt'], order: 'ASCENDING' },
+    ];
+  }
+
+  // Index configuration for vendorHindiMappings collection
+  getVendorHindiMappingsIndexes(): Array<{ fields: string[]; order: 'ASCENDING' | 'DESCENDING' }> {
+    return [
+      { fields: ['englishName', 'type'], order: 'ASCENDING' },
+      { fields: ['createdAt'], order: 'ASCENDING' },
+    ];
+  }
+}

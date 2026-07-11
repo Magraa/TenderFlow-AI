@@ -4,9 +4,18 @@ import { layoutEngine } from './layoutEngine';
 import { templateLoader } from './templateLoader';
 import { governmentTemplates } from './governmentTemplates';
 import { dataService } from './dataService';
+import { generateAIDraft, getAvailableProviders, getProviderDisplayName } from './aiClient';
 
 const GLOBAL_SYSTEM_PROMPT =
   'You write procurement documents in structured HTML with precise headings and concise government formatting.';
+
+// AI Configuration from environment
+const AI_PROVIDER = (process.env.NEXT_PUBLIC_AI_PROVIDER || 'mock').toLowerCase() as any;
+const AI_API_KEY = process.env.NEXT_PUBLIC_AI_API_KEY || '';
+const AI_MODEL = process.env.NEXT_PUBLIC_AI_MODEL || 'mock-1.0';
+
+console.log(`AI Provider: ${getProviderDisplayName(AI_PROVIDER)}`);
+console.log(`AI Model: ${AI_MODEL}`);
 
 const DOC_TYPE_PROMPTS: Record<TenderDocType, string> = {
   vigyapti: 'Generate a public tender notification.',
@@ -64,7 +73,6 @@ function docUsesLetterhead(docType: TenderDocType): boolean {
     docType === 'quotation_main' ||
     docType === 'quotation_alt_1' ||
     docType === 'quotation_alt_2' ||
-    docType === 'supply_aadesh' ||
     docType === 'firm_bill'
   );
 }
@@ -179,13 +187,14 @@ function getTitleByDocType(docType: TenderDocType, language: Language): string {
   return language === 'hindi' ? hindiTitles[docType] : englishTitles[docType];
 }
 
-function buildContentPages(
+async function buildContentPages(
   request: AdvancedDraftRequest,
   language: Language,
   adjustedItems: TenderItem[],
   totals: { totalAmount: number },
-  departmentName: string
-): { pages: string[]; fallbackUsed: boolean } {
+  departmentName: string,
+  firm: Firm
+): Promise<{ pages: string[]; fallbackUsed: boolean }> {
   // Use structured government templates for Vigyapti and Supply Aadesh
   if (request.docType === 'vigyapti' || request.docType === 'supply_aadesh') {
     try {
@@ -253,15 +262,37 @@ function buildContentPages(
   }
 
   const primaryTable = itemTablePages[0]?.html || '<table class="items-table"><tbody></tbody></table>';
-  const aiHTML = request.forceTemplateFallback
-    ? ''
-    : simulateAIDraftHTML(request, language, primaryTable, totals);
-
-  if (aiFormatter.isAIResponseInvalid(aiHTML)) {
+  
+  // Use real AI if configured, otherwise use mock/simulated
+  let aiHTML = '';
+  let aiUsed = false;
+  
+  if (!request.forceTemplateFallback && AI_PROVIDER !== 'mock') {
+    try {
+      const promptStack = buildPromptStack(firm, request.docType);
+      const aiResponse = await generateAIDraft(
+        { provider: AI_PROVIDER, apiKey: AI_API_KEY, model: AI_MODEL },
+        {
+          systemPrompt: GLOBAL_SYSTEM_PROMPT,
+          userPrompt: promptStack,
+          temperature: 0.7,
+          maxTokens: 4000,
+        }
+      );
+      aiHTML = aiResponse.content;
+      aiUsed = true;
+      console.log(`AI Provider: ${aiResponse.provider}, Model: ${aiResponse.model}`);
+    } catch (error) {
+      console.error('AI generation failed, using fallback:', error);
+      aiUsed = false;
+    }
+  }
+  
+  // If AI failed or is disabled, use simulated draft
+  if (!aiUsed || aiFormatter.isAIResponseInvalid(aiHTML)) {
     fallbackUsed = true;
-    const context = buildContext(request, language, primaryTable, totals.totalAmount);
-    const fallback = templateLoader.loadDefaultTemplate(request.docType, language, context);
-    return { pages: [aiFormatter.sanitizeAIHTML(fallback)], fallbackUsed };
+    aiHTML = simulateAIDraftHTML(request, language, primaryTable, totals);
+    console.log('Using fallback template');
   }
 
   return { pages: [aiFormatter.sanitizeAIHTML(aiHTML)], fallbackUsed };
@@ -281,7 +312,7 @@ export async function generateDraft(request: AdvancedDraftRequest): Promise<Draf
       : null;
   const departmentName = department?.name || 'Government Department';
 
-  const { pages, fallbackUsed } = buildContentPages(request, language, adjustedItems, totals, departmentName);
+  const { pages, fallbackUsed } = await buildContentPages(request, language, adjustedItems, totals, departmentName, firm);
   const includeLetterhead = docUsesLetterhead(request.docType);
   const layered = includeLetterhead
     ? layoutEngine.applyLetterheadLayoutPages(pages, firm, {

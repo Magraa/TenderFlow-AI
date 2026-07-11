@@ -220,6 +220,95 @@ All documents include:
 - Apply settings to multiple documents
 - Batch generate documents
 
+## Master Dictionaries
+
+### Purpose Library
+
+The Purpose Library is a reusable database that maps procurement categories to professional procurement purposes. This ensures tender documents use formal government language instead of raw item names.
+
+#### How to Use Purpose Library
+
+1. **Access Master Dictionaries**:
+   - Navigate to the Master Dictionaries interface
+   - Select "Purpose Library" tab
+
+2. **Add New Mapping**:
+   - Click "Add Mapping" button
+   - Enter the procurement category (e.g., "fire_fighting", "water_supply", "chemicals")
+   - Enter the professional procurement purpose in Hindi or English
+   - Click "Save"
+
+3. **Example Mappings**:
+   - Category: "fire_fighting"
+     Purpose: "अग्निशमन एवं जल आपूर्ति कार्य हेतु आवश्यक सामग्री"
+   - Category: "water_supply"
+     Purpose: "जल आपूर्ति कार्य हेतु आवश्यक सामग्री"
+   - Category: "electrical_items"
+     Purpose: "प्रकाश/विद्युत कार्य हेतु आवश्यक सामग्री"
+
+4. **Edit/Delete Mappings**:
+   - Find the mapping in the list
+   - Click "Edit" to modify
+   - Click "Delete" to remove
+
+5. **Automatic Usage**:
+   - When creating a tender, the system automatically checks the Purpose Library
+   - If a mapping exists for an item's category, it uses the professional purpose
+   - If no mapping exists, it uses a temporary purpose automatically
+
+#### Benefits of Purpose Library
+
+- **Consistency**: All items in the same category use the same professional purpose
+- **Professional Documents**: Documents use formal government language
+- **Time-Saving**: No need to manually enter professional purposes for each tender
+- **Reusability**: Mappings can be shared across all tenders and departments
+
+### Hindi Transliteration
+
+Hindi Transliteration converts English item names and vendor names to Hindi phonetic script, making documents more readable for Hindi-speaking officials.
+
+#### How to Use Hindi Transliteration
+
+1. **Access Master Dictionaries**:
+   - Navigate to the Master Dictionaries interface
+   - Select "Item Hindi Mapping" or "Vendor Hindi Mapping" tab
+
+2. **Item Hindi Mapping**:
+   - Add mappings for common items (e.g., "Aluminium Armoured Cable" → "अल्युमीनियम आर्मर्ड केबल")
+   - The system automatically calls AI transliteration once for unknown items
+   - Saved mappings are reused automatically
+
+3. **Vendor Hindi Mapping**:
+   - Add mappings for vendor names and locations
+   - Firm names, cities, and addresses can be transliterated
+   - Example: "Municipal Corporation" → "नगर निगम"
+
+4. **Automatic Usage in Documents**:
+   - When language is set to Hindi, the system uses Hindi names
+   - Item tables display Hindi names
+   - Supplier information shows Hindi names
+   - When language is English, English names are used
+
+#### Example Transliterations
+
+**Items**:
+- "Aluminium Armoured Cable" → "अल्युमीनियम आर्मर्ड केबल"
+- "LED Street Light" → "एलईडी स्ट्रीट लाइट"
+- "PVC Pipes" → "पीवीसी पाइप्स"
+- "Hand Pump" → "हैंड पंप"
+
+**Vendors**:
+- "Municipal Corporation" → "नगर निगम"
+- "Government Store" → "सरकारी स्टोर"
+- "District Office" → "जिला कार्यालय"
+
+#### Benefits of Hindi Transliteration
+
+- **Better Readability**: Hindi-speaking officials can easily read the documents
+- **Professional Appearance**: Documents appear more formal and professional
+- **Consistency**: Same items always use the same Hindi name
+- **Time-Saving**: AI generates Hindi names automatically, no manual entry needed
+
 ## Keyboard Shortcuts
 
 ### In Item Manager

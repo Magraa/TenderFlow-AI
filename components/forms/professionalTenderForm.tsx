@@ -26,6 +26,7 @@ interface FormData {
   alternateFirmAId: string;
   alternateFirmBId: string;
   status: 'draft' | 'final';
+  estimatedAmount: string;
 }
 
 function uniqueFirmIds(ids: string[]): string[] {
@@ -56,6 +57,7 @@ export function ProfessionalTenderForm() {
     alternateFirmAId: '',
     alternateFirmBId: '',
     status: 'draft',
+    estimatedAmount: '',
   });
 
   useEffect(() => {
@@ -140,6 +142,9 @@ export function ProfessionalTenderForm() {
       if (!formData.mainFirmId) {
         throw new Error('Main firm is required.');
       }
+      if (!formData.estimatedAmount) {
+        throw new Error('Estimated amount is required.');
+      }
       if (items.length === 0) {
         throw new Error('At least one item is required.');
       }
@@ -179,6 +184,7 @@ export function ProfessionalTenderForm() {
         submissionDate: formData.submissionDate,
         openingDate: formData.openingDate,
         estimatedBudget: totals.grandTotal,
+        estimatedAmount: formData.estimatedAmount ? parseFloat(formData.estimatedAmount) : undefined,
       });
 
       router.push(`/tenders/${tender.id}`);
@@ -364,6 +370,38 @@ export function ProfessionalTenderForm() {
                     Enter the district name (e.g., दतिया, ग्वालियर)
                   </p>
                 </div>
+              </div>
+
+              {/* Estimated Amount Field */}
+              <div className="p-4 bg-amber-50 rounded-lg border border-amber-200">
+                <Label htmlFor="estimatedAmount">अनुमानित राशि (Estimated Amount) *</Label>
+                <div className="mt-2 space-y-2">
+                  <select
+                    id="estimatedAmount"
+                    className="h-10 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                    value={formData.estimatedAmount}
+                    onChange={(e) => setFormData({ ...formData, estimatedAmount: e.target.value })}
+                    required
+                  >
+                    <option value="">Select estimated amount</option>
+                    <option value="95000">₹95,000</option>
+                    <option value="98000">₹98,000</option>
+                    <option value="198000">₹1,98,000</option>
+                    <option value="custom">Custom (Free Text)</option>
+                  </select>
+                  {formData.estimatedAmount === 'custom' && (
+                    <Input
+                      id="estimatedAmountCustom"
+                      type="number"
+                      placeholder="Enter custom amount (e.g., 150000)"
+                      onChange={(e) => setFormData({ ...formData, estimatedAmount: e.target.value })}
+                      className="mt-2"
+                    />
+                  )}
+                </div>
+                <p className="text-xs text-slate-500 mt-2">
+                  Enter the total estimated budget for this tender
+                </p>
               </div>
 
               {!isMunicipalCorporation && (

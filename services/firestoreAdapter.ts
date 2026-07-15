@@ -17,6 +17,7 @@ import {
 import {
   AILocationCache,
   DepartmentProfile,
+  DocumentPhraseMapping,
   DocumentVersion,
   Firm,
   HindiMapping,
@@ -28,6 +29,7 @@ import {
   TenderDocument,
   TenderItem,
 } from '@/types';
+
 import { getFirebaseFirestore } from '@/services/firebase/firebaseClient';
 import { normalizeSettingsVersioning } from '@/services/versioningSettings';
 import { v4 as uuid } from 'uuid';
@@ -62,7 +64,9 @@ type Collections = {
   placeMappings: PlaceMapping;
   localBodyTypes: LocalBodyType;
   aiLocationCache: AILocationCache;
+  documentPhraseMappings: DocumentPhraseMapping;
 };
+
 
 type CollectionName = keyof Collections;
 
@@ -730,4 +734,56 @@ export class FirestoreDB {
       { fields: ['createdAt'], order: 'ASCENDING' },
     ];
   }
+
+  // ─── Document Phrase Mappings ─────────────────────────────────────────────
+
+  async createDocumentPhraseMapping(
+    data: Omit<DocumentPhraseMapping, 'id' | 'createdAt' | 'updatedAt'>
+  ): Promise<DocumentPhraseMapping> {
+    return this.createEntity('documentPhraseMappings', data);
+  }
+
+  async getDocumentPhraseMappingByCategory(categoryId: string): Promise<DocumentPhraseMapping | undefined> {
+    const q = query(
+      collection(this.firestore, collectionPath('documentPhraseMappings')),
+      where('categoryId', '==', categoryId),
+      limit(1)
+    );
+    const snap = await getDocs(q);
+    if (snap.empty) return undefined;
+    return snap.docs[0].data() as DocumentPhraseMapping;
+  }
+
+  async findDocumentPhraseMappingByKeyword(keyword: string): Promise<DocumentPhraseMapping | undefined> {
+    // Firestore array-contains query for keyword matching
+    const normalizedKeyword = keyword.trim().toLowerCase();
+    // Try categoryId match first (exact)
+    const byCat = await this.getDocumentPhraseMappingByCategory(normalizedKeyword);
+    if (byCat) return byCat;
+    // Then try keyword array-contains
+    const q = query(
+      collection(this.firestore, collectionPath('documentPhraseMappings')),
+      where('keywords', 'array-contains', normalizedKeyword),
+      limit(1)
+    );
+    const snap = await getDocs(q);
+    if (snap.empty) return undefined;
+    return snap.docs[0].data() as DocumentPhraseMapping;
+  }
+
+  async listDocumentPhraseMappings(): Promise<DocumentPhraseMapping[]> {
+    return this.listEntities('documentPhraseMappings');
+  }
+
+  async updateDocumentPhraseMapping(
+    id: string,
+    data: Partial<Omit<DocumentPhraseMapping, 'id' | 'createdAt'>>
+  ): Promise<DocumentPhraseMapping | undefined> {
+    return this.updateEntity('documentPhraseMappings', id, data as any);
+  }
+
+  async deleteDocumentPhraseMapping(id: string): Promise<boolean> {
+    return this.deleteEntity('documentPhraseMappings', id);
+  }
 }
+

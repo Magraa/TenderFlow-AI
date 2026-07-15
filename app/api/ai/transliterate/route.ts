@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { transliterate, AIConfig, AITransliterateRequest } from '@/services/aiClient';
+import { transliterate, AIConfig, AITransliterateRequest, AIProvider } from '@/services/aiClient';
 
 function extractText(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'text is required' }, { status: 400 });
   }
 
-  const provider = (process.env.AI_PROVIDER || process.env.NEXT_PUBLIC_AI_PROVIDER || 'mock').toLowerCase();
+  const provider = (process.env.AI_PROVIDER || process.env.NEXT_PUBLIC_AI_PROVIDER || 'mock').toLowerCase() as AIProvider;
   const apiKey = process.env.AI_API_KEY || process.env.NEXT_PUBLIC_AI_API_KEY || '';
   const model = process.env.AI_MODEL || process.env.NEXT_PUBLIC_AI_MODEL || 'mock-1.0';
 

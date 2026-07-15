@@ -24,7 +24,9 @@ export interface Database {
   placeMappings: PlaceMapping[];
   localBodyTypes: LocalBodyType[];
   aiLocationCache: AILocationCache[];
+  documentPhraseMappings: DocumentPhraseMapping[];
 }
+
 
 export interface PurposeMapping {
   id: string;
@@ -87,7 +89,29 @@ export interface HindiMapping {
  * }
  */
 
+export interface DocumentPhraseMapping {
+  id: string;
+  categoryName: string;
+  categoryId: string;
+  keywords: string[];
+  phrases: {
+    supplyOrder: { subject: string };
+    quotationMain: { english: string; hindi: string };
+    quotation: { purchaseLine: string };
+    quotationAltHindi: { subject: string };
+    quotationAltEnglish: { subject: string };
+    bill: { itemDescription: string };
+  };
+  generatedByAI: boolean;
+  approved: boolean;
+  usageCount: number;
+  lastUsedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export const defaultDatabase: Database = {
+
   tenders: [],
   firms: [],
   documents: [],
@@ -100,7 +124,9 @@ export const defaultDatabase: Database = {
   placeMappings: [],
   localBodyTypes: [],
   aiLocationCache: [],
+  documentPhraseMappings: [],
 };
+
 
 export const defaultSettings: Settings = {
   id: 'default-settings',

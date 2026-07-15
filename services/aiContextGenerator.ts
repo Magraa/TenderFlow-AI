@@ -1,5 +1,7 @@
-﻿import { TenderItem } from '@/types';
+import { TenderItem } from '@/types';
 import { getPurposeByCategory, consolidatePurposesByCategory, getHindiItemName } from './mappingService';
+import { findPhrasePack } from './documentPhraseService';
+
 
 /**
  * AI Context Generator
@@ -143,6 +145,19 @@ export async function generateSupplyAadeshBody(
   items: TenderItem[],
   language: 'hindi' | 'english' = 'hindi'
 ): Promise<string> {
+  if (items.length > 0) {
+    const firstItem = items[0];
+    const pack = await findPhrasePack(firstItem.category || firstItem.productName);
+    if (pack) {
+      const itemSummary = language === 'hindi' ? (pack.phrases.bill?.itemDescription || pack.categoryName) : pack.categoryName;
+      if (language === 'hindi') {
+        return `विशेषान्तर्गत आपको अवगत कराया जाता है कि आपके द्वारा प्रस्तुत ${itemSummary} के संबंध में कोटेशन दिनांक ............. के माध्यम से सप्लाई हेतु निवेदन किया गया था, जो दर न्यूनतम होने से कार्यालय द्वारा दर स्वीकृत की गई है।\n\nअतः आप निम्न सामग्री की सप्लाई को सात दिवस में प्रस्तुत करें।`;
+      } else {
+        return `Dear Sir/Madam,\n\nWith reference to the rates submitted by you for ${itemSummary}, you are hereby informed that your firm has been selected for the supply of the following materials. Please ensure timely delivery within the specified timeframe.`;
+      }
+    }
+  }
+
   const context = await generateTenderPurpose(items, language);
 
   if (language === 'hindi') {
@@ -183,6 +198,20 @@ export async function generateVigyaptiIntroWithPurpose(
   items: TenderItem[],
   language: 'hindi' | 'english' = 'hindi'
 ): Promise<string> {
+  if (items.length > 0) {
+    const firstItem = items[0];
+    const pack = await findPhrasePack(firstItem.category || firstItem.productName);
+    if (pack) {
+      if (language === 'hindi') {
+        const purchaseLine = pack.phrases.quotation.purchaseLine || `${pack.categoryName} क्रय किया जाना है।`;
+        return `एतद् द्वारा सर्व संबंधित वाणिज्य कर विभाग में पंजीकृत फर्मों को सूचित किया जाता है कि नगर परिषद ${placeName} में ${purchaseLine}`;
+      } else {
+        const categoryName = pack.categoryName || firstItem.productName;
+        return `All concerned firms registered with the Commercial Tax Department are hereby informed that the Municipal Council ${placeName} proposes to purchase ${categoryName}.`;
+      }
+    }
+  }
+
   const purpose = await generatePurposeLineByCategoryForItems(items, language);
   
   if (language === 'hindi') {
@@ -199,6 +228,18 @@ export async function generateSupplyAadeshSubjectWithPurpose(
   items: TenderItem[],
   language: 'hindi' | 'english' = 'hindi'
 ): Promise<string> {
+  if (items.length > 0) {
+    const firstItem = items[0];
+    const pack = await findPhrasePack(firstItem.category || firstItem.productName);
+    if (pack) {
+      if (language === 'hindi') {
+        return `विषय:- ${pack.phrases.supplyOrder.subject}`;
+      } else {
+        return `Subject: ${pack.phrases.quotationMain?.english || pack.phrases.quotationAltEnglish.subject}`;
+      }
+    }
+  }
+
   const purpose = await generatePurposeLineByCategoryForItems(items, language);
   
   if (language === 'hindi') {
@@ -207,6 +248,7 @@ export async function generateSupplyAadeshSubjectWithPurpose(
     return `Subject: Regarding supply of ${purpose}.`;
   }
 }
+
 
 export const aiContextGenerator = {
   generateTenderPurpose,

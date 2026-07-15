@@ -24,6 +24,9 @@ type FirmFormState = FirmFormData & {
   headerImagePathFileInfo?: { url: string; fileName: string };
   signatureImagePathFileInfo?: { url: string; fileName: string };
   stampImagePathFileInfo?: { url: string; fileName: string };
+  headerImagePathPreview?: string;
+  signatureImagePathPreview?: string;
+  stampImagePathPreview?: string;
 };
 
 const FIT_MODES: LetterheadFitMode[] = ['contain', 'cover', 'stretch'];
@@ -123,13 +126,18 @@ function PreviewFrame({
   const stampMode = formData.stampMode ?? 'image';
   const fitStyle = getFitStyle(formData.fitLetterheadMode);
 
+  // Use local preview URLs if available (prevents CORS & network load issues)
+  const headerImagePath = formData.headerImagePathPreview || formData.headerImagePath;
+  const signatureImagePath = formData.signatureImagePathPreview || formData.signatureImagePath;
+  const stampImagePath = formData.stampImagePathPreview || formData.stampImagePath;
+
   // Debug: Log letterhead URL
   useEffect(() => {
-    if (formData.headerImagePath) {
-      console.log('Preview letterhead URL:', formData.headerImagePath);
-      console.log('Is Firebase URL:', formData.headerImagePath.startsWith('https://firebasestorage.googleapis.com/'));
+    if (headerImagePath) {
+      console.log('Preview letterhead URL:', headerImagePath);
+      console.log('Is Firebase URL:', headerImagePath.startsWith('https://firebasestorage.googleapis.com/'));
     }
-  }, [formData.headerImagePath]);
+  }, [headerImagePath]);
 
   return (
     <div className="rounded-xl border bg-slate-50 p-4">
@@ -147,18 +155,18 @@ function PreviewFrame({
           }}
         >
           <div className="relative w-full overflow-hidden" style={{ aspectRatio: '210 / 297' }}>
-        {showLetterheadBackground && formData.headerImagePath ? (
+        {showLetterheadBackground && headerImagePath ? (
           <>
             <div
               className="absolute inset-0 bg-top bg-no-repeat"
-              style={{ backgroundImage: `url(${formData.headerImagePath})`, ...fitStyle }}
+              style={{ backgroundImage: `url("${headerImagePath}")`, ...fitStyle }}
             />
             {/* Debug: Show URL in preview */}
             <div className="absolute bottom-2 left-2 z-50 rounded bg-black/70 px-2 py-1 text-[10px] font-mono text-white">
-              <span className="truncate max-w-[200px]">{formData.headerImagePath}</span>
+              <span className="truncate max-w-[200px]">{headerImagePath}</span>
             </div>
           </>
-        ) : showLetterheadBackground && !formData.headerImagePath ? (
+        ) : showLetterheadBackground && !headerImagePath ? (
           <div className="absolute inset-0 flex items-center justify-center rounded-md bg-slate-100">
             <p className="text-sm text-slate-500">No letterhead uploaded</p>
           </div>
@@ -240,7 +248,7 @@ function PreviewFrame({
           </div>
         </div>
 
-        {formData.signatureImagePath && (
+        {signatureImagePath && (
           <div
             className="absolute z-20"
             style={{
@@ -252,7 +260,7 @@ function PreviewFrame({
           >
             <div className="relative h-11 w-[132px]">
               <Image
-                src={formData.signatureImagePath}
+                src={signatureImagePath}
                 alt="Signature preview"
                 fill
                 className="object-contain object-right-bottom"
@@ -262,7 +270,7 @@ function PreviewFrame({
           </div>
         )}
 
-        {(stampMode === 'generic' || formData.stampImagePath) && (
+        {(stampMode === 'generic' || stampImagePath) && (
           <div
             className="absolute z-20"
             style={{
@@ -284,8 +292,8 @@ function PreviewFrame({
               </div>
             ) : (
               <div className="relative h-16 w-[92px]">
-                {formData.stampImagePath ? (
-                  <Image src={formData.stampImagePath} alt="Stamp preview" fill className="object-contain object-right-bottom" unoptimized />
+                {stampImagePath ? (
+                  <Image src={stampImagePath} alt="Stamp preview" fill className="object-contain object-right-bottom" unoptimized />
                 ) : null}
               </div>
             )}
@@ -444,10 +452,23 @@ export default function ManageFirmsPage() {
     setDialogOpen(true);
   };
 
+  const cleanupPreviews = (data: FirmFormState) => {
+    if (data.headerImagePathPreview) {
+      try { URL.revokeObjectURL(data.headerImagePathPreview); } catch (e) {}
+    }
+    if (data.signatureImagePathPreview) {
+      try { URL.revokeObjectURL(data.signatureImagePathPreview); } catch (e) {}
+    }
+    if (data.stampImagePathPreview) {
+      try { URL.revokeObjectURL(data.stampImagePathPreview); } catch (e) {}
+    }
+  };
+
   const handleDialogOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) {
       const isDirty = JSON.stringify(formData) !== JSON.stringify(initialFormDataRef.current);
       if (isDirty && !confirm('You have unsaved changes. Close without saving?')) return;
+      cleanupPreviews(formData);
     }
     setDialogOpen(nextOpen);
   };
@@ -455,9 +476,16 @@ export default function ManageFirmsPage() {
   const handleUpload = async (field: 'headerImagePath' | 'signatureImagePath' | 'stampImagePath', file?: File) => {
     if (!file) return;
     
+    // Create local object URL for instant preview
+    const objectUrl = URL.createObjectURL(file);
+    
     try {
-      // Show upload progress
-      setFormData((prev) => ({ ...prev, [`${field}Loading`]: true }));
+      // Show upload progress and set preview URL
+      setFormData((prev) => ({ 
+        ...prev, 
+        [`${field}Loading`]: true,
+        [`${field}Preview`]: objectUrl
+      }));
       
       // Get firm ID (use temp ID if creating new firm)
       const firmId = editingFirm?.id || `temp-${Date.now()}`;
@@ -498,7 +526,13 @@ export default function ManageFirmsPage() {
       const message = uploadError instanceof Error ? uploadError.message : 'Upload failed.';
       setError(message);
       console.error('Upload error:', uploadError);
-      setFormData((prev) => ({ ...prev, [`${field}Loading`]: false }));
+      // Clean up local preview URL on failure
+      try { URL.revokeObjectURL(objectUrl); } catch (e) {}
+      setFormData((prev) => ({ 
+        ...prev, 
+        [`${field}Loading`]: false,
+        [`${field}Preview`]: undefined 
+      }));
     }
   };
 
@@ -598,7 +632,19 @@ export default function ManageFirmsPage() {
       stampMode: (formData.stampMode ?? 'image') as 'image' | 'generic',
     };
 
-    const validation = firmService.validateFirmComplete(normalized);
+    // Create a clean object for saving to Firestore by deleting UI-only state keys
+    const cleanData = { ...normalized };
+    delete (cleanData as any).headerImagePathLoading;
+    delete (cleanData as any).signatureImagePathLoading;
+    delete (cleanData as any).stampImagePathLoading;
+    delete (cleanData as any).headerImagePathFileInfo;
+    delete (cleanData as any).signatureImagePathFileInfo;
+    delete (cleanData as any).stampImagePathFileInfo;
+    delete (cleanData as any).headerImagePathPreview;
+    delete (cleanData as any).signatureImagePathPreview;
+    delete (cleanData as any).stampImagePathPreview;
+
+    const validation = firmService.validateFirmComplete(cleanData);
     if (!validation.valid) {
       setError(validation.errors.join(' '));
       return;
@@ -608,16 +654,17 @@ export default function ManageFirmsPage() {
     setError('');
     try {
       if (editingFirm) {
-        const updated = await dataService.firms.update(editingFirm.id, normalized);
+        const updated = await dataService.firms.update(editingFirm.id, cleanData);
         if (updated) {
           setFirms((previous) => previous.map((firm) => (firm.id === editingFirm.id ? updated : firm)));
         }
         setSuccess('Firm updated.');
       } else {
-        const created = await dataService.firms.create(normalized);
+        const created = await dataService.firms.create(cleanData);
         setFirms((previous) => [...previous, created]);
         setSuccess('Firm created.');
       }
+      cleanupPreviews(formData);
       setDialogOpen(false);
       setTimeout(() => setSuccess(''), 2200);
     } catch (saveError) {
@@ -669,7 +716,7 @@ export default function ManageFirmsPage() {
   return (
     <div className="min-h-screen bg-slate-50">
       <div className="border-b bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-6 sm:px-6 lg:px-8">
+        <div className="mx-auto flex max-w-screen-xl items-center justify-between px-4 py-6 sm:px-6 lg:px-8">
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-slate-900">Manage Firms</h1>
             <p className="mt-1 text-sm text-slate-600">Configure letterhead fit, AI prompt style, and document layout.</p>
@@ -680,7 +727,7 @@ export default function ManageFirmsPage() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-7xl space-y-4 px-4 py-4 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-screen-xl space-y-4 px-4 py-4 sm:px-6 lg:px-8">
         {error && (
           <Alert variant="destructive">
             <AlertTitle>Error</AlertTitle>
@@ -700,7 +747,7 @@ export default function ManageFirmsPage() {
               + Add New Firm
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-h-[94vh] overflow-y-auto sm:max-w-7xl">
+          <DialogContent className="max-h-[94vh] overflow-y-auto sm:max-w-screen-lg">
             <DialogHeader>
               <DialogTitle>{isEditMode ? 'Edit Firm' : 'Add New Firm'}</DialogTitle>
             </DialogHeader>
@@ -1368,7 +1415,7 @@ export default function ManageFirmsPage() {
                   className="h-24 bg-slate-200 bg-top bg-no-repeat"
                   style={
                     firm.headerImagePath
-                      ? { backgroundImage: `url(${firm.headerImagePath})`, ...getFitStyle(firm.fitLetterheadMode) }
+                      ? { backgroundImage: `url("${firm.headerImagePath}")`, ...getFitStyle(firm.fitLetterheadMode) }
                       : undefined
                   }
                 />

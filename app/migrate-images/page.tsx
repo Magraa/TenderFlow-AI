@@ -177,7 +177,7 @@ export default function MigrateImagesPage() {
   return (
     <div className="min-h-screen bg-slate-50">
       <div className="border-b bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-6 sm:px-6 lg:px-8">
+        <div className="mx-auto flex max-w-screen-xl items-center justify-between px-4 py-6 sm:px-6 lg:px-8">
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-slate-900">Migrate Images to Firebase Storage</h1>
             <p className="mt-1 text-sm text-slate-600">
@@ -190,7 +190,7 @@ export default function MigrateImagesPage() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-7xl space-y-4 px-4 py-4 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-screen-xl space-y-4 px-4 py-4 sm:px-6 lg:px-8">
         {error && (
           <Alert variant="destructive">
             <AlertTitle>Error</AlertTitle>

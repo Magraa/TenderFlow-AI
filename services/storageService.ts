@@ -24,7 +24,9 @@ import {
   samplePlaceMappings,
   sampleDepartmentProfile,
   sampleFirms,
+  DocumentPhraseMapping,
 } from '@/data/schema';
+
 import { normalizeSettingsVersioning } from '@/services/versioningSettings';
 import { v4 as uuid } from 'uuid';
 
@@ -184,6 +186,29 @@ function normalizeAILocationCache(entry: Partial<AILocationCache>): AILocationCa
     provider: toSafeString(entry.provider, 'local'),
     createdAt: toSafeString(entry.createdAt, nowIso()),
     updatedAt: toSafeString(entry.updatedAt, nowIso()),
+  };
+}
+
+function normalizeDocumentPhraseMapping(mapping: Partial<DocumentPhraseMapping>): DocumentPhraseMapping {
+  return {
+    id: toSafeString(mapping.id, uuid()),
+    categoryName: toSafeString(mapping.categoryName, ''),
+    categoryId: toSafeString(mapping.categoryId, ''),
+    keywords: Array.isArray(mapping.keywords) ? mapping.keywords : [],
+    phrases: mapping.phrases ?? {
+      supplyOrder: { subject: '' },
+      quotationMain: { english: '', hindi: '' },
+      quotation: { purchaseLine: '' },
+      quotationAltHindi: { subject: '' },
+      quotationAltEnglish: { subject: '' },
+      bill: { itemDescription: '' },
+    },
+    generatedByAI: toSafeBoolean(mapping.generatedByAI, false),
+    approved: toSafeBoolean(mapping.approved, false),
+    usageCount: toSafeNumber(mapping.usageCount, 0),
+    lastUsedAt: mapping.lastUsedAt,
+    createdAt: toSafeString(mapping.createdAt, nowIso()),
+    updatedAt: toSafeString(mapping.updatedAt, nowIso()),
   };
 }
 
@@ -396,8 +421,12 @@ function normalizeDatabase(raw: unknown): Database {
     placeMappings: placeMappings.length > 0 ? placeMappings : [...samplePlaceMappings],
     localBodyTypes: localBodyTypes.length > 0 ? localBodyTypes : [...defaultLocalBodyTypes],
     aiLocationCache,
+    documentPhraseMappings: Array.isArray(parsed.documentPhraseMappings)
+      ? parsed.documentPhraseMappings.map((m: any) => normalizeDocumentPhraseMapping(m))
+      : [],
   };
 }
+
 
 class LocalStorageDB {
   private db: Database;
@@ -1028,6 +1057,66 @@ class LocalStorageDB {
     this.saveToStorage(this.db);
     return true;
   }
+
+  // ─── Document Phrase Mappings CRUD ────────────────────────────────────────
+
+  createDocumentPhraseMapping(
+    data: Omit<DocumentPhraseMapping, 'id' | 'createdAt' | 'updatedAt'>
+  ): DocumentPhraseMapping {
+    const createdAt = nowIso();
+    const mapping = normalizeDocumentPhraseMapping({ ...data, id: uuid(), createdAt, updatedAt: createdAt });
+    if (!this.db.documentPhraseMappings) this.db.documentPhraseMappings = [];
+    this.db.documentPhraseMappings.push(mapping);
+    this.saveToStorage(this.db);
+    return mapping;
+  }
+
+  getDocumentPhraseMappingByCategory(categoryId: string): DocumentPhraseMapping | undefined {
+    return (this.db.documentPhraseMappings || []).find(
+      (m) => m.categoryId === categoryId
+    );
+  }
+
+  findDocumentPhraseMappingByKeyword(keyword: string): DocumentPhraseMapping | undefined {
+    const normalizedKeyword = keyword.trim().toLowerCase();
+    return (this.db.documentPhraseMappings || []).find(
+      (m) =>
+        m.categoryId === normalizedKeyword ||
+        m.categoryName.toLowerCase() === normalizedKeyword ||
+        m.keywords.some((k) => k.toLowerCase() === normalizedKeyword)
+    );
+  }
+
+  listDocumentPhraseMappings(): DocumentPhraseMapping[] {
+    return [...(this.db.documentPhraseMappings || [])].sort(
+      (a, b) => b.usageCount - a.usageCount
+    );
+  }
+
+  updateDocumentPhraseMapping(
+    id: string,
+    data: Partial<Omit<DocumentPhraseMapping, 'id' | 'createdAt'>>
+  ): DocumentPhraseMapping | undefined {
+    const arr = this.db.documentPhraseMappings || [];
+    const index = arr.findIndex((m) => m.id === id);
+    if (index === -1) return undefined;
+    const updated = normalizeDocumentPhraseMapping({ ...arr[index], ...data, id, updatedAt: nowIso() });
+    arr[index] = updated;
+    this.db.documentPhraseMappings = arr;
+    this.saveToStorage(this.db);
+    return updated;
+  }
+
+  deleteDocumentPhraseMapping(id: string): boolean {
+    const arr = this.db.documentPhraseMappings || [];
+    const index = arr.findIndex((m) => m.id === id);
+    if (index === -1) return false;
+    arr.splice(index, 1);
+    this.db.documentPhraseMappings = arr;
+    this.saveToStorage(this.db);
+    return true;
+  }
 }
+
 
 export const db = new LocalStorageDB();

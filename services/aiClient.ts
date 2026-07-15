@@ -37,11 +37,16 @@ async function mockAIDraft(request: AIDraftRequest): Promise<AIDraftResponse> {
   };
 }
 
+function normalizeGeminiModel(model: string): string {
+  return model || 'gemini-2.0-flash';
+}
+
 // Gemini AI integration
 async function geminiAIDraft(request: AIDraftRequest, apiKey: string, model: string = 'gemini-1.5-flash'): Promise<AIDraftResponse> {
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
-    const geminiModel = genAI.getGenerativeModel({ model });
+    const normalizedModel = normalizeGeminiModel(model);
+    const geminiModel = genAI.getGenerativeModel({ model: normalizedModel });
     
     const prompt = `${request.systemPrompt}\n\n${request.userPrompt}`;
     
@@ -52,7 +57,7 @@ async function geminiAIDraft(request: AIDraftRequest, apiKey: string, model: str
     return {
       content: content,
       provider: 'gemini',
-      model: model,
+      model: normalizedModel,
       tokensUsed: response.usage?.totalTokens,
     };
   } catch (error) {
@@ -245,7 +250,8 @@ async function geminiTransliterate(
 ): Promise<AITransliterateResponse> {
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
-    const geminiModel = genAI.getGenerativeModel({ model });
+    const normalizedModel = normalizeGeminiModel(model);
+    const geminiModel = genAI.getGenerativeModel({ model: normalizedModel });
     
     const prompt = `Transliterate "${request.text}" from ${request.sourceLanguage} to ${request.targetLanguage}. Return only the transliterated text.`;
     
@@ -256,7 +262,7 @@ async function geminiTransliterate(
     return {
       transliteratedText,
       provider: 'gemini',
-      model: model,
+      model: normalizedModel,
     };
   } catch (error) {
     console.error('Gemini transliteration error:', error);

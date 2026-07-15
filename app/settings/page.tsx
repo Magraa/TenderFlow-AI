@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Firm, Settings, PurposeMapping, HindiMapping, PlaceMapping, VersioningSettings } from '@/types';
+import { Firm, Settings, PurposeMapping, HindiMapping, PlaceMapping, VersioningSettings, DocumentPhraseMapping } from '@/types';
+
 import { dataService } from '@/services/dataService';
 import {
   defaultVersioningSettings,
@@ -17,7 +18,8 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AddPlaceDialog } from '@/components/forms/Location/AddPlaceDialog';
-import { Sparkles, FileText, Languages } from 'lucide-react';
+import { Sparkles, FileText, Languages, Package, ChevronDown, ChevronUp } from 'lucide-react';
+
 import { Textarea } from '@/components/ui/textarea';
 
 type DictionaryType = 'purpose' | 'itemHindi' | 'vendorHindi';
@@ -35,7 +37,17 @@ export default function SettingsPage() {
   const [itemHindiMappings, setItemHindiMappings] = useState<HindiMapping[]>([]);
   const [vendorHindiMappings, setVendorHindiMappings] = useState<HindiMapping[]>([]);
   const [placeMappings, setPlaceMappings] = useState<PlaceMapping[]>([]);
+  const [documentPhraseMappings, setDocumentPhraseMappings] = useState<DocumentPhraseMapping[]>([]);
   const [loadingMappings, setLoadingMappings] = useState(false);
+
+  // Phrase pack dialog state
+  const [phraseDialogOpen, setPhraseDialogOpen] = useState(false);
+  const [phraseDialogMode, setPhraseDialogMode] = useState<'add' | 'edit'>('add');
+  const [currentPhrase, setCurrentPhrase] = useState<DocumentPhraseMapping | null>(null);
+  const [phraseFormData, setPhraseFormData] = useState<any>({});
+  const [generatingPhrasePack, setGeneratingPhrasePack] = useState(false);
+  const [expandedPhraseId, setExpandedPhraseId] = useState<string | null>(null);
+
 
   // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -86,16 +98,19 @@ export default function SettingsPage() {
   const loadMappings = async () => {
     setLoadingMappings(true);
     try {
-      const [purposes, items, vendors, places] = await Promise.all([
+      const [purposes, items, vendors, places, phrasePacks] = await Promise.all([
         dataService.purposeMappings.list(),
         dataService.itemHindiMappings.list(),
         dataService.vendorHindiMappings.list(),
         dataService.placeMappings.list(),
+        dataService.documentPhraseMappings.list(),
       ]);
       setPurposeMappings(purposes);
       setItemHindiMappings(items);
       setVendorHindiMappings(vendors);
       setPlaceMappings(places);
+      setDocumentPhraseMappings(phrasePacks);
+
     } catch (error) {
       console.error('Error loading mappings:', error);
     } finally {
@@ -679,12 +694,17 @@ export default function SettingsPage() {
             <CardDescription>Manage purpose mappings and Hindi transliteration dictionaries.</CardDescription>
           </CardHeader>
           <CardContent>
-            <Tabs defaultValue="purpose" className="w-full">
-              <TabsList className="grid w-full grid-cols-3">
+            <Tabs defaultValue="phrasepacks" className="w-full">
+              <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="purpose">Purpose Library</TabsTrigger>
                 <TabsTrigger value="item">Item Hindi Mappings</TabsTrigger>
+                <TabsTrigger value="phrasepacks" className="flex items-center gap-1.5">
+                  <Package className="h-3.5 w-3.5" />
+                  Phrase Packs
+                </TabsTrigger>
                 <TabsTrigger value="locations">Locations</TabsTrigger>
               </TabsList>
+
               
               <TabsContent value="purpose" className="space-y-4">
                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
@@ -815,8 +835,157 @@ export default function SettingsPage() {
                   </div>
                 )}
               </TabsContent>
-              
+
+              {/* ─── Phrase Packs Tab ─────────────────────────────────────────── */}
+              <TabsContent value="phrasepacks" className="space-y-4 pt-2">
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-slate-700">Document Phrase Packs</p>
+                    <p className="text-xs text-slate-500 mt-0.5">Each category stores reusable Hindi phrases for all tender document types. Generated once by AI, reused forever.</p>
+                  </div>
+                  <Button
+                    onClick={() => {
+                      setPhraseDialogMode('add');
+                      setCurrentPhrase(null);
+                      setPhraseFormData({
+                        categoryName: '',
+                        keywords: '',
+                        supplyOrderSubject: '',
+                        quotationPurchaseLine: '',
+                        quotationAltHindi: '',
+                        quotationAltEnglish: '',
+                        billItemDescription: '',
+                      });
+                      setPhraseDialogOpen(true);
+                    }}
+                    className="shrink-0"
+                  >
+                    <Package className="h-4 w-4 mr-2" />
+                    Add Phrase Pack
+                  </Button>
+                </div>
+
+                {loadingMappings ? (
+                  <p className="text-sm text-slate-500">Loading phrase packs...</p>
+                ) : documentPhraseMappings.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/60 p-10 text-center">
+                    <Package className="h-10 w-10 text-slate-300 mx-auto mb-3" />
+                    <p className="text-sm font-medium text-slate-600">No phrase packs yet</p>
+                    <p className="text-xs text-slate-400 mt-1">Create a tender and the system will auto-generate phrase packs, or add one manually above.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {documentPhraseMappings.map((pack) => (
+                      <div
+                        key={pack.id}
+                        className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden"
+                      >
+                        {/* Header row */}
+                        <div className="flex items-center justify-between px-4 py-3">
+                          <div className="flex items-center gap-3">
+                            <div className="h-9 w-9 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
+                              <Package className="h-4.5 w-4.5 text-blue-500" />
+                            </div>
+                            <div>
+                              <p className="font-semibold text-slate-800 text-sm">{pack.categoryName}</p>
+                              <p className="text-xs text-slate-400 mt-0.5">
+                                {pack.keywords.slice(0, 4).join(', ')}{pack.keywords.length > 4 ? ` +${pack.keywords.length - 4}` : ''}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {pack.generatedByAI && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-purple-50 text-purple-600">
+                                <Sparkles className="h-3 w-3" /> AI
+                              </span>
+                            )}
+                            {pack.approved && (
+                              <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-600">Approved</span>
+                            )}
+                            <span className="text-xs text-slate-400">Used {pack.usageCount}×</span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setPhraseDialogMode('edit');
+                                setCurrentPhrase(pack);
+                                setPhraseFormData({
+                                  categoryName: pack.categoryName,
+                                  keywords: pack.keywords.join(', '),
+                                  supplyOrderSubject: pack.phrases.supplyOrder.subject,
+                                  quotationPurchaseLine: pack.phrases.quotation.purchaseLine,
+                                  quotationAltHindi: pack.phrases.quotationAltHindi.subject,
+                                  quotationAltEnglish: pack.phrases.quotationAltEnglish.subject,
+                                  billItemDescription: pack.phrases.bill.itemDescription,
+                                });
+                                setPhraseDialogOpen(true);
+                              }}
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={async () => {
+                                if (!confirm(`Delete phrase pack "${pack.categoryName}"?`)) return;
+                                await dataService.documentPhraseMappings.delete(pack.id);
+                                setDocumentPhraseMappings((prev) => prev.filter((p) => p.id !== pack.id));
+                              }}
+                            >
+                              Delete
+                            </Button>
+                            <button
+                              className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+                              onClick={() => setExpandedPhraseId(expandedPhraseId === pack.id ? null : pack.id)}
+                            >
+                              {expandedPhraseId === pack.id
+                                ? <ChevronUp className="h-4 w-4 text-slate-400" />
+                                : <ChevronDown className="h-4 w-4 text-slate-400" />}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Expanded phrase detail */}
+                        {expandedPhraseId === pack.id && (
+                          <div className="border-t border-slate-100 bg-slate-50/50 px-4 py-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="space-y-1 sm:col-span-2">
+                              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Supply Order Subject</p>
+                              <p className="text-sm text-slate-700 bg-white rounded-lg border border-slate-200 px-3 py-2">{pack.phrases.supplyOrder.subject || <span className="text-slate-300 italic">—</span>}</p>
+                            </div>
+                            <div className="space-y-1">
+                              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Main Quotation (English)</p>
+                              <p className="text-sm text-slate-700 bg-white rounded-lg border border-slate-200 px-3 py-2">{pack.phrases.quotationMain?.english || <span className="text-slate-300 italic">—</span>}</p>
+                            </div>
+                            <div className="space-y-1">
+                              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Main Quotation (Hindi)</p>
+                              <p className="text-sm text-slate-700 bg-white rounded-lg border border-slate-200 px-3 py-2">{pack.phrases.quotationMain?.hindi || <span className="text-slate-300 italic">—</span>}</p>
+                            </div>
+                            <div className="space-y-1">
+                              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Quotation Purchase Line</p>
+                              <p className="text-sm text-slate-700 bg-white rounded-lg border border-slate-200 px-3 py-2">{pack.phrases.quotation.purchaseLine || <span className="text-slate-300 italic">—</span>}</p>
+                            </div>
+                            <div className="space-y-1">
+                              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Alt Quotation (Hindi)</p>
+                              <p className="text-sm text-slate-700 bg-white rounded-lg border border-slate-200 px-3 py-2">{pack.phrases.quotationAltHindi.subject || <span className="text-slate-300 italic">—</span>}</p>
+                            </div>
+                            <div className="space-y-1">
+                              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Alt Quotation (English)</p>
+                              <p className="text-sm text-slate-700 bg-white rounded-lg border border-slate-200 px-3 py-2">{pack.phrases.quotationAltEnglish.subject || <span className="text-slate-300 italic">—</span>}</p>
+                            </div>
+                            <div className="space-y-1 sm:col-span-2">
+                              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Bill / Invoice Description</p>
+                              <p className="text-sm text-slate-700 bg-white rounded-lg border border-slate-200 px-3 py-2">{pack.phrases.bill.itemDescription || <span className="text-slate-300 italic">—</span>}</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+
               <TabsContent value="locations" className="space-y-4">
+
                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
                   <p className="text-sm text-slate-500">Manage place, district, and local body mappings.</p>
                   <Button onClick={openAddPlaceDialog}>Add Place</Button>
@@ -1282,6 +1451,267 @@ export default function SettingsPage() {
               onClick={handleSaveMapping}
             >
               {dialogMode === 'add' ? 'Add Mapping' : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Phrase Pack Add / Edit Dialog ──────────────────────────────── */}
+      <Dialog open={phraseDialogOpen} onOpenChange={setPhraseDialogOpen}>
+        <DialogContent className="max-w-2xl border-0 bg-white/95 backdrop-blur-md shadow-2xl rounded-2xl overflow-hidden">
+          <DialogHeader className="bg-slate-50/50 border-b border-slate-100 px-6 py-5">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+                <Package className="h-5 w-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-xl font-bold text-slate-800">
+                  {phraseDialogMode === 'add' ? 'Add' : 'Edit'} Phrase Pack
+                </DialogTitle>
+                <p className="text-xs text-slate-500 mt-1">
+                  Define reusable Hindi phrases for all tender document types in this category.
+                </p>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-4 px-6 py-5 bg-white overflow-y-auto max-h-[70vh]">
+            {/* Category + AI Generate */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5 col-span-1">
+                <Label htmlFor="phraseCategory" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  Category Name <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="phraseCategory"
+                  className="focus-visible:ring-blue-500 border-slate-200 h-10 rounded-lg bg-white shadow-sm"
+                  value={phraseFormData.categoryName || ''}
+                  onChange={(e) => setPhraseFormData({ ...phraseFormData, categoryName: e.target.value })}
+                  placeholder="e.g., Dustbin"
+                />
+              </div>
+              <div className="space-y-1.5 col-span-1">
+                <Label htmlFor="phraseKeywords" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  Keywords <span className="text-slate-400 font-normal">(comma separated)</span>
+                </Label>
+                <Input
+                  id="phraseKeywords"
+                  className="focus-visible:ring-blue-500 border-slate-200 h-10 rounded-lg bg-white shadow-sm"
+                  value={phraseFormData.keywords || ''}
+                  onChange={(e) => setPhraseFormData({ ...phraseFormData, keywords: e.target.value })}
+                  placeholder="dustbin, waste bin, pedal bin"
+                />
+              </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label htmlFor="phraseEnglishDescription" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  English Description <span className="text-slate-400 font-normal">(Optional - improves AI generation accuracy)</span>
+                </Label>
+                <Textarea
+                  id="phraseEnglishDescription"
+                  className="focus-visible:ring-blue-500 border-slate-200 rounded-lg bg-white shadow-sm min-h-[60px]"
+                  value={phraseFormData.englishDescription || ''}
+                  onChange={(e) => setPhraseFormData({ ...phraseFormData, englishDescription: e.target.value })}
+                  placeholder="e.g., Fire fighting hose made of synthetic rubber, or 12 liter HDPE garbage bin..."
+                />
+              </div>
+            </div>
+
+            {/* AI Generate button */}
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full h-10 border-purple-200 hover:border-purple-300 hover:bg-purple-50 text-purple-600 font-semibold rounded-lg shadow-sm transition-all flex items-center justify-center gap-2"
+              loading={generatingPhrasePack}
+              disabled={!phraseFormData.categoryName?.trim() || generatingPhrasePack}
+              onClick={async () => {
+                setGeneratingPhrasePack(true);
+                try {
+                  const response = await fetch('/api/ai/generate-phrase-pack', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      itemName: phraseFormData.categoryName,
+                      description: phraseFormData.englishDescription,
+                    }),
+                  });
+                  if (!response.ok) throw new Error('Generation failed');
+                  const data = await response.json();
+                  setPhraseFormData((prev: any) => ({
+                    ...prev,
+                    keywords: [...new Set([...(prev.keywords ? prev.keywords.split(',').map((k: string) => k.trim()) : []), ...(data.keywords || [])])].join(', '),
+                    supplyOrderSubject: data.phrases?.supplyOrder?.subject || prev.supplyOrderSubject,
+                    quotationMainEnglish: data.phrases?.quotationMain?.english || prev.quotationMainEnglish,
+                    quotationMainHindi: data.phrases?.quotationMain?.hindi || prev.quotationMainHindi,
+                    quotationPurchaseLine: data.phrases?.quotation?.purchaseLine || prev.quotationPurchaseLine,
+                    quotationAltHindi: data.phrases?.quotationAltHindi?.subject || prev.quotationAltHindi,
+                    quotationAltEnglish: data.phrases?.quotationAltEnglish?.subject || prev.quotationAltEnglish,
+                    billItemDescription: data.phrases?.bill?.itemDescription || prev.billItemDescription,
+                  }));
+                } catch {
+                  alert('Failed to generate phrase pack. Please fill in manually.');
+                } finally {
+                  setGeneratingPhrasePack(false);
+                }
+              }}
+            >
+              {!generatingPhrasePack && <Sparkles className="h-4 w-4 text-purple-500" />}
+              Generate All Phrases with AI
+            </Button>
+
+            <div className="border-t border-slate-100 pt-4 space-y-4">
+              {/* Supply Order */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  Supply Order Subject
+                </Label>
+                <Textarea
+                  className="focus-visible:ring-blue-500 border-slate-200 rounded-lg bg-white shadow-sm min-h-[52px]"
+                  value={phraseFormData.supplyOrderSubject || ''}
+                  onChange={(e) => setPhraseFormData({ ...phraseFormData, supplyOrderSubject: e.target.value })}
+                  placeholder="e.g., स्वच्छता हेतु डस्टबिन सप्लाई करने बाबत।"
+                />
+              </div>
+
+              {/* Main Quotation English & Hindi */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Main Quotation (English)
+                  </Label>
+                  <Textarea
+                    className="focus-visible:ring-blue-500 border-slate-200 rounded-lg bg-white shadow-sm min-h-[52px]"
+                    value={phraseFormData.quotationMainEnglish || ''}
+                    onChange={(e) => setPhraseFormData({ ...phraseFormData, quotationMainEnglish: e.target.value })}
+                    placeholder="e.g., To give the Quotations of Dustbin."
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Main Quotation (Hindi)
+                  </Label>
+                  <Textarea
+                    className="focus-visible:ring-blue-500 border-slate-200 rounded-lg bg-white shadow-sm min-h-[52px]"
+                    value={phraseFormData.quotationMainHindi || ''}
+                    onChange={(e) => setPhraseFormData({ ...phraseFormData, quotationMainHindi: e.target.value })}
+                    placeholder="e.g., डस्टबिन के कोटेशन देने हेतु।"
+                  />
+                </div>
+              </div>
+
+              {/* Quotation */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  Quotation Purchase Line
+                </Label>
+                <Textarea
+                  className="focus-visible:ring-blue-500 border-slate-200 rounded-lg bg-white shadow-sm min-h-[52px]"
+                  value={phraseFormData.quotationPurchaseLine || ''}
+                  onChange={(e) => setPhraseFormData({ ...phraseFormData, quotationPurchaseLine: e.target.value })}
+                  placeholder="e.g., स्वच्छता हेतु डस्टबिन क्रय किया जाना है।"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Alt Hindi */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Alt Quotation (Hindi)
+                  </Label>
+                  <Textarea
+                    className="focus-visible:ring-blue-500 border-slate-200 rounded-lg bg-white shadow-sm min-h-[52px]"
+                    value={phraseFormData.quotationAltHindi || ''}
+                    onChange={(e) => setPhraseFormData({ ...phraseFormData, quotationAltHindi: e.target.value })}
+                    placeholder="e.g., सफाई सामग्री के कुटेशन देने बाबत।"
+                  />
+                </div>
+                {/* Alt English */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Alt Quotation (English)
+                  </Label>
+                  <Textarea
+                    className="focus-visible:ring-blue-500 border-slate-200 rounded-lg bg-white shadow-sm min-h-[52px]"
+                    value={phraseFormData.quotationAltEnglish || ''}
+                    onChange={(e) => setPhraseFormData({ ...phraseFormData, quotationAltEnglish: e.target.value })}
+                    placeholder="e.g., To give the Quotations of Cleaning Material."
+                  />
+                </div>
+              </div>
+
+              {/* Bill */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  Bill / Invoice Description
+                </Label>
+                <Textarea
+                  className="focus-visible:ring-blue-500 border-slate-200 rounded-lg bg-white shadow-sm min-h-[52px]"
+                  value={phraseFormData.billItemDescription || ''}
+                  onChange={(e) => setPhraseFormData({ ...phraseFormData, billItemDescription: e.target.value })}
+                  placeholder="e.g., स्वच्छता सामग्री डस्टबिन की आपूर्ति हेतु।"
+                />
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="bg-slate-50/50 border-t border-slate-100 px-6 py-4 flex gap-2">
+            <Button
+              variant="outline"
+              className="rounded-lg h-10 border-slate-200 hover:bg-slate-100 font-medium"
+              onClick={() => setPhraseDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="rounded-lg h-10 bg-blue-600 hover:bg-blue-700 font-medium"
+              onClick={async () => {
+                if (!phraseFormData.categoryName?.trim()) {
+                  alert('Category name is required');
+                  return;
+                }
+                const keywords = (phraseFormData.keywords || '')
+                  .split(',')
+                  .map((k: string) => k.trim().toLowerCase())
+                  .filter(Boolean);
+                const slug = phraseFormData.categoryName.trim().toLowerCase().replace(/\s+/g, '_');
+                const phrases = {
+                  supplyOrder: { subject: phraseFormData.supplyOrderSubject || '' },
+                  quotationMain: {
+                    english: phraseFormData.quotationMainEnglish || '',
+                    hindi: phraseFormData.quotationMainHindi || '',
+                  },
+                  quotation: { purchaseLine: phraseFormData.quotationPurchaseLine || '' },
+                  quotationAltHindi: { subject: phraseFormData.quotationAltHindi || '' },
+                  quotationAltEnglish: { subject: phraseFormData.quotationAltEnglish || '' },
+                  bill: { itemDescription: phraseFormData.billItemDescription || '' },
+                };
+
+                if (phraseDialogMode === 'add') {
+                  const created = await dataService.documentPhraseMappings.create({
+                    categoryName: phraseFormData.categoryName.trim(),
+                    categoryId: slug,
+                    keywords: Array.from(new Set([slug, ...keywords])),
+                    phrases,
+                    generatedByAI: false,
+                    approved: true,
+                    usageCount: 0,
+                  });
+                  setDocumentPhraseMappings((prev) => [created, ...prev]);
+                } else if (currentPhrase) {
+                  const updated = await dataService.documentPhraseMappings.update(currentPhrase.id, {
+                    categoryName: phraseFormData.categoryName.trim(),
+                    categoryId: slug,
+                    keywords: Array.from(new Set([slug, ...keywords])),
+                    phrases,
+                    approved: true,
+                  });
+                  setDocumentPhraseMappings((prev) =>
+                    prev.map((p) => (p.id === currentPhrase.id ? (updated || p) : p))
+                  );
+                }
+                setPhraseDialogOpen(false);
+              }}
+            >
+              {phraseDialogMode === 'add' ? 'Add Phrase Pack' : 'Save Changes'}
             </Button>
           </DialogFooter>
         </DialogContent>

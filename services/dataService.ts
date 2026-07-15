@@ -1,6 +1,7 @@
 import {
   AILocationCache,
   DepartmentProfile,
+  DocumentPhraseMapping,
   DocumentVersion,
   Firm,
   HindiMapping,
@@ -12,6 +13,7 @@ import {
   TenderDocument,
   TenderItem,
 } from '@/types';
+
 import { db } from '@/services/db';
 
 export const dataService = {
@@ -128,4 +130,17 @@ export const dataService = {
     import: (data: string) => db.importDatabase(data),
     clear: () => db.clearDatabase(),
   },
+
+  // Document Phrase Mappings
+  documentPhraseMappings: {
+    create: (data: Omit<DocumentPhraseMapping, 'id' | 'createdAt' | 'updatedAt'>) =>
+      db.createDocumentPhraseMapping(data),
+    getByCategory: (categoryId: string) => db.getDocumentPhraseMappingByCategory(categoryId),
+    findByKeyword: (keyword: string) => db.findDocumentPhraseMappingByKeyword(keyword),
+    list: () => db.listDocumentPhraseMappings(),
+    update: (id: string, data: Partial<Omit<DocumentPhraseMapping, 'id' | 'createdAt'>>) =>
+      db.updateDocumentPhraseMapping(id, data),
+    delete: (id: string) => db.deleteDocumentPhraseMapping(id),
+  },
 };
+

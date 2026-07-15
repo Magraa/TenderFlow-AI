@@ -2,8 +2,10 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { DepartmentProfile, Firm, Settings, TenderItem } from '@/types';
+import { DepartmentProfile, Firm, Settings, TenderItem, DocumentPhraseMapping } from '@/types';
 import { dataService } from '@/services/dataService';
+import { getOrGeneratePhrasePack } from '@/services/documentPhraseService';
+
 import { tenderUtility } from '@/services/tenderUtility';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -52,6 +54,12 @@ export function ProfessionalTenderForm() {
   const [items, setItems] = useState<TenderItem[]>([]);
   const [tempTenderId] = useState(`temp-${Date.now()}`);
 
+  // Document Phrase Pack States
+  const [phrasePacks, setPhrasePacks] = useState<DocumentPhraseMapping[]>([]);
+  const [phrasePackMode, setPhrasePackMode] = useState<'auto' | 'force' | 'manual'>('auto');
+  const [selectedPhraseCategoryId, setSelectedPhraseCategoryId] = useState<string>('');
+
+
   const [formData, setFormData] = useState<FormData>({
     title: '',
     departmentProfileId: '',
@@ -74,12 +82,14 @@ export function ProfessionalTenderForm() {
     let cancelled = false;
 
     (async () => {
-      const [loadedFirms, loadedDepartmentsInitial, loadedSettings] = await Promise.all([
+      const [loadedFirms, loadedDepartmentsInitial, loadedSettings, loadedPhrasePacks] = await Promise.all([
         dataService.firms.list(),
         dataService.departmentProfiles.list(),
         dataService.settings.get(),
+        dataService.documentPhraseMappings.list(),
       ]);
 
+      // Ensure Municipal Corporation exists and is always first
       const hasMunicipalCorp = loadedDepartmentsInitial.some((department) => department.name === 'Municipal Corporation');
       if (!hasMunicipalCorp) {
         await dataService.departmentProfiles.create({
@@ -96,18 +106,20 @@ export function ProfessionalTenderForm() {
         });
       }
 
-      const loadedDepartments = hasMunicipalCorp
-        ? loadedDepartmentsInitial
-        : await dataService.departmentProfiles.list();
+      // Get updated departments list with Municipal Corporation first
+      const loadedDepartments = await dataService.departmentProfiles.list();
 
       if (cancelled) return;
       setFirms(loadedFirms);
       setDepartments(loadedDepartments);
       setSettings(loadedSettings);
+      setPhrasePacks(loadedPhrasePacks);
 
+      // Default to Municipal Corporation if no department selected
+      const municipalCorp = loadedDepartments.find((d) => d.name === 'Municipal Corporation');
       setFormData((previous) => ({
         ...previous,
-        departmentProfileId: previous.departmentProfileId || loadedDepartments[0]?.id || '',
+        departmentProfileId: previous.departmentProfileId || municipalCorp?.id || loadedDepartments[0]?.id || '',
         mainFirmId: previous.mainFirmId || loadedFirms[0]?.id || '',
       }));
     })();
@@ -178,13 +190,34 @@ export function ProfessionalTenderForm() {
       const now = new Date().toISOString();
       const tenderNumber = await tenderUtility.generateTenderNumber();
 
+      // Get/Generate phrase packs for each item based on strategy
+      const itemsWithCategories = [];
+      for (const item of items) {
+        let categoryId = '';
+        try {
+          const pack = await getOrGeneratePhrasePack(item.productName, item.description, {
+            mode: phrasePackMode,
+            categoryId: selectedPhraseCategoryId,
+          });
+          if (pack) {
+            categoryId = pack.categoryId;
+          }
+        } catch (err) {
+          console.error('Failed to get/generate phrase pack for item:', item.productName, err);
+        }
+        itemsWithCategories.push({
+          ...item,
+          category: categoryId,
+        });
+      }
+
       const tender = await dataService.tenders.create({
         title: formData.title.trim(),
         tenderNumber,
         departmentProfileId: formData.departmentProfileId,
         mainFirmId: formData.mainFirmId,
         alternateFirms,
-        items: items.map((item) => ({
+        items: itemsWithCategories.map((item) => ({
           ...item,
           tenderId: '',
           totalAmount: Math.round(item.quantity * item.rate * 100) / 100,
@@ -192,6 +225,7 @@ export function ProfessionalTenderForm() {
           createdAt: item.createdAt || now,
           updatedAt: now,
         })),
+
         language: formData.language,
         status: nextStatus,
         version: 1,
@@ -300,7 +334,7 @@ export function ProfessionalTenderForm() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-7xl">
+    <div className="mx-auto w-full max-w-screen-xl">
       <div className="mb-6 rounded-lg border border-slate-200 bg-white px-5 py-4 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
@@ -373,11 +407,22 @@ export function ProfessionalTenderForm() {
                     required
                   >
                     <option value="">Select department</option>
-                    {departments.map((department) => (
-                      <option key={department.id} value={department.id}>
-                        {department.name}
-                      </option>
-                    ))}
+                    {departments
+                      .map((dept) => ({
+                        ...dept,
+                        isMunicipalCorp: dept.name === 'Municipal Corporation',
+                      }))
+                      .sort((a, b) => {
+                        // Municipal Corporation first, then others alphabetically
+                        if (a.isMunicipalCorp) return -1;
+                        if (b.isMunicipalCorp) return 1;
+                        return a.name.localeCompare(b.name);
+                      })
+                      .map((department) => (
+                        <option key={department.id} value={department.id}>
+                          {department.isMunicipalCorp ? 'Municipal Corporation' : department.name}
+                        </option>
+                      ))}
                   </select>
                 </div>
 
@@ -615,6 +660,48 @@ export function ProfessionalTenderForm() {
               </div>
             </CardContent>
           </Card>
+
+          <Card className="rounded-lg">
+            <CardHeader className="border-b border-slate-100 pb-4">
+              <CardTitle className="text-lg">Document Phrase Pack</CardTitle>
+              <CardDescription>Configure phrase generation and assignment strategy for tender documents.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 pt-5">
+              <div className="space-y-2">
+                <Label htmlFor="phrasePackMode">Strategy</Label>
+                <select
+                  id="phrasePackMode"
+                  className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+                  value={phrasePackMode}
+                  onChange={(event) => setPhrasePackMode(event.target.value as any)}
+                >
+                  <option value="auto">Auto-match (Generate with AI if category not found)</option>
+                  <option value="force">Force new AI generation (Always generate new pack)</option>
+                  <option value="manual">Assign manually to existing category</option>
+                </select>
+              </div>
+
+              {phrasePackMode === 'manual' && (
+                <div className="space-y-2">
+                  <Label htmlFor="selectedPhraseCategoryId">Select Category</Label>
+                  <select
+                    id="selectedPhraseCategoryId"
+                    className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+                    value={selectedPhraseCategoryId}
+                    onChange={(event) => setSelectedPhraseCategoryId(event.target.value)}
+                  >
+                    <option value="">Select existing category</option>
+                    {phrasePacks.map((pack) => (
+                      <option key={pack.categoryId} value={pack.categoryId}>
+                        {pack.categoryName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
 
           <Card className="rounded-lg">
             <CardHeader className="border-b border-slate-100 pb-4">

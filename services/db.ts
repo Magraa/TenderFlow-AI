@@ -70,7 +70,14 @@ type ExposedKeys =
   | 'listLocalBodyTypes'
   | 'updateLocalBodyType'
   | 'getAILocationCache'
-  | 'setAILocationCache';
+  | 'setAILocationCache'
+  | 'createDocumentPhraseMapping'
+  | 'getDocumentPhraseMappingByCategory'
+  | 'findDocumentPhraseMappingByKeyword'
+  | 'listDocumentPhraseMappings'
+  | 'updateDocumentPhraseMapping'
+  | 'deleteDocumentPhraseMapping';
+
 
 type DbAdapter = {
   [K in ExposedKeys]: LocalAdapter[K] extends (...args: infer A) => infer R ? (...args: A) => Promise<Awaited<R>> : never;
@@ -169,4 +176,13 @@ export const db: DbAdapter = {
   updateLocalBodyType: async (...args) => (await getAdapter()).updateLocalBodyType(...args),
   getAILocationCache: async (...args) => (await getAdapter()).getAILocationCache(...args),
   setAILocationCache: async (...args) => (await getAdapter()).setAILocationCache(...args),
+
+  // Document Phrase Mappings
+  createDocumentPhraseMapping: async (...args) => (await getAdapter()).createDocumentPhraseMapping(...args),
+  getDocumentPhraseMappingByCategory: async (...args) => (await getAdapter()).getDocumentPhraseMappingByCategory(...args),
+  findDocumentPhraseMappingByKeyword: async (...args) => (await getAdapter()).findDocumentPhraseMappingByKeyword(...args),
+  listDocumentPhraseMappings: async (...args) => (await getAdapter()).listDocumentPhraseMappings(...args),
+  updateDocumentPhraseMapping: async (...args) => (await getAdapter()).updateDocumentPhraseMapping(...args),
+  deleteDocumentPhraseMapping: async (...args) => (await getAdapter()).deleteDocumentPhraseMapping(...args),
 };
+

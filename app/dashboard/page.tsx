@@ -41,7 +41,7 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-slate-50">
       <div className="border-b bg-white shadow-sm">
-        <div className="mx-auto flex max-w-7xl flex-col gap-4 sm:flex-row sm:items-center sm:justify-between px-4 py-8 sm:px-6 lg:px-8 bg-gradient-to-r from-slate-50 to-white">
+        <div className="mx-auto flex max-w-screen-xl flex-col gap-4 sm:flex-row sm:items-center sm:justify-between px-4 py-8 sm:px-6 lg:px-8 bg-gradient-to-r from-slate-50 to-white">
           <div>
             <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 flex items-center gap-2">
               <FileText className="h-8 w-8 text-primary" />
@@ -66,7 +66,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-screen-xl px-4 py-10 sm:px-6 lg:px-8">
         {loading ? (
           <div className="flex flex-col items-center justify-center p-12 text-slate-400">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-4"></div>

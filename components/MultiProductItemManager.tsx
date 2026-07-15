@@ -1,6 +1,8 @@
 'use client';
 
-import { TenderItem } from '@/types';
+import { useState, useEffect } from 'react';
+import { TenderItem, HindiMapping } from '@/types';
+import { dataService } from '@/services/dataService';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -40,6 +42,19 @@ export interface ItemManagerProps {
 }
 
 export function MultiProductItemManager({ tenderId, items, onItemsChange }: ItemManagerProps) {
+  const [mappings, setMappings] = useState<HindiMapping[]>([]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const list = await dataService.itemHindiMappings.list();
+        setMappings(list);
+      } catch (err) {
+        console.error('Error loading item Hindi mappings:', err);
+      }
+    })();
+  }, []);
+
   const updateItems = (nextItems: TenderItem[]) => {
     onItemsChange(
       nextItems.map((item) => {
@@ -93,6 +108,12 @@ export function MultiProductItemManager({ tenderId, items, onItemsChange }: Item
       current.description = value;
     } else {
       current.productName = value;
+      const matched = mappings.find(
+        (m) => m.englishName.toLowerCase().trim() === value.toLowerCase().trim()
+      );
+      if (matched && matched.englishDescription) {
+        current.description = matched.englishDescription;
+      }
     }
 
     current.totalAmount = calculateSubtotal(current);
@@ -138,6 +159,7 @@ export function MultiProductItemManager({ tenderId, items, onItemsChange }: Item
                     <tr key={item.id} className="border-b align-top">
                       <td className="px-3 py-2">
                         <input
+                          list="product-suggestions"
                           className="w-full rounded border border-slate-300 px-2 py-1"
                           value={item.productName}
                           onChange={(event) => handleChange(index, 'productName', event.target.value)}
@@ -246,6 +268,14 @@ export function MultiProductItemManager({ tenderId, items, onItemsChange }: Item
         <Button type="button" onClick={handleAddItem} variant="outline" className="w-full">
           + Add Item
         </Button>
+
+        <datalist id="product-suggestions">
+          {mappings.map((m) => (
+            <option key={m.id} value={m.englishName}>
+              {m.englishDescription ? `${m.englishName} - ${m.englishDescription}` : m.englishName}
+            </option>
+          ))}
+        </datalist>
       </CardContent>
     </Card>
   );

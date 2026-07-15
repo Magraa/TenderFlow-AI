@@ -61,7 +61,16 @@ type ExposedKeys =
   | 'getVendorHindiMapping'
   | 'listVendorHindiMappings'
   | 'updateVendorHindiMapping'
-  | 'deleteVendorHindiMapping';
+  | 'deleteVendorHindiMapping'
+  | 'createPlaceMapping'
+  | 'listPlaceMappings'
+  | 'updatePlaceMapping'
+  | 'deletePlaceMapping'
+  | 'createLocalBodyType'
+  | 'listLocalBodyTypes'
+  | 'updateLocalBodyType'
+  | 'getAILocationCache'
+  | 'setAILocationCache';
 
 type DbAdapter = {
   [K in ExposedKeys]: LocalAdapter[K] extends (...args: infer A) => infer R ? (...args: A) => Promise<Awaited<R>> : never;
@@ -149,4 +158,15 @@ export const db: DbAdapter = {
   listVendorHindiMappings: async (...args) => (await getAdapter()).listVendorHindiMappings(...args),
   updateVendorHindiMapping: async (...args) => (await getAdapter()).updateVendorHindiMapping(...args),
   deleteVendorHindiMapping: async (...args) => (await getAdapter()).deleteVendorHindiMapping(...args),
+
+  // Location helpers
+  createPlaceMapping: async (...args) => (await getAdapter()).createPlaceMapping(...args),
+  listPlaceMappings: async (...args) => (await getAdapter()).listPlaceMappings(...args),
+  updatePlaceMapping: async (...args) => (await getAdapter()).updatePlaceMapping(...args),
+  deletePlaceMapping: async (...args) => (await getAdapter()).deletePlaceMapping(...args),
+  createLocalBodyType: async (...args) => (await getAdapter()).createLocalBodyType(...args),
+  listLocalBodyTypes: async (...args) => (await getAdapter()).listLocalBodyTypes(...args),
+  updateLocalBodyType: async (...args) => (await getAdapter()).updateLocalBodyType(...args),
+  getAILocationCache: async (...args) => (await getAdapter()).getAILocationCache(...args),
+  setAILocationCache: async (...args) => (await getAdapter()).setAILocationCache(...args),
 };

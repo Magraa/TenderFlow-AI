@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Firm, Settings, PurposeMapping, HindiMapping, VersioningSettings } from '@/types';
+import { Firm, Settings, PurposeMapping, HindiMapping, PlaceMapping, VersioningSettings } from '@/types';
 import { dataService } from '@/services/dataService';
 import {
   defaultVersioningSettings,
@@ -16,6 +16,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { AddPlaceDialog } from '@/components/forms/Location/AddPlaceDialog';
+import { Sparkles, FileText, Languages } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
 
 type DictionaryType = 'purpose' | 'itemHindi' | 'vendorHindi';
 
@@ -31,13 +34,17 @@ export default function SettingsPage() {
   const [purposeMappings, setPurposeMappings] = useState<PurposeMapping[]>([]);
   const [itemHindiMappings, setItemHindiMappings] = useState<HindiMapping[]>([]);
   const [vendorHindiMappings, setVendorHindiMappings] = useState<HindiMapping[]>([]);
+  const [placeMappings, setPlaceMappings] = useState<PlaceMapping[]>([]);
   const [loadingMappings, setLoadingMappings] = useState(false);
 
   // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [placeDialogOpen, setPlaceDialogOpen] = useState(false);
+  const [editingPlace, setEditingPlace] = useState<PlaceMapping | null>(null);
   const [dialogMode, setDialogMode] = useState<'add' | 'edit'>('add');
   const [dialogType, setDialogType] = useState<'purpose' | 'item' | 'vendor'>('purpose');
   const [currentMapping, setCurrentMapping] = useState<any>(null);
+  const [generatingHindi, setGeneratingHindi] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState<any>({});
@@ -62,6 +69,7 @@ export default function SettingsPage() {
       setSettings(loadedSettings);
       setFirms(loadedFirms);
       setLoading(false);
+      loadMappings();
     })();
     return () => {
       cancelled = true;
@@ -78,14 +86,16 @@ export default function SettingsPage() {
   const loadMappings = async () => {
     setLoadingMappings(true);
     try {
-      const [purposes, items, vendors] = await Promise.all([
+      const [purposes, items, vendors, places] = await Promise.all([
         dataService.purposeMappings.list(),
         dataService.itemHindiMappings.list(),
         dataService.vendorHindiMappings.list(),
+        dataService.placeMappings.list(),
       ]);
       setPurposeMappings(purposes);
       setItemHindiMappings(items);
       setVendorHindiMappings(vendors);
+      setPlaceMappings(places);
     } catch (error) {
       console.error('Error loading mappings:', error);
     } finally {
@@ -248,6 +258,7 @@ export default function SettingsPage() {
       defaultLanguage: settings.defaultLanguage,
       headerSafeZonePx: settings.headerSafeZonePx,
       tenderNumberPrefix: settings.tenderNumberPrefix,
+      enableLocationAIAutofill: settings.enableLocationAIAutofill,
       versioningSettings: settings.versioningSettings,
     });
     setSettings(updated);
@@ -348,6 +359,28 @@ export default function SettingsPage() {
     }
   };
 
+  const openAddPlaceDialog = () => {
+    setEditingPlace(null);
+    setPlaceDialogOpen(true);
+  };
+
+  const openEditPlaceDialog = (place: PlaceMapping) => {
+    setEditingPlace(place);
+    setPlaceDialogOpen(true);
+  };
+
+  const deletePlaceMapping = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this location?')) return;
+
+    try {
+      await dataService.placeMappings.delete(id);
+      setPlaceMappings((places) => places.filter((place) => place.id !== id));
+    } catch (error) {
+      console.error('Error deleting location:', error);
+      alert('Failed to delete location');
+    }
+  };
+
   const validateForm = () => {
     const errors: Record<string, string> = {};
     
@@ -361,6 +394,81 @@ export default function SettingsPage() {
     
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
+  };
+
+  const handleGenerateAllHindi = async () => {
+    const englishName = formData.englishName?.trim();
+    const englishDesc = formData.englishDescription?.trim();
+    if (!englishName) return;
+
+    setGeneratingHindi(true);
+    try {
+      if (englishName && englishDesc) {
+        // Send both in a single request with a separator
+        const combinedText = `${englishName} ||| ${englishDesc}`;
+        const response = await fetch('/api/ai/transliterate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text: combinedText,
+            sourceLanguage: 'english',
+            targetLanguage: 'hindi',
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Transliteration failed');
+        }
+
+        const data = await response.json();
+        if (data.transliteratedText) {
+          const parts = data.transliteratedText.split('|||');
+          const transliteratedName = parts[0]?.trim() || englishName;
+          const transliteratedDesc = parts[1]?.trim() || '';
+
+          setFormData((prev: any) => ({
+            ...prev,
+            hindiName: transliteratedName,
+            hindiDescription: transliteratedDesc,
+          }));
+        }
+      } else {
+        // Send name only
+        const response = await fetch('/api/ai/transliterate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text: englishName,
+            sourceLanguage: 'english',
+            targetLanguage: 'hindi',
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Transliteration failed');
+        }
+
+        const data = await response.json();
+        if (data.transliteratedText) {
+          setFormData((prev: any) => ({
+            ...prev,
+            hindiName: data.transliteratedText,
+          }));
+        }
+      }
+
+      // Clear any previous hindiName error if resolved
+      setFormErrors((prev) => {
+        const next = { ...prev };
+        delete next.hindiName;
+        return next;
+      });
+    } catch (error) {
+      console.error('Error generating Hindi transliteration:', error);
+      alert('Failed to generate Hindi transliteration. Please enter manually.');
+    } finally {
+      setGeneratingHindi(false);
+    }
   };
 
   const handleSaveMapping = async () => {
@@ -385,6 +493,8 @@ export default function SettingsPage() {
         const mappingData = {
           englishName: formData.englishName.trim(),
           hindiName: formData.hindiName.trim(),
+          englishDescription: formData.englishDescription?.trim() || '',
+          hindiDescription: formData.hindiDescription?.trim() || '',
           type: dialogType as 'item' | 'vendor',
           usageCount: 0,
           isAutoGenerated: false,
@@ -400,11 +510,15 @@ export default function SettingsPage() {
           if (dialogType === 'item') {
             await dataService.itemHindiMappings.update(currentMapping.id, {
               hindiName: formData.hindiName.trim(),
+              englishDescription: formData.englishDescription?.trim() || '',
+              hindiDescription: formData.hindiDescription?.trim() || '',
               updatedAt: new Date().toISOString(),
             });
           } else {
             await dataService.vendorHindiMappings.update(currentMapping.id, {
               hindiName: formData.hindiName.trim(),
+              englishDescription: formData.englishDescription?.trim() || '',
+              hindiDescription: formData.hindiDescription?.trim() || '',
               updatedAt: new Date().toISOString(),
             });
           }
@@ -511,6 +625,18 @@ export default function SettingsPage() {
                 </div>
               </div>
 
+              <label className="flex items-center gap-3 rounded border border-slate-200 p-3 text-sm">
+                <input
+                  type="checkbox"
+                  checked={settings.enableLocationAIAutofill}
+                  onChange={(event) => setSettings({ ...settings, enableLocationAIAutofill: event.target.checked })}
+                />
+                <span>
+                  <span className="block font-medium">Enable location AI auto-fill</span>
+                  <span className="text-slate-500">Temporarily keep this off while location auto-fill is refined.</span>
+                </span>
+              </label>
+
               <Button onClick={handleSave} loading={saving} disabled={saving}>
                 Save Settings
               </Button>
@@ -557,7 +683,7 @@ export default function SettingsPage() {
               <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="purpose">Purpose Library</TabsTrigger>
                 <TabsTrigger value="item">Item Hindi Mappings</TabsTrigger>
-                <TabsTrigger value="vendor">Vendor Hindi Mappings</TabsTrigger>
+                <TabsTrigger value="locations">Locations</TabsTrigger>
               </TabsList>
               
               <TabsContent value="purpose" className="space-y-4">
@@ -658,10 +784,20 @@ export default function SettingsPage() {
                             <p className="font-medium">
                               <span className="text-slate-500">English:</span> {mapping.englishName}
                             </p>
-                            <p className="mt-1">
+                            {mapping.englishDescription && (
+                              <p className="text-xs text-slate-500 mt-0.5 ml-4">
+                                <span className="font-medium text-slate-400">Desc:</span> {mapping.englishDescription}
+                              </p>
+                            )}
+                            <p className="mt-1.5 font-medium">
                               <span className="text-slate-500">Hindi:</span> {mapping.hindiName}
                             </p>
-                            <p className="mt-1 text-xs text-slate-400">
+                            {mapping.hindiDescription && (
+                              <p className="text-xs text-slate-500 mt-0.5 ml-4">
+                                <span className="font-medium text-slate-400">विवरण:</span> {mapping.hindiDescription}
+                              </p>
+                            )}
+                            <p className="mt-2 text-xs text-slate-400">
                               Usage: {mapping.usageCount} | Auto-generated: {mapping.isAutoGenerated ? 'Yes' : 'No'}
                             </p>
                           </div>
@@ -680,62 +816,54 @@ export default function SettingsPage() {
                 )}
               </TabsContent>
               
-              <TabsContent value="vendor" className="space-y-4">
+              <TabsContent value="locations" className="space-y-4">
                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
-                  <p className="text-sm text-slate-500">Map English vendor names to Hindi transliterations.</p>
-                  <div className="flex gap-2">
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => openExportDialog('vendorHindi')}
-                      disabled={exporting || vendorHindiMappings.length === 0}
-                    >
-                      Export
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => openImportDialog('vendorHindi')}
-                      disabled={importing}
-                    >
-                      Import
-                    </Button>
-                    <Button onClick={() => openAddDialog('vendor')}>
-                      Add Mapping
-                    </Button>
-                  </div>
+                  <p className="text-sm text-slate-500">Manage place, district, and local body mappings.</p>
+                  <Button onClick={openAddPlaceDialog}>Add Place</Button>
                 </div>
                 {loadingMappings ? (
-                  <p className="text-sm text-slate-500">Loading mappings...</p>
-                ) : vendorHindiMappings.length === 0 ? (
-                  <p className="text-sm text-slate-500">No vendor Hindi mappings configured.</p>
+                  <p className="text-sm text-slate-500">Loading locations...</p>
+                ) : placeMappings.length === 0 ? (
+                  <p className="text-sm text-slate-500">No locations configured.</p>
                 ) : (
-                  <div className="space-y-2">
-                    {vendorHindiMappings.map((mapping) => (
-                      <div key={mapping.id} className="rounded border border-slate-200 p-3 text-sm">
-                        <div className="flex justify-between items-start">
-                          <div className="flex-1">
-                            <p className="font-medium">
-                              <span className="text-slate-500">English:</span> {mapping.englishName}
-                            </p>
-                            <p className="mt-1">
-                              <span className="text-slate-500">Hindi:</span> {mapping.hindiName}
-                            </p>
-                            <p className="mt-1 text-xs text-slate-400">
-                              Usage: {mapping.usageCount} | Auto-generated: {mapping.isAutoGenerated ? 'Yes' : 'No'}
-                            </p>
-                          </div>
-                          <div className="flex space-x-2">
-                            <Button variant="outline" size="sm" onClick={() => openEditDialog('vendor', mapping)}>
+                  <div className="overflow-hidden rounded border border-slate-200">
+                    <div className="grid grid-cols-5 gap-3 bg-slate-100 px-3 py-2 text-xs font-semibold uppercase text-slate-600">
+                      <span>Place</span>
+                      <span>District</span>
+                      <span>Local Body</span>
+                      <span>Final Line</span>
+                      <span>Actions</span>
+                    </div>
+                    {placeMappings.map((place) => {
+                      const finalLine = `${[place.localBodyTypeHindi || place.localBodyType, place.hindiName || place.englishName]
+                        .filter(Boolean)
+                        .join(' ')}${place.districtHindiName || place.districtName ? ` जिला ${place.districtHindiName || place.districtName}` : ''}`.trim();
+                      return (
+                        <div key={place.id} className="grid grid-cols-5 gap-3 border-t border-slate-200 px-3 py-2 text-sm">
+                          <span>
+                            {place.hindiName || place.englishName}
+                            {place.englishName && place.hindiName ? ` (${place.englishName})` : ''}
+                          </span>
+                          <span>
+                            {place.districtHindiName || place.districtName}
+                            {place.districtName && place.districtHindiName ? ` (${place.districtName})` : ''}
+                          </span>
+                          <span>
+                            {place.localBodyTypeHindi || place.localBodyType || 'N/A'}
+                            {place.localBodyType && place.localBodyTypeHindi ? ` (${place.localBodyType})` : ''}
+                          </span>
+                          <span className="font-medium text-slate-900">{finalLine || 'N/A'}</span>
+                          <span className="flex gap-2">
+                            <Button variant="outline" size="sm" onClick={() => openEditPlaceDialog(place)}>
                               Edit
                             </Button>
-                            <Button variant="destructive" size="sm" onClick={() => deleteMapping('vendor', mapping.id)}>
+                            <Button variant="destructive" size="sm" onClick={() => deletePlaceMapping(place.id)}>
                               Delete
                             </Button>
-                          </div>
+                          </span>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </TabsContent>
@@ -862,38 +990,72 @@ export default function SettingsPage() {
       </div>
 
       {/* Import Dialog */}
+      <AddPlaceDialog
+        open={placeDialogOpen}
+        initialName=""
+        place={editingPlace}
+        onOpenChange={setPlaceDialogOpen}
+        onCreated={(place) => setPlaceMappings((current) => [place, ...current])}
+        onUpdated={(updatedPlace) =>
+          setPlaceMappings((current) =>
+            current.map((place) => (place.id === updatedPlace.id ? updatedPlace : place))
+          )
+        }
+      />
+
+      {/* Import Dialog */}
       <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Import {selectedDictionary === 'purpose' ? 'Purpose' : selectedDictionary === 'itemHindi' ? 'Item Hindi' : 'Vendor Hindi'} Mappings</DialogTitle>
+        <DialogContent className="max-w-md border-0 bg-white/95 backdrop-blur-md shadow-2xl rounded-2xl overflow-hidden transition-all duration-300">
+          <DialogHeader className="bg-slate-50/50 border-b border-slate-100 px-6 py-5">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+                <FileText className="h-5 w-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-xl font-bold text-slate-800">
+                  Import {selectedDictionary === 'purpose' ? 'Purpose' : 'Item Hindi'} Mappings
+                </DialogTitle>
+                <p className="text-xs text-slate-500 mt-1">
+                  Upload a JSON file containing mapping records.
+                </p>
+              </div>
+            </div>
           </DialogHeader>
           
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="importFile">JSON File</Label>
+          <div className="space-y-4 px-6 py-5 bg-white">
+            <div className="space-y-1.5">
+              <Label htmlFor="importFile" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                JSON File
+              </Label>
               <Input
                 id="importFile"
                 type="file"
                 accept=".json"
+                className="focus-visible:ring-blue-500 border-slate-200 rounded-lg shadow-sm"
                 onChange={handleFileChange}
                 disabled={importing}
               />
             </div>
             
             {importError && (
-              <Alert variant="destructive">
+              <Alert variant="destructive" className="rounded-lg">
                 <AlertTitle>Error</AlertTitle>
                 <AlertDescription>{importError}</AlertDescription>
               </Alert>
             )}
             
-            <p className="text-sm text-slate-500">
+            <p className="text-xs text-slate-400">
               Select a JSON file containing an array of mappings. Each mapping should have the appropriate fields for the dictionary type.
             </p>
           </div>
           
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setImportDialogOpen(false)} disabled={importing}>
+          <DialogFooter className="bg-slate-50/50 border-t border-slate-100 px-6 py-4 flex gap-2">
+            <Button 
+              variant="outline" 
+              className="rounded-lg h-10 border-slate-200 hover:bg-slate-100 font-medium"
+              onClick={() => setImportDialogOpen(false)} 
+              disabled={importing}
+            >
               Cancel
             </Button>
           </DialogFooter>
@@ -902,33 +1064,55 @@ export default function SettingsPage() {
 
       {/* Export Dialog */}
       <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Export {selectedDictionary === 'purpose' ? 'Purpose' : selectedDictionary === 'itemHindi' ? 'Item Hindi' : 'Vendor Hindi'} Mappings</DialogTitle>
+        <DialogContent className="max-w-md border-0 bg-white/95 backdrop-blur-md shadow-2xl rounded-2xl overflow-hidden transition-all duration-300">
+          <DialogHeader className="bg-slate-50/50 border-b border-slate-100 px-6 py-5">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+                <FileText className="h-5 w-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-xl font-bold text-slate-800">
+                  Export {selectedDictionary === 'purpose' ? 'Purpose' : 'Item Hindi'} Mappings
+                </DialogTitle>
+                <p className="text-xs text-slate-500 mt-1">
+                  Download mappings as a JSON file.
+                </p>
+              </div>
+            </div>
           </DialogHeader>
           
-          <div className="py-4">
-            <p className="text-sm text-slate-500">
-              Are you sure you want to export the {selectedDictionary === 'purpose' ? 'purpose' : selectedDictionary === 'itemHindi' ? 'item Hindi' : 'vendor Hindi'} mappings?
+          <div className="px-6 py-5 bg-white">
+            <p className="text-sm text-slate-600">
+              Are you sure you want to export the {selectedDictionary === 'purpose' ? 'purpose' : 'item Hindi'} mappings?
             </p>
             
-            <div className="mt-4 rounded border border-slate-200 bg-slate-50 p-3 text-sm">
-              <p className="font-medium">Export Details:</p>
-              <ul className="mt-2 list-inside list-disc space-y-1 text-slate-600">
-                <li>Type: {selectedDictionary === 'purpose' ? 'Purpose Mappings' : selectedDictionary === 'itemHindi' ? 'Item Hindi Mappings' : 'Vendor Hindi Mappings'}</li>
+            <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50/80 p-4 text-sm shadow-inner">
+              <p className="font-semibold text-slate-700">Export Details:</p>
+              <ul className="mt-2 list-inside list-disc space-y-1.5 text-slate-600">
+                <li>Type: {selectedDictionary === 'purpose' ? 'Purpose Mappings' : 'Item Hindi Mappings'}</li>
                 <li>
-                  Count: {selectedDictionary === 'purpose' ? purposeMappings.length : selectedDictionary === 'itemHindi' ? itemHindiMappings.length : vendorHindiMappings.length}
+                  Count: {selectedDictionary === 'purpose' ? purposeMappings.length : itemHindiMappings.length}
                 </li>
                 <li>Format: JSON</li>
               </ul>
             </div>
           </div>
           
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setExportDialogOpen(false)} disabled={exporting}>
+          <DialogFooter className="bg-slate-50/50 border-t border-slate-100 px-6 py-4 flex gap-2">
+            <Button 
+              variant="outline" 
+              className="rounded-lg h-10 border-slate-200 hover:bg-slate-100 font-medium"
+              onClick={() => setExportDialogOpen(false)} 
+              disabled={exporting}
+            >
               Cancel
             </Button>
-            <Button onClick={handleExport} loading={exporting} disabled={exporting}>
+            <Button 
+              className="rounded-lg h-10 bg-blue-600 hover:bg-blue-700 font-medium"
+              onClick={handleExport} 
+              loading={exporting} 
+              disabled={exporting}
+            >
               Export
             </Button>
           </DialogFooter>
@@ -937,43 +1121,67 @@ export default function SettingsPage() {
 
       {/* Add/Edit Mapping Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>
-              {dialogMode === 'add' ? 'Add' : 'Edit'} {dialogType === 'purpose' ? 'Purpose' : `${dialogType.charAt(0).toUpperCase() + dialogType.slice(1)} Hindi Mapping`}
-            </DialogTitle>
+        <DialogContent className="max-w-md border-0 bg-white/95 backdrop-blur-md shadow-2xl rounded-2xl overflow-hidden transition-all duration-300">
+          <DialogHeader className="bg-slate-50/50 border-b border-slate-100 px-6 py-5">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+                {dialogType === 'purpose' ? (
+                  <FileText className="h-5 w-5" />
+                ) : (
+                  <Languages className="h-5 w-5" />
+                )}
+              </div>
+              <div>
+                <DialogTitle className="text-xl font-bold text-slate-800">
+                  {dialogMode === 'add' ? 'Add New' : 'Edit'} {dialogType === 'purpose' ? 'Purpose Mapping' : 'Item Hindi Mapping'}
+                </DialogTitle>
+                <p className="text-xs text-slate-500 mt-1">
+                  {dialogType === 'purpose' 
+                    ? 'Map categories to professional Hindi/English purpose statements.' 
+                    : 'Transliterate English item names to Hindi script for automatic translation.'}
+                </p>
+              </div>
+            </div>
           </DialogHeader>
           
-          <div className="space-y-4 py-4">
+          <div className="space-y-5 px-6 py-6 bg-white">
             {dialogType === 'purpose' && (
               <>
-                <div className="space-y-2">
-                  <Label htmlFor="category">Category</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="category" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Category Name <span className="text-red-500">*</span>
+                  </Label>
                   <Input
                     id="category"
+                    className="focus-visible:ring-blue-500 border-slate-200 h-10 rounded-lg shadow-sm"
                     value={formData.category}
                     onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                     placeholder="e.g., fire_fighting"
                   />
-                  {formErrors.category && <p className="text-sm text-red-500">{formErrors.category}</p>}
+                  {formErrors.category && <p className="text-xs text-red-500 font-medium">{formErrors.category}</p>}
                 </div>
                 
-                <div className="space-y-2">
-                  <Label htmlFor="professionalPurpose">Professional Purpose</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="professionalPurpose" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Professional Purpose (Hindi/English) <span className="text-red-500">*</span>
+                  </Label>
                   <Input
                     id="professionalPurpose"
+                    className="focus-visible:ring-blue-500 border-slate-200 h-10 rounded-lg shadow-sm"
                     value={formData.professionalPurpose}
                     onChange={(e) => setFormData({ ...formData, professionalPurpose: e.target.value })}
                     placeholder="e.g., अग्निशमन एवं जल आपूर्ति कार्य हेतु आवश्यक सामग्री"
                   />
-                  {formErrors.professionalPurpose && <p className="text-sm text-red-500">{formErrors.professionalPurpose}</p>}
+                  {formErrors.professionalPurpose && <p className="text-xs text-red-500 font-medium">{formErrors.professionalPurpose}</p>}
                 </div>
                 
-                <div className="space-y-2">
-                  <Label htmlFor="language">Language</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="language" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Language
+                  </Label>
                   <select
                     id="language"
-                    className="flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="flex h-10 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-blue-500"
                     value={formData.language}
                     onChange={(e) => setFormData({ ...formData, language: e.target.value as 'hindi' | 'english' })}
                   >
@@ -986,37 +1194,94 @@ export default function SettingsPage() {
             
             {dialogType !== 'purpose' && (
               <>
-                <div className="space-y-2">
-                  <Label htmlFor="englishName">English Name</Label>
-                  <Input
-                    id="englishName"
-                    value={formData.englishName}
-                    onChange={(e) => setFormData({ ...formData, englishName: e.target.value })}
-                    placeholder="e.g., Fire Hose"
-                  />
-                  {formErrors.englishName && <p className="text-sm text-red-500">{formErrors.englishName}</p>}
+                <div className="space-y-4 p-3 bg-slate-50/50 rounded-xl border border-slate-100/80">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="englishName" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      English Name <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      id="englishName"
+                      className="focus-visible:ring-blue-500 border-slate-200 h-10 rounded-lg bg-white shadow-sm"
+                      value={formData.englishName}
+                      onChange={(e) => setFormData({ ...formData, englishName: e.target.value })}
+                      placeholder="e.g., Fire Hose"
+                    />
+                    {formErrors.englishName && <p className="text-xs text-red-500 font-medium">{formErrors.englishName}</p>}
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="englishDescription" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      English Description <span className="text-slate-400 font-normal">(Optional)</span>
+                    </Label>
+                    <Textarea
+                      id="englishDescription"
+                      className="focus-visible:ring-blue-500 border-slate-200 rounded-lg bg-white shadow-sm min-h-[60px]"
+                      value={formData.englishDescription}
+                      onChange={(e) => setFormData({ ...formData, englishDescription: e.target.value })}
+                      placeholder="e.g., Fire fighting hose made of synthetic rubber..."
+                    />
+                  </div>
                 </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="hindiName">Hindi Name</Label>
-                  <Input
-                    id="hindiName"
-                    value={formData.hindiName}
-                    onChange={(e) => setFormData({ ...formData, hindiName: e.target.value })}
-                    placeholder="e.g., अग्निशमन होस"
-                  />
-                  {formErrors.hindiName && <p className="text-sm text-red-500">{formErrors.hindiName}</p>}
+
+                <div className="flex justify-center py-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full h-10 border-blue-200 hover:border-blue-300 hover:bg-blue-50 text-blue-600 font-semibold rounded-lg shadow-sm transition-all flex items-center justify-center gap-2"
+                    loading={generatingHindi}
+                    disabled={!formData.englishName?.trim() || generatingHindi}
+                    onClick={handleGenerateAllHindi}
+                  >
+                    {!generatingHindi && <Sparkles className="h-4 w-4 text-blue-500" />}
+                    Generate Hindi Transliteration
+                  </Button>
+                </div>
+
+                <div className="space-y-4 p-3 bg-slate-50/50 rounded-xl border border-slate-100/80">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="hindiName" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      Hindi Transliteration <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      id="hindiName"
+                      className="focus-visible:ring-blue-500 border-slate-200 h-10 rounded-lg bg-white shadow-sm"
+                      value={formData.hindiName}
+                      onChange={(e) => setFormData({ ...formData, hindiName: e.target.value })}
+                      placeholder="e.g., अग्निशमन होस"
+                    />
+                    {formErrors.hindiName && <p className="text-xs text-red-500 font-medium">{formErrors.hindiName}</p>}
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="hindiDescription" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      Hindi Description <span className="text-slate-400 font-normal">(Optional)</span>
+                    </Label>
+                    <Textarea
+                      id="hindiDescription"
+                      className="focus-visible:ring-blue-500 border-slate-200 rounded-lg bg-white shadow-sm min-h-[60px]"
+                      value={formData.hindiDescription}
+                      onChange={(e) => setFormData({ ...formData, hindiDescription: e.target.value })}
+                      placeholder="e.g., सिंथेटिक रबर से बना अग्निशमन नली..."
+                    />
+                  </div>
                 </div>
               </>
             )}
           </div>
           
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>
+          <DialogFooter className="bg-slate-50/50 border-t border-slate-100 px-6 py-4 flex gap-2">
+            <Button 
+              variant="outline" 
+              className="rounded-lg h-10 border-slate-200 hover:bg-slate-100 font-medium"
+              onClick={() => setDialogOpen(false)}
+            >
               Cancel
             </Button>
-            <Button onClick={handleSaveMapping}>
-              {dialogMode === 'add' ? 'Add' : 'Save'} Mapping
+            <Button 
+              className="rounded-lg h-10 bg-blue-600 hover:bg-blue-700 font-medium"
+              onClick={handleSaveMapping}
+            >
+              {dialogMode === 'add' ? 'Add Mapping' : 'Save Changes'}
             </Button>
           </DialogFooter>
         </DialogContent>

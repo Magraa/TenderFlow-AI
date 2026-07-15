@@ -55,6 +55,7 @@ const EMPTY_FORM: FirmFormState = {
   gstNumber: '',
   mobileNumber: '',
   contactPerson: '',
+  vendorHindiName: '',
   bankName: '',
   bankBranch: '',
   ifscCode: '',
@@ -350,6 +351,7 @@ export default function ManageFirmsPage() {
   const [mobilePreviewOpen, setMobilePreviewOpen] = useState(false);
   const [aiSectionOpen, setAiSectionOpen] = useState(false);
   const [billSectionOpen, setBillSectionOpen] = useState(false);
+  const [generatingHindiName, setGeneratingHindiName] = useState(false);
   const [formData, setFormData] = useState<FirmFormState>({ ...EMPTY_FORM });
   const initialFormDataRef = useRef<FirmFormData>({ ...EMPTY_FORM });
 
@@ -419,6 +421,7 @@ export default function ManageFirmsPage() {
       gstNumber: firm.gstNumber || '',
       mobileNumber: firm.mobileNumber || '',
       contactPerson: firm.contactPerson || '',
+      vendorHindiName: firm.vendorHindiName || '',
       bankName: firm.bankName || '',
       bankBranch: firm.bankBranch || '',
       ifscCode: firm.ifscCode || '',
@@ -499,6 +502,50 @@ export default function ManageFirmsPage() {
     }
   };
 
+  const handleGenerateHindiName = async () => {
+    const firmName = formData.name?.trim();
+    if (!firmName) {
+      setError('Please enter a Firm Name first');
+      setTimeout(() => setError(''), 3000);
+      return;
+    }
+
+    setGeneratingHindiName(true);
+    setError('');
+
+    try {
+      const response = await fetch('/api/ai/transliterate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: firmName,
+          sourceLanguage: 'english',
+          targetLanguage: 'hindi',
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || 'Failed to generate Hindi name');
+        return;
+      }
+
+      if (data.transliteratedText) {
+        setFormData((prev) => ({ ...prev, vendorHindiName: data.transliteratedText }));
+        setSuccess('Hindi name generated successfully!');
+      } else {
+        setError('Failed to generate Hindi name');
+      }
+    } catch (err) {
+      console.error('Hindi name generation error:', err);
+      setError('Failed to generate Hindi name');
+    } finally {
+      setGeneratingHindiName(false);
+      setTimeout(() => setSuccess(''), 3000);
+    }
+  };
+
   const handleApplyStyle = () => {
     if (!styleSourceFirm) return;
     setFormData((previous) => ({
@@ -523,6 +570,7 @@ export default function ManageFirmsPage() {
       gstNumber: styleSourceFirm.gstNumber || '',
       mobileNumber: styleSourceFirm.mobileNumber || '',
       contactPerson: styleSourceFirm.contactPerson || '',
+      vendorHindiName: styleSourceFirm.vendorHindiName || '',
       bankName: styleSourceFirm.bankName || '',
       bankBranch: styleSourceFirm.bankBranch || '',
       ifscCode: styleSourceFirm.ifscCode || '',
@@ -669,6 +717,29 @@ export default function ManageFirmsPage() {
                       onChange={(event) => setFormData({ ...formData, name: event.target.value })}
                       placeholder="e.g., Magra Industrial Suppliers"
                     />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="vendor-hindi-name">Vendor Hindi Name</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="vendor-hindi-name"
+                        value={formData.vendorHindiName || ''}
+                        onChange={(event) => setFormData({ ...formData, vendorHindiName: event.target.value })}
+                        placeholder="e.g., माग्रा इंडस्ट्रियल सप्लायर्स"
+                        className="flex-1"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleGenerateHindiName}
+                        disabled={generatingHindiName || !formData.name?.trim()}
+                        title="Generate Hindi transliteration using AI"
+                      >
+                        {generatingHindiName ? 'Generating...' : 'Generate'}
+                      </Button>
+                    </div>
                   </div>
 
                   <div className="grid gap-4 md:grid-cols-2">

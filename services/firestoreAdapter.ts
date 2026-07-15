@@ -14,7 +14,20 @@ import {
   where,
   writeBatch,
 } from 'firebase/firestore';
-import { DepartmentProfile, DocumentVersion, Firm, HindiMapping, PurposeMapping, Settings, Tender, TenderDocument, TenderItem } from '@/types';
+import {
+  AILocationCache,
+  DepartmentProfile,
+  DocumentVersion,
+  Firm,
+  HindiMapping,
+  LocalBodyType,
+  PlaceMapping,
+  PurposeMapping,
+  Settings,
+  Tender,
+  TenderDocument,
+  TenderItem,
+} from '@/types';
 import { getFirebaseFirestore } from '@/services/firebase/firebaseClient';
 import { normalizeSettingsVersioning } from '@/services/versioningSettings';
 import { v4 as uuid } from 'uuid';
@@ -46,6 +59,9 @@ type Collections = {
   purposeMappings: PurposeMapping;
   itemHindiMappings: HindiMapping;
   vendorHindiMappings: HindiMapping;
+  placeMappings: PlaceMapping;
+  localBodyTypes: LocalBodyType;
+  aiLocationCache: AILocationCache;
 };
 
 type CollectionName = keyof Collections;
@@ -241,6 +257,7 @@ export class FirestoreDB {
         defaultLanguage: 'english',
         headerSafeZonePx: 160,
         tenderNumberPrefix: 'TEND-',
+        enableLocationAIAutofill: false,
         createdAt,
         updatedAt: createdAt,
       });
@@ -642,6 +659,60 @@ export class FirestoreDB {
     if (!existing.exists()) return false;
     await deleteDoc(ref);
     return true;
+  }
+
+  createPlaceMapping(data: Omit<PlaceMapping, 'id' | 'createdAt' | 'updatedAt'>): Promise<PlaceMapping> {
+    return this.createEntity('placeMappings', data);
+  }
+
+  listPlaceMappings(): Promise<PlaceMapping[]> {
+    return this.listEntities('placeMappings');
+  }
+
+  updatePlaceMapping(
+    id: string,
+    data: Partial<Omit<PlaceMapping, 'id' | 'createdAt'>>
+  ): Promise<PlaceMapping | undefined> {
+    return this.updateEntity('placeMappings', id, data as any);
+  }
+
+  deletePlaceMapping(id: string): Promise<boolean> {
+    return this.deleteEntity('placeMappings', id);
+  }
+
+  createLocalBodyType(data: Omit<LocalBodyType, 'id' | 'createdAt' | 'updatedAt'>): Promise<LocalBodyType> {
+    return this.createEntity('localBodyTypes', data);
+  }
+
+  listLocalBodyTypes(): Promise<LocalBodyType[]> {
+    return this.listEntities('localBodyTypes');
+  }
+
+  updateLocalBodyType(
+    id: string,
+    data: Partial<Omit<LocalBodyType, 'id' | 'createdAt'>>
+  ): Promise<LocalBodyType | undefined> {
+    return this.updateEntity('localBodyTypes', id, data as any);
+  }
+
+  async getAILocationCache(queryText: string): Promise<AILocationCache | undefined> {
+    const normalized = queryText.trim().toLowerCase();
+    const q = query(collection(this.firestore, collectionPath('aiLocationCache')), where('query', '==', normalized), limit(1));
+    const snap = await getDocs(q);
+    if (snap.empty) return undefined;
+    return snap.docs[0].data() as AILocationCache;
+  }
+
+  async setAILocationCache(data: Omit<AILocationCache, 'id' | 'createdAt' | 'updatedAt'>): Promise<AILocationCache> {
+    const existing = await this.getAILocationCache(data.query);
+    if (existing) {
+      const updated = await this.updateEntity('aiLocationCache', existing.id, {
+        ...data,
+        query: data.query.trim().toLowerCase(),
+      } as any);
+      return updated || existing;
+    }
+    return this.createEntity('aiLocationCache', { ...data, query: data.query.trim().toLowerCase() });
   }
 
   // Index configuration for purposeMappings collection

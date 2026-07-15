@@ -1,4 +1,17 @@
-import { DepartmentProfile, DocumentVersion, Firm, HindiMapping, PurposeMapping, Settings, Tender, TenderDocument, TenderItem } from '@/types';
+import {
+  AILocationCache,
+  DepartmentProfile,
+  DocumentVersion,
+  Firm,
+  HindiMapping,
+  LocalBodyType,
+  PlaceMapping,
+  PurposeMapping,
+  Settings,
+  Tender,
+  TenderDocument,
+  TenderItem,
+} from '@/types';
 import { db } from '@/services/db';
 
 export const dataService = {
@@ -88,6 +101,26 @@ export const dataService = {
     update: (id: string, data: Partial<Omit<HindiMapping, 'id' | 'createdAt'>>) =>
       db.updateVendorHindiMapping(id, data),
     delete: (id: string) => db.deleteVendorHindiMapping(id),
+  },
+
+  placeMappings: {
+    create: (data: Omit<PlaceMapping, 'id' | 'createdAt' | 'updatedAt'>) => db.createPlaceMapping(data),
+    list: () => db.listPlaceMappings(),
+    update: (id: string, data: Partial<Omit<PlaceMapping, 'id' | 'createdAt'>>) =>
+      db.updatePlaceMapping(id, data),
+    delete: (id: string) => db.deletePlaceMapping(id),
+  },
+
+  localBodyTypes: {
+    create: (data: Omit<LocalBodyType, 'id' | 'createdAt' | 'updatedAt'>) => db.createLocalBodyType(data),
+    list: () => db.listLocalBodyTypes(),
+    update: (id: string, data: Partial<Omit<LocalBodyType, 'id' | 'createdAt'>>) =>
+      db.updateLocalBodyType(id, data),
+  },
+
+  aiLocationCache: {
+    get: (query: string) => db.getAILocationCache(query),
+    set: (data: Omit<AILocationCache, 'id' | 'createdAt' | 'updatedAt'>) => db.setAILocationCache(data),
   },
 
   backup: {

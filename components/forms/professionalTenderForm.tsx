@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { DepartmentProfile, Firm, TenderItem } from '@/types';
+import { DepartmentProfile, Firm, Settings, TenderItem } from '@/types';
 import { dataService } from '@/services/dataService';
 import { tenderUtility } from '@/services/tenderUtility';
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { MultiProductItemManager } from '@/components/MultiProductItemManager';
+import { AILocationHelper } from '@/components/forms/Location/AILocationHelper';
+import { LocationSearchInput } from '@/components/forms/Location/LocationSearchInput';
 
 interface FormData {
   title: string;
@@ -19,30 +21,37 @@ interface FormData {
   tenderType: string;
   placeName: string;
   districtName: string;
+  localBodyType: string;
+  localBodyTypeHindi: string;
   publishDate: string;
   submissionDate: string;
   openingDate: string;
   mainFirmId: string;
   alternateFirmAId: string;
   alternateFirmBId: string;
-  status: 'draft' | 'final';
   estimatedAmount: string;
 }
+
+const ESTIMATED_AMOUNT_PRESETS = ['95000', '98000', '198000'];
 
 function uniqueFirmIds(ids: string[]): string[] {
   return [...new Set(ids.filter(Boolean))];
 }
 
+function formatMoney(value: number): string {
+  return `Rs. ${value.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 export function ProfessionalTenderForm() {
   const router = useRouter();
-  const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [firms, setFirms] = useState<Firm[]>([]);
   const [departments, setDepartments] = useState<DepartmentProfile[]>([]);
+  const [settings, setSettings] = useState<Settings | null>(null);
   const [items, setItems] = useState<TenderItem[]>([]);
   const [tempTenderId] = useState(`temp-${Date.now()}`);
-  
+
   const [formData, setFormData] = useState<FormData>({
     title: '',
     departmentProfileId: '',
@@ -50,13 +59,14 @@ export function ProfessionalTenderForm() {
     tenderType: 'Open Tender',
     placeName: '',
     districtName: '',
+    localBodyType: '',
+    localBodyTypeHindi: '',
     publishDate: new Date().toISOString().split('T')[0],
     submissionDate: '',
     openingDate: '',
     mainFirmId: '',
     alternateFirmAId: '',
     alternateFirmBId: '',
-    status: 'draft',
     estimatedAmount: '',
   });
 
@@ -64,13 +74,13 @@ export function ProfessionalTenderForm() {
     let cancelled = false;
 
     (async () => {
-      const [loadedFirms, loadedDepartmentsInitial] = await Promise.all([
+      const [loadedFirms, loadedDepartmentsInitial, loadedSettings] = await Promise.all([
         dataService.firms.list(),
         dataService.departmentProfiles.list(),
+        dataService.settings.get(),
       ]);
 
-      // Ensure Municipal Corporation is available as an option.
-      const hasMunicipalCorp = loadedDepartmentsInitial.some((d) => d.name === 'Municipal Corporation');
+      const hasMunicipalCorp = loadedDepartmentsInitial.some((department) => department.name === 'Municipal Corporation');
       if (!hasMunicipalCorp) {
         await dataService.departmentProfiles.create({
           name: 'Municipal Corporation',
@@ -93,11 +103,12 @@ export function ProfessionalTenderForm() {
       if (cancelled) return;
       setFirms(loadedFirms);
       setDepartments(loadedDepartments);
+      setSettings(loadedSettings);
 
-      setFormData((prev) => ({
-        ...prev,
-        departmentProfileId: prev.departmentProfileId || loadedDepartments[0]?.id || '',
-        mainFirmId: prev.mainFirmId || loadedFirms[0]?.id || '',
+      setFormData((previous) => ({
+        ...previous,
+        departmentProfileId: previous.departmentProfileId || loadedDepartments[0]?.id || '',
+        mainFirmId: previous.mainFirmId || loadedFirms[0]?.id || '',
       }));
     })();
 
@@ -108,7 +119,7 @@ export function ProfessionalTenderForm() {
 
   const totals = useMemo(() => {
     const subtotal = items.reduce((sum, item) => sum + item.quantity * item.rate, 0);
-    const gstTotal = items.reduce((sum, item) => sum + ((item.quantity * item.rate) * item.gstPercent) / 100, 0);
+    const gstTotal = items.reduce((sum, item) => sum + (item.quantity * item.rate * item.gstPercent) / 100, 0);
     return {
       subtotal,
       gstTotal,
@@ -116,10 +127,30 @@ export function ProfessionalTenderForm() {
     };
   }, [items]);
 
-  // Place and District fields are now always visible for all government tenders
-
-  // Check if Municipal Corporation is selected (hide Tender Type and Dates)
-  const isMunicipalCorporation = departments.find(d => d.id === formData.departmentProfileId)?.name === 'Municipal Corporation';
+  const selectedDepartment = departments.find((department) => department.id === formData.departmentProfileId);
+  const selectedMainFirm = firms.find((firm) => firm.id === formData.mainFirmId);
+  const selectedAlternateFirmA = firms.find((firm) => firm.id === formData.alternateFirmAId);
+  const selectedAlternateFirmB = firms.find((firm) => firm.id === formData.alternateFirmBId);
+  const isMunicipalCorporation = selectedDepartment?.name === 'Municipal Corporation';
+  const selectedAmountOption = ESTIMATED_AMOUNT_PRESETS.includes(formData.estimatedAmount)
+    ? formData.estimatedAmount
+    : formData.estimatedAmount
+      ? 'custom'
+      : '';
+  const numericEstimatedAmount = Number(formData.estimatedAmount);
+  const locationSummary = `${[formData.localBodyTypeHindi || formData.localBodyType, formData.placeName]
+    .filter(Boolean)
+    .join(' ')}${formData.districtName ? ` जिला ${formData.districtName}` : ''}`.trim();
+  const isSubmitDisabled =
+    loading ||
+    !formData.title.trim() ||
+    !formData.departmentProfileId ||
+    !formData.placeName.trim() ||
+    !formData.districtName.trim() ||
+    !formData.mainFirmId ||
+    !Number.isFinite(numericEstimatedAmount) ||
+    numericEstimatedAmount <= 0 ||
+    items.length === 0;
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -127,30 +158,19 @@ export function ProfessionalTenderForm() {
     setLoading(true);
 
     try {
-      if (!formData.title.trim()) {
-        throw new Error('Tender title is required.');
-      }
-      if (!formData.departmentProfileId) {
-        throw new Error('Department selection is required.');
-      }
-      if (!formData.placeName.trim()) {
-        throw new Error('Place name is required for government tender documents.');
-      }
-      if (!formData.districtName.trim()) {
-        throw new Error('District name is required for government tender documents.');
-      }
-      if (!formData.mainFirmId) {
-        throw new Error('Main firm is required.');
-      }
-      if (!formData.estimatedAmount) {
+      const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
+      const nextStatus = submitter?.value === 'final' ? 'final' : 'draft';
+
+      if (!formData.title.trim()) throw new Error('Tender title is required.');
+      if (!formData.departmentProfileId) throw new Error('Department selection is required.');
+      if (!formData.placeName.trim()) throw new Error('Place name is required for government tender documents.');
+      if (!formData.districtName.trim()) throw new Error('District name is required for government tender documents.');
+      if (!formData.mainFirmId) throw new Error('Main firm is required.');
+      if (!Number.isFinite(numericEstimatedAmount) || numericEstimatedAmount <= 0) {
         throw new Error('Estimated amount is required.');
       }
-      if (items.length === 0) {
-        throw new Error('At least one item is required.');
-      }
-      if (items.some((item) => !item.productName.trim())) {
-        throw new Error('Each item must include a product name.');
-      }
+      if (items.length === 0) throw new Error('At least one item is required.');
+      if (items.some((item) => !item.productName.trim())) throw new Error('Each item must include a product name.');
 
       const alternateFirms = uniqueFirmIds([formData.alternateFirmAId, formData.alternateFirmBId]).filter(
         (firmId) => firmId !== formData.mainFirmId
@@ -173,19 +193,102 @@ export function ProfessionalTenderForm() {
           updatedAt: now,
         })),
         language: formData.language,
-        status: formData.status,
+        status: nextStatus,
         version: 1,
         description: '',
         notes: '',
         tenderType: formData.tenderType,
         placeName: formData.placeName,
         districtName: formData.districtName,
+        localBodyType: formData.localBodyType,
+        localBodyTypeHindi: formData.localBodyTypeHindi,
         publishDate: formData.publishDate,
         submissionDate: formData.submissionDate,
         openingDate: formData.openingDate,
         estimatedBudget: totals.grandTotal,
-        estimatedAmount: formData.estimatedAmount ? parseFloat(formData.estimatedAmount) : undefined,
+        estimatedAmount: numericEstimatedAmount,
       });
+
+      // Save/transliterate items to Hindi mappings in the background
+      for (const item of items) {
+        const englishName = item.productName.trim();
+        if (!englishName) continue;
+
+        try {
+          const existingMappings = await dataService.itemHindiMappings.list();
+          const matched = existingMappings.find(
+            (m) => m.englishName.toLowerCase().trim() === englishName.toLowerCase()
+          );
+
+          if (!matched) {
+            // Transliterate name using AI endpoint
+            const nameResponse = await fetch('/api/ai/transliterate', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                text: englishName,
+                sourceLanguage: 'english',
+                targetLanguage: 'hindi',
+              }),
+            });
+            const nameData = await nameResponse.json();
+            const hindiName = nameData.transliteratedText || englishName;
+
+            // Transliterate description if present
+            let hindiDescription = '';
+            if (item.description?.trim()) {
+              const descResponse = await fetch('/api/ai/transliterate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  text: item.description.trim(),
+                  sourceLanguage: 'english',
+                  targetLanguage: 'hindi',
+                }),
+              });
+              const descData = await descResponse.json();
+              hindiDescription = descData.transliteratedText || '';
+            }
+
+            // Save new item Hindi mapping
+            await dataService.itemHindiMappings.create({
+              englishName,
+              hindiName,
+              englishDescription: item.description?.trim() || '',
+              hindiDescription,
+              type: 'item',
+              usageCount: 1,
+              isAutoGenerated: true,
+            });
+          } else {
+            // Update usage count, and description if it wasn't present
+            const patch: any = {
+              usageCount: (matched.usageCount || 0) + 1,
+            };
+
+            if (item.description?.trim() && !matched.englishDescription) {
+              patch.englishDescription = item.description.trim();
+
+              // Transliterate new description
+              const descResponse = await fetch('/api/ai/transliterate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  text: item.description.trim(),
+                  sourceLanguage: 'english',
+                  targetLanguage: 'hindi',
+                }),
+              });
+              const descData = await descResponse.json();
+              patch.hindiDescription = descData.transliteratedText || '';
+            }
+
+            await dataService.itemHindiMappings.update(matched.id, patch);
+          }
+        } catch (mappingErr) {
+          console.error('Failed to auto-save item Hindi mapping:', englishName, mappingErr);
+        }
+      }
 
       router.push(`/tenders/${tender.id}`);
     } catch (submitError) {
@@ -196,67 +299,36 @@ export function ProfessionalTenderForm() {
     }
   };
 
-  const canProceedToStep2 = formData.title.trim() && formData.departmentProfileId && formData.placeName.trim() && formData.districtName.trim();
-  const canProceedToStep3 = items.length > 0;
-
   return (
-    <div className="w-full max-w-7xl mx-auto">
-      {/* Header Section */}
-      <Card className="mb-6">
-        <CardHeader className="pb-4">
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
-              <CardTitle className="text-2xl">Create New Tender</CardTitle>
-              <CardDescription className="mt-2">
-                Professional government tender creation workflow
-              </CardDescription>
+    <div className="mx-auto w-full max-w-7xl">
+      <div className="mb-6 rounded-lg border border-slate-200 bg-white px-5 py-4 shadow-sm">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold text-slate-950">Create New Tender</h1>
+            <p className="mt-1 text-sm text-slate-500">
+              Enter tender details, location, items, and firms in one reviewable workspace.
+            </p>
+          </div>
+          <div className="grid grid-cols-3 gap-2 text-center sm:min-w-[360px]">
+            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+              <div className="text-xs text-slate-500">Items</div>
+              <div className="text-base font-semibold text-slate-900">{items.length}</div>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="text-right">
-                <div className="text-xs text-slate-500">Tender Number</div>
-                <div className="text-sm font-mono font-semibold">
-                  <span className="hidden sm:inline">TEND-</span>
-                  <span className="sm:hidden">TEND-2605-001</span>
-                </div>
+            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+              <div className="text-xs text-slate-500">Estimate</div>
+              <div className="text-base font-semibold text-slate-900">
+                {Number.isFinite(numericEstimatedAmount) && numericEstimatedAmount > 0
+                  ? `Rs. ${numericEstimatedAmount.toLocaleString('en-IN')}`
+                  : 'Pending'}
               </div>
-              <div className="px-3 py-1 rounded-full bg-amber-100 text-amber-800 text-xs font-medium">
-                {formData.status === 'draft' ? 'Draft' : 'Final'}
+            </div>
+            <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2">
+              <div className="text-xs text-blue-700">Total</div>
+              <div className="text-base font-semibold text-blue-900">
+                Rs. {Math.round(totals.grandTotal).toLocaleString('en-IN')}
               </div>
             </div>
           </div>
-        </CardHeader>
-      </Card>
-
-      {/* Progress Indicator */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between max-w-2xl mx-auto">
-          {[1, 2, 3].map((step) => (
-            <div key={step} className="flex items-center flex-1">
-              <div className="flex flex-col items-center flex-1">
-                <div
-                  className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold transition-colors ${
-                    currentStep >= step
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-slate-200 text-slate-500'
-                  }`}
-                >
-                  {step}
-                </div>
-                <div className={`mt-2 text-xs font-medium ${currentStep >= step ? 'text-blue-600' : 'text-slate-500'}`}>
-                  {step === 1 && 'Tender Info'}
-                  {step === 2 && 'Items'}
-                  {step === 3 && 'Firms'}
-                </div>
-              </div>
-              {step < 3 && (
-                <div
-                  className={`h-1 flex-1 mx-2 transition-colors ${
-                    currentStep > step ? 'bg-blue-600' : 'bg-slate-200'
-                  }`}
-                />
-              )}
-            </div>
-          ))}
         </div>
       </div>
 
@@ -267,26 +339,25 @@ export function ProfessionalTenderForm() {
         </Alert>
       )}
 
-      <form onSubmit={handleSubmit}>
-        {/* Step 1: Tender Information */}
-        {currentStep === 1 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Step 1: Tender Information</CardTitle>
+      <form onSubmit={handleSubmit} className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="space-y-6">
+          <Card className="rounded-lg">
+            <CardHeader className="border-b border-slate-100 pb-4">
+              <CardTitle className="text-lg">Tender Details</CardTitle>
               <CardDescription>
-                {isMunicipalCorporation 
-                  ? 'Basic tender details (dates not required for Municipal Corporation)' 
-                  : 'Basic tender details and dates'}
+                {isMunicipalCorporation
+                  ? 'Basic tender details. Dates are not required for Municipal Corporation.'
+                  : 'Basic tender details, location, amount, and dates.'}
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid gap-6 md:grid-cols-2">
-                <div className="space-y-2">
+            <CardContent className="space-y-5 pt-5">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2 md:col-span-2">
                   <Label htmlFor="title">Tender Title *</Label>
                   <Input
                     id="title"
                     value={formData.title}
-                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                    onChange={(event) => setFormData({ ...formData, title: event.target.value })}
                     placeholder="e.g., Supply of Electrical Materials"
                     required
                   />
@@ -296,15 +367,15 @@ export function ProfessionalTenderForm() {
                   <Label htmlFor="departmentProfileId">Department *</Label>
                   <select
                     id="departmentProfileId"
-                    className="h-10 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                    className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
                     value={formData.departmentProfileId}
-                    onChange={(e) => setFormData({ ...formData, departmentProfileId: e.target.value })}
+                    onChange={(event) => setFormData({ ...formData, departmentProfileId: event.target.value })}
                     required
                   >
                     <option value="">Select department</option>
-                    {departments.map((dept) => (
-                      <option key={dept.id} value={dept.id}>
-                        {dept.name}
+                    {departments.map((department) => (
+                      <option key={department.id} value={department.id}>
+                        {department.name}
                       </option>
                     ))}
                   </select>
@@ -314,11 +385,11 @@ export function ProfessionalTenderForm() {
                   <Label htmlFor="language">Language *</Label>
                   <select
                     id="language"
-                    className="h-10 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                    className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
                     value={formData.language}
-                    onChange={(e) => setFormData({ ...formData, language: e.target.value as 'hindi' | 'english' })}
+                    onChange={(event) => setFormData({ ...formData, language: event.target.value as 'hindi' | 'english' })}
                   >
-                    <option value="hindi">Hindi (हिंदी)</option>
+                    <option value="hindi">Hindi</option>
                     <option value="english">English</option>
                   </select>
                 </div>
@@ -328,9 +399,9 @@ export function ProfessionalTenderForm() {
                     <Label htmlFor="tenderType">Tender Type</Label>
                     <select
                       id="tenderType"
-                      className="h-10 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                      className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
                       value={formData.tenderType}
-                      onChange={(e) => setFormData({ ...formData, tenderType: e.target.value })}
+                      onChange={(event) => setFormData({ ...formData, tenderType: event.target.value })}
                     >
                       <option value="Open Tender">Open Tender</option>
                       <option value="Limited Tender">Limited Tender</option>
@@ -339,80 +410,106 @@ export function ProfessionalTenderForm() {
                     </select>
                   </div>
                 )}
-              </div>
-
-              {/* Place and District - Always Visible for Government Tenders */}
-              <div className="grid gap-6 md:grid-cols-2 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                <div className="space-y-2">
-                  <Label htmlFor="placeName">Place Name (स्थान का नाम) *</Label>
-                  <Input
-                    id="placeName"
-                    value={formData.placeName}
-                    onChange={(e) => setFormData({ ...formData, placeName: e.target.value })}
-                    placeholder="e.g., सेवड़ा"
-                    required
-                  />
-                  <p className="text-xs text-slate-500">
-                    Enter the place/city name (e.g., सेवड़ा, ग्वालियर)
-                  </p>
-                </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="districtName">District (जिला) *</Label>
-                  <Input
-                    id="districtName"
-                    value={formData.districtName}
-                    onChange={(e) => setFormData({ ...formData, districtName: e.target.value })}
-                    placeholder="e.g., दतिया"
-                    required
-                  />
-                  <p className="text-xs text-slate-500">
-                    Enter the district name (e.g., दतिया, ग्वालियर)
-                  </p>
-                </div>
-              </div>
-
-              {/* Estimated Amount Field */}
-              <div className="p-4 bg-amber-50 rounded-lg border border-amber-200">
-                <Label htmlFor="estimatedAmount">अनुमानित राशि (Estimated Amount) *</Label>
-                <div className="mt-2 space-y-2">
+                  <Label htmlFor="estimatedAmount">Estimated Amount *</Label>
                   <select
                     id="estimatedAmount"
-                    className="h-10 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                    value={formData.estimatedAmount}
-                    onChange={(e) => setFormData({ ...formData, estimatedAmount: e.target.value })}
+                    className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+                    value={selectedAmountOption}
+                    onChange={(event) =>
+                      setFormData({
+                        ...formData,
+                        estimatedAmount: event.target.value === 'custom' ? 'custom' : event.target.value,
+                      })
+                    }
                     required
                   >
                     <option value="">Select estimated amount</option>
-                    <option value="95000">₹95,000</option>
-                    <option value="98000">₹98,000</option>
-                    <option value="198000">₹1,98,000</option>
-                    <option value="custom">Custom (Free Text)</option>
+                    <option value="95000">Rs. 95,000</option>
+                    <option value="98000">Rs. 98,000</option>
+                    <option value="198000">Rs. 1,98,000</option>
+                    <option value="custom">Custom</option>
                   </select>
-                  {formData.estimatedAmount === 'custom' && (
+                  {selectedAmountOption === 'custom' && (
                     <Input
                       id="estimatedAmountCustom"
                       type="number"
-                      placeholder="Enter custom amount (e.g., 150000)"
-                      onChange={(e) => setFormData({ ...formData, estimatedAmount: e.target.value })}
-                      className="mt-2"
+                      min="1"
+                      placeholder="Enter custom amount"
+                      value={formData.estimatedAmount === 'custom' ? '' : formData.estimatedAmount}
+                      onChange={(event) => setFormData({ ...formData, estimatedAmount: event.target.value })}
                     />
                   )}
                 </div>
-                <p className="text-xs text-slate-500 mt-2">
-                  Enter the total estimated budget for this tender
-                </p>
+              </div>
+
+              <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+                <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h3 className="text-sm font-semibold text-blue-950">Location</h3>
+                    <p className="text-xs text-blue-700">Search saved places or add a new district mapping.</p>
+                  </div>
+                  {locationSummary && (
+                    <div className="rounded-md border border-blue-200 bg-white px-3 py-1 text-sm font-medium text-blue-900">
+                      {locationSummary}
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="placeName">Place Name *</Label>
+                    <LocationSearchInput
+                      id="placeName"
+                      value={formData.placeName}
+                      onChange={(value) => setFormData({ ...formData, placeName: value })}
+                      onSelect={(place) =>
+                        setFormData({
+                          ...formData,
+                          placeName: place.hindiName || place.englishName,
+                          districtName: place.districtHindiName || place.districtName,
+                          localBodyType: place.localBodyType || '',
+                          localBodyTypeHindi: place.localBodyTypeHindi || '',
+                        })
+                      }
+                    />
+                    {settings?.enableLocationAIAutofill && (
+                      <AILocationHelper
+                        placeName={formData.placeName}
+                        onAIFill={(data) =>
+                          setFormData({
+                            ...formData,
+                            placeName: data.hindiName || data.englishName,
+                            districtName: data.districtHindiName || data.districtName,
+                          })
+                        }
+                      />
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="districtName">District *</Label>
+                    <Input
+                      id="districtName"
+                      value={formData.districtName}
+                      onChange={(event) => setFormData({ ...formData, districtName: event.target.value })}
+                      placeholder="e.g., Datia"
+                      required
+                    />
+                  </div>
+                </div>
               </div>
 
               {!isMunicipalCorporation && (
-                <div className="grid gap-6 md:grid-cols-3">
+                <div className="grid gap-4 rounded-lg border border-slate-200 bg-slate-50 p-4 md:grid-cols-3">
                   <div className="space-y-2">
-                    <Label htmlFor="publishDate">Tender Publish Date</Label>
+                    <Label htmlFor="publishDate">Publish Date</Label>
                     <Input
                       id="publishDate"
                       type="date"
                       value={formData.publishDate}
-                      onChange={(e) => setFormData({ ...formData, publishDate: e.target.value })}
+                      onChange={(event) => setFormData({ ...formData, publishDate: event.target.value })}
                     />
                   </div>
 
@@ -422,7 +519,7 @@ export function ProfessionalTenderForm() {
                       id="submissionDate"
                       type="date"
                       value={formData.submissionDate}
-                      onChange={(e) => setFormData({ ...formData, submissionDate: e.target.value })}
+                      onChange={(event) => setFormData({ ...formData, submissionDate: event.target.value })}
                     />
                   </div>
 
@@ -432,119 +529,57 @@ export function ProfessionalTenderForm() {
                       id="openingDate"
                       type="date"
                       value={formData.openingDate}
-                      onChange={(e) => setFormData({ ...formData, openingDate: e.target.value })}
+                      onChange={(event) => setFormData({ ...formData, openingDate: event.target.value })}
                     />
                   </div>
                 </div>
               )}
-
-              <div className="flex justify-end gap-3 pt-4">
-                <Button
-                  type="button"
-                  onClick={() => setCurrentStep(2)}
-                  disabled={!canProceedToStep2}
-                >
-                  Next: Add Items
-                </Button>
-              </div>
             </CardContent>
           </Card>
-        )}
 
-        {/* Step 2: Item Management */}
-        {currentStep === 2 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Step 2: Item Management</CardTitle>
-              <CardDescription>Add items with quantities, rates, and GST</CardDescription>
+          <MultiProductItemManager tenderId={tempTenderId} items={items} onItemsChange={setItems} />
+        </div>
+
+        <aside className="space-y-6 lg:sticky lg:top-6 lg:self-start">
+          <Card className="rounded-lg">
+            <CardHeader className="border-b border-slate-100 pb-4">
+              <CardTitle className="text-lg">Firms</CardTitle>
+              <CardDescription>Select the main firm and optional alternates.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
-              <MultiProductItemManager tenderId={tempTenderId} items={items} onItemsChange={setItems} />
-
-              {/* Grand Total Panel */}
-              <div className="bg-slate-50 rounded-lg p-6 border border-slate-200">
-                <div className="grid grid-cols-3 gap-4 text-center">
-                  <div>
-                    <div className="text-xs text-slate-500 mb-1">Subtotal</div>
-                    <div className="text-xl font-bold">₹{totals.subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-slate-500 mb-1">GST Total</div>
-                    <div className="text-xl font-bold">₹{totals.gstTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-slate-500 mb-1">Grand Total</div>
-                    <div className="text-2xl font-bold text-blue-600">₹{totals.grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex justify-between pt-4">
-                <Button type="button" variant="outline" onClick={() => setCurrentStep(1)}>
-                  Back
-                </Button>
-                <Button
-                  type="button"
-                  onClick={() => setCurrentStep(3)}
-                  disabled={!canProceedToStep3}
+            <CardContent className="space-y-4 pt-5">
+              <div className="space-y-2">
+                <Label htmlFor="mainFirmId">Main Firm *</Label>
+                <select
+                  id="mainFirmId"
+                  className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+                  value={formData.mainFirmId}
+                  onChange={(event) => setFormData({ ...formData, mainFirmId: event.target.value })}
+                  required
                 >
-                  Next: Select Firms
-                </Button>
+                  <option value="">Select main firm</option>
+                  {firms.map((firm) => (
+                    <option key={firm.id} value={firm.id}>
+                      {firm.name}
+                    </option>
+                  ))}
+                </select>
+                {selectedMainFirm && (
+                  <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-xs text-slate-700">
+                    <div><strong>City:</strong> {selectedMainFirm.firmCity || 'N/A'}</div>
+                    <div><strong>GST:</strong> {selectedMainFirm.gstNumber || 'N/A'}</div>
+                    <div><strong>Contact:</strong> {selectedMainFirm.mobileNumber || 'N/A'}</div>
+                  </div>
+                )}
               </div>
-            </CardContent>
-          </Card>
-        )}
 
-        {/* Step 3: Firm Selection */}
-        {currentStep === 3 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Step 3: Firm Selection</CardTitle>
-              <CardDescription>Select main firm and optional alternate firms</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid gap-6 md:grid-cols-3">
-                {/* Main Firm Card */}
-                <div className="space-y-2">
-                  <Label htmlFor="mainFirmId">Main Firm *</Label>
-                  <select
-                    id="mainFirmId"
-                    className="h-10 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                    value={formData.mainFirmId}
-                    onChange={(e) => setFormData({ ...formData, mainFirmId: e.target.value })}
-                    required
-                  >
-                    <option value="">Select main firm</option>
-                    {firms.map((firm) => (
-                      <option key={firm.id} value={firm.id}>
-                        {firm.name}
-                      </option>
-                    ))}
-                  </select>
-                  {formData.mainFirmId && (
-                    <div className="mt-2 p-3 bg-blue-50 rounded border border-blue-200 text-xs">
-                      {(() => {
-                        const firm = firms.find(f => f.id === formData.mainFirmId);
-                        return firm ? (
-                          <>
-                            <div><strong>City:</strong> {firm.firmCity || 'N/A'}</div>
-                            <div><strong>GST:</strong> {firm.gstNumber || 'N/A'}</div>
-                            <div><strong>Contact:</strong> {firm.mobileNumber || 'N/A'}</div>
-                          </>
-                        ) : null;
-                      })()}
-                    </div>
-                  )}
-                </div>
-
-                {/* Alternate Firm A */}
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
                 <div className="space-y-2">
                   <Label htmlFor="alternateFirmAId">Alternate Firm A</Label>
                   <select
                     id="alternateFirmAId"
-                    className="h-10 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                    className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
                     value={formData.alternateFirmAId}
-                    onChange={(e) => setFormData({ ...formData, alternateFirmAId: e.target.value })}
+                    onChange={(event) => setFormData({ ...formData, alternateFirmAId: event.target.value })}
                   >
                     <option value="">None</option>
                     {firms.map((firm) => (
@@ -553,29 +588,18 @@ export function ProfessionalTenderForm() {
                       </option>
                     ))}
                   </select>
-                  {formData.alternateFirmAId && (
-                    <div className="mt-2 p-3 bg-slate-50 rounded border border-slate-200 text-xs">
-                      {(() => {
-                        const firm = firms.find(f => f.id === formData.alternateFirmAId);
-                        return firm ? (
-                          <>
-                            <div><strong>City:</strong> {firm.firmCity || 'N/A'}</div>
-                            <div><strong>GST:</strong> {firm.gstNumber || 'N/A'}</div>
-                          </>
-                        ) : null;
-                      })()}
-                    </div>
+                  {selectedAlternateFirmA && (
+                    <p className="text-xs text-slate-500">{selectedAlternateFirmA.firmCity || 'City N/A'}</p>
                   )}
                 </div>
 
-                {/* Alternate Firm B */}
                 <div className="space-y-2">
                   <Label htmlFor="alternateFirmBId">Alternate Firm B</Label>
                   <select
                     id="alternateFirmBId"
-                    className="h-10 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                    className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
                     value={formData.alternateFirmBId}
-                    onChange={(e) => setFormData({ ...formData, alternateFirmBId: e.target.value })}
+                    onChange={(event) => setFormData({ ...formData, alternateFirmBId: event.target.value })}
                   >
                     <option value="">None</option>
                     {firms.map((firm) => (
@@ -584,49 +608,68 @@ export function ProfessionalTenderForm() {
                       </option>
                     ))}
                   </select>
-                  {formData.alternateFirmBId && (
-                    <div className="mt-2 p-3 bg-slate-50 rounded border border-slate-200 text-xs">
-                      {(() => {
-                        const firm = firms.find(f => f.id === formData.alternateFirmBId);
-                        return firm ? (
-                          <>
-                            <div><strong>City:</strong> {firm.firmCity || 'N/A'}</div>
-                            <div><strong>GST:</strong> {firm.gstNumber || 'N/A'}</div>
-                          </>
-                        ) : null;
-                      })()}
-                    </div>
+                  {selectedAlternateFirmB && (
+                    <p className="text-xs text-slate-500">{selectedAlternateFirmB.firmCity || 'City N/A'}</p>
                   )}
-                </div>
-              </div>
-
-              <div className="flex justify-between pt-4">
-                <Button type="button" variant="outline" onClick={() => setCurrentStep(2)}>
-                  Back
-                </Button>
-                <div className="flex gap-3">
-                  <Button
-                    type="submit"
-                    variant="outline"
-                    loading={loading}
-                    disabled={loading}
-                    onClick={() => setFormData({ ...formData, status: 'draft' })}
-                  >
-                    Save as Draft
-                  </Button>
-                  <Button
-                    type="submit"
-                    loading={loading}
-                    disabled={loading}
-                    onClick={() => setFormData({ ...formData, status: 'final' })}
-                  >
-                    Create Tender
-                  </Button>
                 </div>
               </div>
             </CardContent>
           </Card>
-        )}
+
+          <Card className="rounded-lg">
+            <CardHeader className="border-b border-slate-100 pb-4">
+              <CardTitle className="text-lg">Review</CardTitle>
+              <CardDescription>Totals update as items are added.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 pt-5">
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="rounded-md bg-slate-50 p-3">
+                  <div className="text-xs text-slate-500">Subtotal</div>
+                  <div className="text-sm font-semibold text-slate-900">{formatMoney(totals.subtotal)}</div>
+                </div>
+                <div className="rounded-md bg-slate-50 p-3">
+                  <div className="text-xs text-slate-500">GST</div>
+                  <div className="text-sm font-semibold text-slate-900">{formatMoney(totals.gstTotal)}</div>
+                </div>
+                <div className="rounded-md bg-blue-50 p-3">
+                  <div className="text-xs text-blue-700">Total</div>
+                  <div className="text-sm font-semibold text-blue-900">{formatMoney(totals.grandTotal)}</div>
+                </div>
+              </div>
+
+              <div className="space-y-2 rounded-md border border-slate-200 p-3 text-sm">
+                <div className="flex justify-between gap-3">
+                  <span className="text-slate-500">Department</span>
+                  <span className="text-right font-medium text-slate-900">{selectedDepartment?.name || 'Not selected'}</span>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <span className="text-slate-500">Location</span>
+                  <span className="text-right font-medium text-slate-900">{locationSummary || 'Not selected'}</span>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <span className="text-slate-500">Main firm</span>
+                  <span className="text-right font-medium text-slate-900">{selectedMainFirm?.name || 'Not selected'}</span>
+                </div>
+              </div>
+
+              <div className="grid gap-2">
+                <Button type="submit" name="status" value="final" loading={loading} disabled={isSubmitDisabled}>
+                  Create Tender
+                </Button>
+                <Button
+                  type="submit"
+                  name="status"
+                  value="draft"
+                  variant="outline"
+                  loading={loading}
+                  disabled={isSubmitDisabled}
+                >
+                  Save as Draft
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </aside>
       </form>
     </div>
   );

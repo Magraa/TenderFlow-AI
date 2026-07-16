@@ -28,6 +28,7 @@ import {
   Tender,
   TenderDocument,
   TenderItem,
+  CustomTemplate,
 } from '@/types';
 
 import { getFirebaseFirestore } from '@/services/firebase/firebaseClient';
@@ -65,6 +66,7 @@ type Collections = {
   localBodyTypes: LocalBodyType;
   aiLocationCache: AILocationCache;
   documentPhraseMappings: DocumentPhraseMapping;
+  customTemplates: CustomTemplate;
 };
 
 
@@ -784,6 +786,31 @@ export class FirestoreDB {
 
   async deleteDocumentPhraseMapping(id: string): Promise<boolean> {
     return this.deleteEntity('documentPhraseMappings', id);
+  }
+
+  // ─── Custom Templates ─────────────────────────────────────────────────────
+
+  async createCustomTemplate(data: Omit<CustomTemplate, 'id' | 'createdAt' | 'updatedAt'>): Promise<CustomTemplate> {
+    return this.createEntity('customTemplates', data);
+  }
+
+  async getCustomTemplate(id: string): Promise<CustomTemplate | undefined> {
+    return this.getEntity('customTemplates', id);
+  }
+
+  async listCustomTemplates(): Promise<CustomTemplate[]> {
+    return this.listEntities('customTemplates');
+  }
+
+  async updateCustomTemplate(
+    id: string,
+    data: Partial<Omit<CustomTemplate, 'id' | 'createdAt'>>
+  ): Promise<CustomTemplate | undefined> {
+    return this.updateEntity('customTemplates', id, data as any);
+  }
+
+  async deleteCustomTemplate(id: string): Promise<boolean> {
+    return this.deleteEntity('customTemplates', id);
   }
 }
 

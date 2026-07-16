@@ -12,6 +12,7 @@ import {
   Tender,
   TenderDocument,
   TenderItem,
+  CustomTemplate,
 } from '@/types';
 
 import { db } from '@/services/db';
@@ -141,6 +142,16 @@ export const dataService = {
     update: (id: string, data: Partial<Omit<DocumentPhraseMapping, 'id' | 'createdAt'>>) =>
       db.updateDocumentPhraseMapping(id, data),
     delete: (id: string) => db.deleteDocumentPhraseMapping(id),
+  },
+
+  // Custom Templates
+  customTemplates: {
+    create: (data: Omit<CustomTemplate, 'id' | 'createdAt' | 'updatedAt'>) => db.createCustomTemplate(data),
+    get: (id: string) => db.getCustomTemplate(id),
+    list: () => db.listCustomTemplates(),
+    update: (id: string, data: Partial<Omit<CustomTemplate, 'id' | 'createdAt'>>) =>
+      db.updateCustomTemplate(id, data),
+    delete: (id: string) => db.deleteCustomTemplate(id),
   },
 };
 

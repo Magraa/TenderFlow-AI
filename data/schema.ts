@@ -8,6 +8,7 @@ import {
   Settings,
   Tender,
   TenderDocument,
+  CustomTemplate,
 } from '@/types';
 import { defaultVersioningSettings } from '@/services/versioningSettings';
 
@@ -25,6 +26,7 @@ export interface Database {
   localBodyTypes: LocalBodyType[];
   aiLocationCache: AILocationCache[];
   documentPhraseMappings: DocumentPhraseMapping[];
+  customTemplates: CustomTemplate[];
 }
 
 
@@ -106,6 +108,7 @@ export interface DocumentPhraseMapping {
   approved: boolean;
   usageCount: number;
   lastUsedAt?: string;
+  englishDescription?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -125,6 +128,7 @@ export const defaultDatabase: Database = {
   localBodyTypes: [],
   aiLocationCache: [],
   documentPhraseMappings: [],
+  customTemplates: [],
 };
 
 

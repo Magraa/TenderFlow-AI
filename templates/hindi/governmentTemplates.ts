@@ -1,6 +1,6 @@
 import { Firm, TenderItem } from '@/types';
-import { aiContextGenerator } from './aiContextGenerator';
-import { consolidatePurposesByCategory, getHindiItemName, getHindiVendorName } from './mappingService';
+import { aiContextGenerator } from '../../services/aiContextGenerator';
+import { getHindiItemName, getHindiVendorName } from '../../services/mappingService';
 
 /**
  * Government Document Template Generator
@@ -65,7 +65,7 @@ function isMunicipalCorporation(departmentName: string): boolean {
 async function generateMunicipalCorporationVigyapti(context: VigyaptiContext): Promise<string> {
   const place = normalizeOfficePlace(context.placeName);
   const district = normalizeDistrict(context.districtName);
-  const purpose = await consolidatePurposesByCategory(context.items, context.language);
+  const aiIntro = await aiContextGenerator.generateVigyaptiIntroWithPurpose(place, district, context.items, context.language);
   const submissionDate = context.submissionDate || '................';
   const openingDate = context.openingDate || 'उसी दिन';
 
@@ -202,7 +202,7 @@ async function generateMunicipalCorporationVigyapti(context: VigyaptiContext): P
 
       <div class="mc-vigyapti-title">विज्ञप्ति</div>
 
-      <p>एतद् द्वारा सर्व संबंधित वाणिज्य कर विभाग में पंजीकृत फर्मों को सूचित किया जाता है कि नगर परिषद ${escapeHTML(place)} द्वारा ${escapeHTML(purpose)} क्रय किया जाना प्रस्तावित है।</p>
+      <p>${escapeHTML(aiIntro)}</p>
 
       <p>जिस हेतु इच्छुक फर्में अपने सीलबंद कोटेशन फर्म के लेटरहेड पर, अधोहस्ताक्षरकर्ता के कार्यालय में दिनांक ${escapeHTML(submissionDate)} को दोपहर 03:00 बजे तक प्रस्तुत कर सकते हैं।</p>
 
@@ -669,9 +669,131 @@ export async function generateSupplyAadesh(context: SupplyAadeshContext): Promis
   return html;
 }
 
+export interface QuotationContext {
+  tenderNumber: string;
+  placeName: string;
+  districtName: string;
+  items: {
+    productName: string;
+    rate: number;
+    unit?: string;
+  }[];
+  subject: string;
+  firmName: string;
+  language: 'hindi' | 'english';
+}
+
+export async function generateQuotation(context: QuotationContext): Promise<string> {
+  const place = normalizeOfficePlace(context.placeName);
+  const district = normalizeDistrict(context.districtName);
+  const isHindi = context.language === 'hindi';
+
+  const itemsLinesHTML = context.items.map((item, idx) => {
+    const rateText = isHindi 
+      ? `Rs. ${item.rate.toLocaleString('en-IN')} प्रति ${item.unit || 'नग'}`
+      : `Rs. ${item.rate.toLocaleString('en-IN')} per ${item.unit || 'Nos'}`;
+    return `
+      <div style="display: flex; justify-content: space-between; max-width: 600px; margin-bottom: 12px; font-size: 16px;">
+        <div style="text-align: left; flex: 1;">
+          ${idx + 1}. ${escapeHTML(item.productName)}
+        </div>
+        <div style="text-align: right; min-width: 200px; font-weight: bold; margin-left: 20px;">
+          ${escapeHTML(rateText)}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  if (isHindi) {
+    return `
+      <div class="quotation-body" style="font-family: 'Kruti Dev 010', 'Mangal', 'Noto Sans Devanagari', sans-serif; font-size: 16px; line-height: 1.8; color: #1e293b; padding: 20px 40px;">
+        <div style="text-align: center; margin-bottom: 30px; font-weight: bold; line-height: 1.5;">
+          <p style="font-size: 18px; margin: 0;">प्रति,</p>
+          <p style="font-size: 18px; margin: 0; margin-left: 20px;">श्रीमान मुख्य नगर पालिका अधिकारी</p>
+          <p style="font-size: 18px; margin: 0; margin-left: 20px;">नगर परिषद ${escapeHTML(place)}</p>
+          <p style="font-size: 18px; margin: 0; margin-left: 20px;">जिला ${escapeHTML(district)} (म.प्र.)</p>
+        </div>
+
+        <div style="margin: 20px 0; font-weight: bold; font-size: 17px;">
+          विषय:- ${escapeHTML(context.subject)} बावत ।
+        </div>
+
+        <div style="margin: 15px 0;">
+          महोदय,
+          <p style="text-indent: 40px; margin-top: 5px;">
+            उपरोक्त विषयांतर्गत निवेदन है कि आपकी संस्था द्वारा आवश्यक सामग्री प्रदाय करने हेतु आमंत्रित निविदा सूचना/कोटेशन आमंत्रण सूचना क्रमांक ${escapeHTML(context.tenderNumber)} के तारतम्य में हमारी फर्म द्वारा सामग्री की न्यूनतम दरें निम्नानुसार प्रस्तुत हैं:-
+          </p>
+        </div>
+
+        <div style="margin: 25px 0 20px 20px; border-left: 2px solid #e2e8f0; padding-left: 15px;">
+          ${itemsLinesHTML}
+        </div>
+
+        <div style="margin: 20px 0; font-weight: bold;">
+          शर्तें:-
+          <ol style="margin: 5px 0 0 20px; font-weight: normal; list-style-type: decimal;">
+            <li>जी.एस.टी. अलग से देय होगा।</li>
+            <li>सामग्री की आपूर्ति आदेशानुसार समयावधि में कर दी जावेगी।</li>
+          </ol>
+        </div>
+
+        <div style="margin-top: 40px; float: right; text-align: center; min-width: 220px;">
+          <p style="margin-bottom: 30px;">भवदीय,</p>
+          <p style="font-weight: bold; margin: 0;">कृते: ${escapeHTML(context.firmName)}</p>
+          <p style="font-size: 14px; color: #64748b; margin: 0;">(अधिकृत हस्ताक्षरकर्ता)</p>
+        </div>
+        <div style="clear: both;"></div>
+      </div>
+    `;
+  }
+
+  // English fallback template
+  return `
+    <div class="quotation-body" style="font-family: 'Inter', sans-serif; font-size: 15px; line-height: 1.6; color: #1e293b; padding: 20px 40px;">
+      <div style="margin-bottom: 30px; font-weight: bold; line-height: 1.5;">
+        <p style="margin: 0;">To,</p>
+        <p style="margin: 0; margin-left: 20px;">The Chief Municipal Officer</p>
+        <p style="margin: 0; margin-left: 20px;">Municipal Council ${escapeHTML(place)}</p>
+        <p style="margin: 0; margin-left: 20px;">District ${escapeHTML(district)} (M.P.)</p>
+      </div>
+
+      <div style="margin: 20px 0; font-weight: bold; font-size: 16px;">
+        Subject: Submission of Rates for ${escapeHTML(context.subject)}.
+      </div>
+
+      <div style="margin: 15px 0;">
+        Dear Sir/Madam,
+        <p style="text-indent: 40px; margin-top: 5px;">
+          In response to your Notice Inviting Quotations/Tender No. ${escapeHTML(context.tenderNumber)} for the procurement of municipal supplies, we are pleased to submit our lowest competitive rates for the required items as detailed below:
+        </p>
+      </div>
+
+      <div style="margin: 25px 0 20px 20px; border-left: 2px solid #e2e8f0; padding-left: 15px;">
+        ${itemsLinesHTML}
+      </div>
+
+      <div style="margin: 20px 0; font-weight: bold;">
+        Terms & Conditions:
+        <ol style="margin: 5px 0 0 20px; font-weight: normal; list-style-type: decimal;">
+          <li>GST will be charged extra as applicable.</li>
+          <li>Delivery of materials will be made within the scheduled timeline.</li>
+        </ol>
+      </div>
+
+      <div style="margin-top: 40px; float: right; text-align: center; min-width: 220px;">
+        <p style="margin-bottom: 30px;">Yours faithfully,</p>
+        <p style="font-weight: bold; margin: 0;">For: ${escapeHTML(context.firmName)}</p>
+        <p style="font-size: 13px; color: #64748b; margin: 0;">(Authorized Signatory)</p>
+      </div>
+      <div style="clear: both;"></div>
+    </div>
+  `;
+}
+
 export const governmentTemplates = {
   generateVigyapti,
   generateSupplyAadesh,
   generateItemsTable,
+  generateQuotation,
 };
 

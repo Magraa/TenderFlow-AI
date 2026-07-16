@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Firm, FirmStyleProfile, LetterheadFitMode } from '@/types';
+import { Firm, FirmStyleProfile, LetterheadFitMode, CustomTemplate } from '@/types';
 import { dataService } from '@/services/dataService';
 import { firmService } from '@/services/firmService';
 import { layoutEngine } from '@/services/layoutEngine';
@@ -65,6 +65,7 @@ const EMPTY_FORM: FirmFormState = {
   accountNumber: '',
   panNumber: '',
   billInstructions: '',
+  customQuotationTemplateId: '',
 };
 
 function clampNumber(value: number, min: number, max: number): number {
@@ -363,14 +364,20 @@ export default function ManageFirmsPage() {
   const [formData, setFormData] = useState<FirmFormState>({ ...EMPTY_FORM });
   const initialFormDataRef = useRef<FirmFormData>({ ...EMPTY_FORM });
 
+  const [customTemplates, setCustomTemplates] = useState<CustomTemplate[]>([]);
+
   const debouncedFormData = useDebouncedValue(formData, 80);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const loaded = await dataService.firms.list();
+      const [loadedFirms, loadedTemplates] = await Promise.all([
+        dataService.firms.list(),
+        dataService.customTemplates.list(),
+      ]);
       if (cancelled) return;
-      setFirms(loaded);
+      setFirms(loadedFirms);
+      setCustomTemplates(loadedTemplates);
       setLoading(false);
     })();
     return () => {
@@ -436,6 +443,7 @@ export default function ManageFirmsPage() {
       accountNumber: firm.accountNumber || '',
       panNumber: firm.panNumber || '',
       billInstructions: firm.billInstructions || '',
+      customQuotationTemplateId: firm.customQuotationTemplateId || '',
     };
     setEditingFirm(firm);
     setStyleSourceId('');
@@ -821,6 +829,25 @@ export default function ManageFirmsPage() {
                         ))}
                       </select>
                     </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="custom-template">Custom Quotation Template (Optional)</Label>
+                    <select
+                      id="custom-template"
+                      className="h-10 w-full rounded-md border border-slate-300 px-3 py-2 text-sm bg-white"
+                      value={formData.customQuotationTemplateId || ''}
+                      onChange={(event) =>
+                        setFormData({ ...formData, customQuotationTemplateId: event.target.value })
+                      }
+                    >
+                      <option value="">-- Use Standard System Template --</option>
+                      {customTemplates.map((template) => (
+                        <option key={template.id} value={template.id}>
+                          {template.name} ({template.language === 'hindi' ? 'Hindi' : 'English'} - {template.docType === 'quotation_main' ? 'Main' : template.docType === 'quotation_alt_1' ? 'Alt A' : 'Alt B'})
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
                   <div className="grid gap-4 md:grid-cols-2">
@@ -1425,11 +1452,19 @@ export default function ManageFirmsPage() {
                     {firm.defaultLanguage} • {firm.firmStyleProfile}
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-2 text-sm">
+                <CardContent className="space-y-2 text-sm text-left">
                   <p>Header spacing: {firm.headerSpacing}px</p>
                   <p>Footer spacing: {firm.footerSpacing}px</p>
                   <p>Page margins: {firm.pageMargin}px</p>
                   <p>fitMode: {firm.fitLetterheadMode}</p>
+                  {(() => {
+                    const template = customTemplates.find((t) => t.id === firm.customQuotationTemplateId);
+                    return (
+                      <p className="text-xs text-slate-500 font-medium pt-1 border-t border-slate-100 mt-2">
+                        Template: <span className="text-blue-600 font-semibold">{template ? template.name : 'Standard Fallback'}</span>
+                      </p>
+                    );
+                  })()}
                   <div className="grid grid-cols-2 gap-2 pt-1">
                     <Button type="button" variant="outline" size="sm" onClick={() => openPreview(firm)}>
                       Preview

@@ -60,7 +60,8 @@ export async function generatePhrasePack(
 
 export async function savePhrasePack(
   pack: GeneratedPhrasePack,
-  itemName: string
+  itemName: string,
+  description?: string
 ): Promise<DocumentPhraseMapping> {
   // Check if category already exists and merge keywords instead of duplicating
   const existing = await dataService.documentPhraseMappings.getByCategory(pack.categoryId);
@@ -69,11 +70,15 @@ export async function savePhrasePack(
     const mergedKeywords = Array.from(
       new Set([...existing.keywords, itemName.toLowerCase(), ...pack.keywords])
     );
-    const updated = await dataService.documentPhraseMappings.update(existing.id, {
+    const patch: any = {
       keywords: mergedKeywords,
       usageCount: existing.usageCount + 1,
       lastUsedAt: new Date().toISOString(),
-    });
+    };
+    if (description && !existing.englishDescription) {
+      patch.englishDescription = description;
+    }
+    const updated = await dataService.documentPhraseMappings.update(existing.id, patch);
     return updated || existing;
   }
 
@@ -86,6 +91,7 @@ export async function savePhrasePack(
     approved: false,
     usageCount: 1,
     lastUsedAt: new Date().toISOString(),
+    englishDescription: description || '',
   });
 }
 
@@ -110,11 +116,15 @@ export async function getOrGeneratePhrasePack(
       const mergedKeywords = Array.from(
         new Set([...existingCategory.keywords, itemName.toLowerCase()])
       );
-      const updated = await dataService.documentPhraseMappings.update(existingCategory.id, {
+      const patch: any = {
         keywords: mergedKeywords,
         usageCount: existingCategory.usageCount + 1,
         lastUsedAt: new Date().toISOString(),
-      });
+      };
+      if (description && !existingCategory.englishDescription) {
+        patch.englishDescription = description;
+      }
+      const updated = await dataService.documentPhraseMappings.update(existingCategory.id, patch);
       return updated || existingCategory;
     }
     // Fall back to auto if category not found
@@ -125,10 +135,14 @@ export async function getOrGeneratePhrasePack(
     const existing = await findPhrasePack(itemName);
     if (existing) {
       // Increment usage in background
-      dataService.documentPhraseMappings.update(existing.id, {
+      const patch: any = {
         usageCount: existing.usageCount + 1,
         lastUsedAt: new Date().toISOString(),
-      }).catch(console.error);
+      };
+      if (description && !existing.englishDescription) {
+        patch.englishDescription = description;
+      }
+      dataService.documentPhraseMappings.update(existing.id, patch).catch(console.error);
       return existing;
     }
   }
@@ -137,7 +151,7 @@ export async function getOrGeneratePhrasePack(
   const generated = await generatePhrasePack(itemName, description);
   if (!generated) return null;
 
-  return savePhrasePack(generated, itemName);
+  return savePhrasePack(generated, itemName, description);
 }
 
 // ─── Add keyword to existing category ────────────────────────────────────────

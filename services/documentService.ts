@@ -23,6 +23,7 @@ export interface GenerateDocumentRequest {
   showPageBoundaryGuide?: boolean;
   showPrintBleedMargin?: boolean;
   forceTemplateFallback?: boolean;
+  customTemplateId?: string;
 }
 
 function documentUsesLetterhead(docType: TenderDocType): boolean {
@@ -175,6 +176,7 @@ async function generateAndPersistDocument(request: GenerateDocumentRequest): Pro
     showPageBoundaryGuide: request.showPageBoundaryGuide,
     showPrintBleedMargin: request.showPrintBleedMargin,
     forceTemplateFallback: request.forceTemplateFallback,
+    customTemplateId: request.customTemplateId,
   });
 
   if (existing) {

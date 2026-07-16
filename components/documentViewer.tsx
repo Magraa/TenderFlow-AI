@@ -2,7 +2,6 @@
 
 import React, { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { governmentTemplates } from '@/services/governmentTemplates';
 import { DocumentVersion, Firm, Tender, VersioningSettings } from '@/types';
 
 interface DocumentViewerProps {
@@ -21,9 +20,6 @@ interface DocumentViewerProps {
 const DocumentViewer: React.FC<DocumentViewerProps> = ({
   content,
   docType,
-  tender,
-  mainFirm,
-  targetFirm,
   tenderLanguage = 'hindi',
   onLanguageChange,
   versioningSettings,
@@ -42,55 +38,8 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
   }, [tenderLanguage]);
 
   useEffect(() => {
-    const regenerateContent = async () => {
-      if (!tender || !mainFirm) {
-        setPreviewContent(content);
-        return;
-      }
-
-      try {
-        if (docType === 'vigyapti') {
-          setPreviewContent(
-            await governmentTemplates.generateVigyapti({
-              placeName: tender.placeName || '',
-              districtName: tender.districtName || '',
-              departmentName: 'Government Department',
-              tenderNumber: tender.tenderNumber,
-              publishDate: tender.publishDate || '',
-              submissionDate: tender.submissionDate || '',
-              openingDate: tender.openingDate || '',
-              items: tender.items,
-              language: previewLanguage,
-            })
-          );
-          return;
-        }
-
-        if (docType === 'supply_aadesh' && targetFirm) {
-          setPreviewContent(
-            await governmentTemplates.generateSupplyAadesh({
-              placeName: tender.placeName || '',
-              districtName: tender.districtName || '',
-              departmentName: 'Government Department',
-              tenderNumber: tender.tenderNumber,
-              orderDate: new Date().toISOString().slice(0, 10),
-              firm: targetFirm,
-              items: tender.items,
-              language: previewLanguage,
-            })
-          );
-          return;
-        }
-
-        setPreviewContent(content);
-      } catch (error) {
-        console.error('Error regenerating document content:', error);
-        setPreviewContent(content);
-      }
-    };
-
-    regenerateContent();
-  }, [previewLanguage, docType, tender, mainFirm, targetFirm, content]);
+    setPreviewContent(content);
+  }, [content]);
 
   const handleLanguageChange = (newLanguage: 'hindi' | 'english') => {
     setPreviewLanguage(newLanguage);

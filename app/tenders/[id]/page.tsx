@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { DocumentVersion, Firm, Settings, Tender, TenderDocType, TenderDocument } from '@/types';
+import { CustomTemplate, DocumentVersion, Firm, Settings, Tender, TenderDocType, TenderDocument } from '@/types';
 import { dataService } from '@/services/dataService';
 import { documentService } from '@/services/documentService';
 import { pdfService } from '@/services/pdfService';
@@ -50,6 +50,8 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
   const [altFirmB, setAltFirmB] = useState<Firm | null>(null);
   const [documents, setDocuments] = useState<TenderDocument[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
+  const [customTemplates, setCustomTemplates] = useState<CustomTemplate[]>([]);
+  const [selectedTemplateByDocType, setSelectedTemplateByDocType] = useState<Record<TenderDocType, string>>({} as any);
   const [historyByDocumentId, setHistoryByDocumentId] = useState<Record<string, DocumentVersion[]>>({});
   const [pendingContentByDocumentId, setPendingContentByDocumentId] = useState<Record<string, string>>({});
   const [activeTab, setActiveTab] = useState<TenderDocType>('vigyapti');
@@ -87,12 +89,13 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
       const altAId = currentTender.alternateFirms?.[0] || '';
       const altBId = currentTender.alternateFirms?.[1] || '';
 
-      const [currentMainFirm, altA, altB, docs, loadedSettings] = await Promise.all([
+      const [currentMainFirm, altA, altB, docs, loadedSettings, templates] = await Promise.all([
         dataService.firms.get(currentTender.mainFirmId),
         altAId ? dataService.firms.get(altAId) : Promise.resolve(null),
         altBId ? dataService.firms.get(altBId) : Promise.resolve(null),
         dataService.documents.listByTender(id),
         dataService.settings.get(),
+        dataService.customTemplates.list(),
       ]);
 
       if (cancelled) return;
@@ -102,6 +105,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
       setAltFirmB(altB || null);
       setDocuments(docs);
       setSettings(loadedSettings);
+      setCustomTemplates(templates || []);
       setLoading(false);
     })();
 
@@ -154,7 +158,11 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
     setDocuments(await dataService.documents.listByTender(tender.id));
   };
 
-  const generateDocument = async (docType: TenderDocType, forceTemplateFallback = false) => {
+  const generateDocument = async (
+    docType: TenderDocType,
+    forceTemplateFallback = false,
+    languageOverride?: 'hindi' | 'english'
+  ) => {
     if (!tender || !mainFirm) return;
     setGenerating(true);
     setError('');
@@ -164,13 +172,15 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
         throw new Error(`Cannot generate ${DOC_CONFIGS[docType].label}: firm not configured.`);
       }
 
+      const selectedTemplateId = selectedTemplateByDocType[docType];
+
       const current = getDocument(docType);
       const result = await documentService.generateAndPersistDocument({
         tender,
         mainFirm,
         targetFirm,
         docType,
-        language: getLanguageForDocType(docType),
+        language: languageOverride || getLanguageForDocType(docType),
         showLetterheadBackground: current?.showLetterheadBackground,
         showSafeMarginGuide: current?.showSafeMarginGuide,
         lockHeaderPosition: current?.lockHeaderPosition,
@@ -179,6 +189,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
         showPageBoundaryGuide: current?.showSafeMarginGuide,
         showPrintBleedMargin: current?.showSafeMarginGuide,
         forceTemplateFallback,
+        customTemplateId: selectedTemplateId || undefined,
       });
 
       await refreshDocuments();
@@ -492,21 +503,47 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
                       <strong>{documentService.documentUsesLetterhead(docType) ? 'Firm-only' : 'Global'}</strong>
                     </p>
 
-                    <div className="flex flex-wrap gap-2">
-                      <Button onClick={() => generateDocument(docType)} loading={generating} disabled={generating}>
-                        Generate Document
-                      </Button>
-                      {current && (
-                        <>
-                          <Button type="button" variant="outline" onClick={downloadPDF}>
-                            Download PDF
+                    {(() => {
+                      const isQuotationType = docType === 'quotation_main' || docType === 'quotation_alt_1' || docType === 'quotation_alt_2';
+                      const availableTemplates = isQuotationType ? customTemplates.filter(t => t.docType === docType) : [];
+                      
+                      return (
+                        <div className="flex flex-wrap items-center gap-3">
+                          <Button onClick={() => generateDocument(docType)} loading={generating} disabled={generating}>
+                            Generate Document
                           </Button>
-                          <Button type="button" variant="outline" onClick={printDocument}>
-                            Print
-                          </Button>
-                        </>
-                      )}
-                    </div>
+
+                          {isQuotationType && availableTemplates.length > 0 && (
+                            <div className="flex items-center gap-2 border border-slate-200 rounded-lg px-2.5 py-1 bg-white shadow-sm h-10">
+                              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Template:</span>
+                              <select
+                                className="bg-transparent focus-visible:outline-none text-xs text-slate-700 font-medium"
+                                value={selectedTemplateByDocType[docType] || ''}
+                                onChange={(e) => setSelectedTemplateByDocType(prev => ({ ...prev, [docType]: e.target.value }))}
+                              >
+                                <option value="">Firm Default Template</option>
+                                {availableTemplates.map((tpl) => (
+                                  <option key={tpl.id} value={tpl.id}>
+                                    {tpl.name} ({tpl.language === 'hindi' ? 'Hindi' : 'English'})
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
+
+                          {current && (
+                            <>
+                              <Button type="button" variant="outline" onClick={downloadPDF}>
+                                Download PDF
+                              </Button>
+                              <Button type="button" variant="outline" onClick={printDocument}>
+                                Print
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      );
+                    })()}
 
                     {current && (
                       <div className="space-y-3 rounded-md border border-slate-200 p-3 text-sm">
@@ -648,9 +685,9 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
                             versioningSettings={versioningSettings}
                             versions={docHistory}
                             onManualSave={manualSaveMode ? handleManualSave : undefined}
-                            onLanguageChange={() => {
+                            onLanguageChange={(lang) => {
                               // Regenerate document when language changes
-                              generateDocument(docType);
+                              generateDocument(docType, false, lang);
                             }}
                           />
                         </div>

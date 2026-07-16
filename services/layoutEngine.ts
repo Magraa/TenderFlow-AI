@@ -121,14 +121,14 @@ export function generateFirmLayoutCSS(firm: Firm, options: LayoutOptions = {}): 
     }
 
     .a4-page {
-      position: relative;
-      width: var(--page-width);
-      min-height: var(--page-height);
-      margin: 0 auto 8px auto;
-      background: #fff;
-      page-break-after: always;
-      break-after: page;
-      overflow: hidden;
+      position: relative !important;
+      width: var(--page-width) !important;
+      min-height: var(--page-height) !important;
+      margin: 0 auto 8px auto !important;
+      background: #fff !important;
+      page-break-after: always !important;
+      break-after: page !important;
+      overflow: hidden !important;
     }
 
     .letterhead-layer {
@@ -142,13 +142,13 @@ export function generateFirmLayoutCSS(firm: Firm, options: LayoutOptions = {}): 
     }
 
     .content-layer {
-      position: absolute;
-      top: var(--content-start-y);
-      left: var(--content-left);
-      right: var(--content-right);
-      bottom: var(--content-bottom);
-      z-index: 3;
-      overflow: hidden;
+      position: absolute !important;
+      top: var(--content-start-y) !important;
+      left: var(--content-left) !important;
+      right: var(--content-right) !important;
+      bottom: var(--content-bottom) !important;
+      z-index: 3 !important;
+      overflow: hidden !important;
       font-size: 12px;
       line-height: 1.45;
       color: #0f172a;
@@ -196,9 +196,8 @@ export function generateFirmLayoutCSS(firm: Firm, options: LayoutOptions = {}): 
       text-transform: uppercase;
       text-align: right;
       padding: 6px 8px;
-      border: 2px solid rgba(15, 23, 42, 0.28);
-      border-radius: 6px;
-      background: rgba(255, 255, 255, 0.72);
+      border: none;
+      background: transparent;
       width: fit-content;
     }
 

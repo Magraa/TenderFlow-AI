@@ -76,7 +76,12 @@ type ExposedKeys =
   | 'findDocumentPhraseMappingByKeyword'
   | 'listDocumentPhraseMappings'
   | 'updateDocumentPhraseMapping'
-  | 'deleteDocumentPhraseMapping';
+  | 'deleteDocumentPhraseMapping'
+  | 'createCustomTemplate'
+  | 'getCustomTemplate'
+  | 'listCustomTemplates'
+  | 'updateCustomTemplate'
+  | 'deleteCustomTemplate';
 
 
 type DbAdapter = {
@@ -184,5 +189,12 @@ export const db: DbAdapter = {
   listDocumentPhraseMappings: async (...args) => (await getAdapter()).listDocumentPhraseMappings(...args),
   updateDocumentPhraseMapping: async (...args) => (await getAdapter()).updateDocumentPhraseMapping(...args),
   deleteDocumentPhraseMapping: async (...args) => (await getAdapter()).deleteDocumentPhraseMapping(...args),
+
+  // Custom Templates
+  createCustomTemplate: async (...args) => (await getAdapter()).createCustomTemplate(...args),
+  getCustomTemplate: async (...args) => (await getAdapter()).getCustomTemplate(...args),
+  listCustomTemplates: async (...args) => (await getAdapter()).listCustomTemplates(...args),
+  updateCustomTemplate: async (...args) => (await getAdapter()).updateCustomTemplate(...args),
+  deleteCustomTemplate: async (...args) => (await getAdapter()).deleteCustomTemplate(...args),
 };
 

@@ -89,9 +89,9 @@ export function ProfessionalTenderForm() {
         dataService.documentPhraseMappings.list(),
       ]);
 
-      // Ensure Municipal Corporation exists and is always first
-      const hasMunicipalCorp = loadedDepartmentsInitial.some((department) => department.name === 'Municipal Corporation');
-      if (!hasMunicipalCorp) {
+      // Deduplicate Municipal Corporation profiles in database
+      const mcProfiles = loadedDepartmentsInitial.filter((department) => department.name === 'Municipal Corporation');
+      if (mcProfiles.length === 0) {
         await dataService.departmentProfiles.create({
           name: 'Municipal Corporation',
           address: '123 Government Road',
@@ -104,22 +104,67 @@ export function ProfessionalTenderForm() {
           headerStyle: 'govt',
           defaultLanguage: 'english',
         });
+      } else if (mcProfiles.length > 1) {
+        const [keep, ...rest] = mcProfiles;
+        for (const dupe of rest) {
+          try {
+            await dataService.departmentProfiles.delete(dupe.id);
+          } catch (err) {
+            console.error('Failed to delete duplicate department profile:', err);
+          }
+        }
       }
 
-      // Get updated departments list with Municipal Corporation first
+      // Ensure Others profile exists in database
+      const othersProfiles = loadedDepartmentsInitial.filter((department) => department.name === 'Others');
+      if (othersProfiles.length === 0) {
+        await dataService.departmentProfiles.create({
+          name: 'Others',
+          address: 'Government Road',
+          city: 'New Delhi',
+          state: 'Delhi',
+          pincode: '110001',
+          contactPerson: 'Department Head',
+          email: 'dept@govt.in',
+          phone: '+91-11-XXXXX',
+          headerStyle: 'govt',
+          defaultLanguage: 'english',
+        });
+      } else if (othersProfiles.length > 1) {
+        const [keep, ...rest] = othersProfiles;
+        for (const dupe of rest) {
+          try {
+            await dataService.departmentProfiles.delete(dupe.id);
+          } catch (err) {
+            console.error('Failed to delete duplicate department profile:', err);
+          }
+        }
+      }
+
+      // Get updated departments list
       const loadedDepartments = await dataService.departmentProfiles.list();
+
+      // Deduplicate by name for UI safety
+      const uniqueDepts: DepartmentProfile[] = [];
+      const seenNames = new Set<string>();
+      for (const dept of loadedDepartments) {
+        if (!seenNames.has(dept.name)) {
+          seenNames.add(dept.name);
+          uniqueDepts.push(dept);
+        }
+      }
 
       if (cancelled) return;
       setFirms(loadedFirms);
-      setDepartments(loadedDepartments);
+      setDepartments(uniqueDepts);
       setSettings(loadedSettings);
       setPhrasePacks(loadedPhrasePacks);
 
       // Default to Municipal Corporation if no department selected
-      const municipalCorp = loadedDepartments.find((d) => d.name === 'Municipal Corporation');
+      const municipalCorp = uniqueDepts.find((d) => d.name === 'Municipal Corporation');
       setFormData((previous) => ({
         ...previous,
-        departmentProfileId: previous.departmentProfileId || municipalCorp?.id || loadedDepartments[0]?.id || '',
+        departmentProfileId: previous.departmentProfileId || (municipalCorp?.id || uniqueDepts[0]?.id || ''),
         mainFirmId: previous.mainFirmId || loadedFirms[0]?.id || '',
       }));
     })();
@@ -245,51 +290,123 @@ export function ProfessionalTenderForm() {
 
       // Save/transliterate items to Hindi mappings in the background
       for (const item of items) {
-        const englishName = item.productName.trim();
-        if (!englishName) continue;
+        const inputName = item.productName.trim();
+        if (!inputName) continue;
 
         try {
+          const isHindiPattern = /[\u0900-\u097F]/;
+          const isInputHindi = isHindiPattern.test(inputName);
+
           const existingMappings = await dataService.itemHindiMappings.list();
-          const matched = existingMappings.find(
-            (m) => m.englishName.toLowerCase().trim() === englishName.toLowerCase()
+          const matched = existingMappings.find((m) =>
+            isInputHindi
+              ? m.hindiName.trim() === inputName
+              : m.englishName.toLowerCase().trim() === inputName.toLowerCase()
           );
 
           if (!matched) {
-            // Transliterate name using AI endpoint
-            const nameResponse = await fetch('/api/ai/transliterate', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                text: englishName,
-                sourceLanguage: 'english',
-                targetLanguage: 'hindi',
-              }),
-            });
-            const nameData = await nameResponse.json();
-            const hindiName = nameData.transliteratedText || englishName;
+            let englishName = '';
+            let hindiName = '';
 
-            // Transliterate description if present
-            let hindiDescription = '';
-            if (item.description?.trim()) {
-              const descResponse = await fetch('/api/ai/transliterate', {
+            if (isInputHindi) {
+              hindiName = inputName;
+              // Transliterate Hindi to English
+              const nameResponse = await fetch('/api/ai/transliterate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                  text: item.description.trim(),
+                  text: inputName,
+                  sourceLanguage: 'hindi',
+                  targetLanguage: 'english',
+                }),
+              });
+              const nameData = await nameResponse.json();
+              englishName = nameData.transliteratedText || inputName;
+            } else {
+              englishName = inputName;
+              // Transliterate English to Hindi
+              const nameResponse = await fetch('/api/ai/transliterate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  text: inputName,
                   sourceLanguage: 'english',
                   targetLanguage: 'hindi',
                 }),
               });
-              const descData = await descResponse.json();
-              hindiDescription = descData.transliteratedText || '';
+              const nameData = await nameResponse.json();
+              hindiName = nameData.transliteratedText || inputName;
+            }
+
+            // Transliterate description if present
+            let englishDescription = '';
+            let hindiDescription = '';
+
+            if (item.description?.trim()) {
+              const inputDesc = item.description.trim();
+              const isDescHindi = isHindiPattern.test(inputDesc);
+
+              if (isDescHindi) {
+                hindiDescription = inputDesc;
+                const descResponse = await fetch('/api/ai/transliterate', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    text: inputDesc,
+                    sourceLanguage: 'hindi',
+                    targetLanguage: 'english',
+                  }),
+                });
+                const descData = await descResponse.json();
+                englishDescription = descData.transliteratedText || '';
+              } else {
+                englishDescription = inputDesc;
+                const descResponse = await fetch('/api/ai/transliterate', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    text: inputDesc,
+                    sourceLanguage: 'english',
+                    targetLanguage: 'hindi',
+                  }),
+                });
+                const descData = await descResponse.json();
+                hindiDescription = descData.transliteratedText || '';
+              }
+            }
+
+            // Generate alternative names using the alternates generator endpoint
+            let altHindiName = '';
+            let altEnglishName1 = '';
+            let altEnglishName2 = '';
+            try {
+              const altResponse = await fetch('/api/ai/generate-alternates', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  itemName: isInputHindi ? inputName : englishName,
+                  description: item.description?.trim() || '',
+                }),
+              });
+              if (altResponse.ok) {
+                const altData = await altResponse.json();
+                altHindiName = altData.altHindi || '';
+                altEnglishName1 = altData.altEnglish1 || '';
+                altEnglishName2 = altData.altEnglish2 || '';
+              }
+            } catch (err) {
+              console.error('Failed to generate alternate names:', err);
             }
 
             // Save new item Hindi mapping
             await dataService.itemHindiMappings.create({
               englishName,
               hindiName,
-              englishDescription: item.description?.trim() || '',
+              englishDescription,
               hindiDescription,
+              altHindiName,
+              altEnglishName1,
+              altEnglishName2,
               type: 'item',
               usageCount: 1,
               isAutoGenerated: true,
@@ -300,27 +417,70 @@ export function ProfessionalTenderForm() {
               usageCount: (matched.usageCount || 0) + 1,
             };
 
-            if (item.description?.trim() && !matched.englishDescription) {
-              patch.englishDescription = item.description.trim();
+            const inputDesc = item.description?.trim() || '';
+            if (inputDesc && (!matched.englishDescription || !matched.hindiDescription)) {
+              const isDescHindi = isHindiPattern.test(inputDesc);
 
-              // Transliterate new description
-              const descResponse = await fetch('/api/ai/transliterate', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  text: item.description.trim(),
-                  sourceLanguage: 'english',
-                  targetLanguage: 'hindi',
-                }),
-              });
-              const descData = await descResponse.json();
-              patch.hindiDescription = descData.transliteratedText || '';
+              if (isDescHindi) {
+                if (!matched.hindiDescription) patch.hindiDescription = inputDesc;
+                if (!matched.englishDescription) {
+                  const descResponse = await fetch('/api/ai/transliterate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      text: inputDesc,
+                      sourceLanguage: 'hindi',
+                      targetLanguage: 'english',
+                    }),
+                  });
+                  const descData = await descResponse.json();
+                  patch.englishDescription = descData.transliteratedText || '';
+                }
+              } else {
+                if (!matched.englishDescription) patch.englishDescription = inputDesc;
+                if (!matched.hindiDescription) {
+                  const descResponse = await fetch('/api/ai/transliterate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      text: inputDesc,
+                      sourceLanguage: 'english',
+                      targetLanguage: 'hindi',
+                    }),
+                  });
+                  const descData = await descResponse.json();
+                  patch.hindiDescription = descData.transliteratedText || '';
+                }
+              }
+            }
+
+            // Generate alternative names if missing
+            const needsAlternatesUpdate = !matched.altHindiName || !matched.altEnglishName1 || !matched.altEnglishName2;
+            if (needsAlternatesUpdate) {
+              try {
+                const altResponse = await fetch('/api/ai/generate-alternates', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    itemName: matched.hindiName || inputName,
+                    description: inputDesc || matched.englishDescription || '',
+                  }),
+                });
+                if (altResponse.ok) {
+                  const altData = await altResponse.json();
+                  patch.altHindiName = altData.altHindi || '';
+                  patch.altEnglishName1 = altData.altEnglish1 || '';
+                  patch.altEnglishName2 = altData.altEnglish2 || '';
+                }
+              } catch (err) {
+                console.error('Failed to update alternate names:', err);
+              }
             }
 
             await dataService.itemHindiMappings.update(matched.id, patch);
           }
         } catch (mappingErr) {
-          console.error('Failed to auto-save item Hindi mapping:', englishName, mappingErr);
+          console.error('Failed to auto-save item Hindi mapping:', inputName, mappingErr);
         }
       }
 
@@ -334,7 +494,7 @@ export function ProfessionalTenderForm() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-screen-xl">
+    <div className="mx-auto w-full max-w-[95%] 2xl:max-w-[95%]">
       <div className="mb-6 rounded-lg border border-slate-200 bg-white px-5 py-4 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
@@ -406,21 +566,18 @@ export function ProfessionalTenderForm() {
                     onChange={(event) => setFormData({ ...formData, departmentProfileId: event.target.value })}
                     required
                   >
-                    <option value="">Select department</option>
                     {departments
-                      .map((dept) => ({
-                        ...dept,
-                        isMunicipalCorp: dept.name === 'Municipal Corporation',
-                      }))
-                      .sort((a, b) => {
-                        // Municipal Corporation first, then others alphabetically
-                        if (a.isMunicipalCorp) return -1;
-                        if (b.isMunicipalCorp) return 1;
-                        return a.name.localeCompare(b.name);
-                      })
-                      .map((department) => (
-                        <option key={department.id} value={department.id}>
-                          {department.isMunicipalCorp ? 'Municipal Corporation' : department.name}
+                      .filter((dept) => dept.name === 'Others')
+                      .map((dept) => (
+                        <option key={dept.id} value={dept.id}>
+                          Others
+                        </option>
+                      ))}
+                    {departments
+                      .filter((dept) => dept.name === 'Municipal Corporation')
+                      .map((dept) => (
+                        <option key={dept.id} value={dept.id}>
+                          Municipal Corporation
                         </option>
                       ))}
                   </select>

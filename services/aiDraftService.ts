@@ -1,10 +1,9 @@
 import { Firm, Language, Tender, TenderDocType, TenderItem } from '@/types';
 import { aiFormatter } from './aiFormatter';
 import { layoutEngine } from './layoutEngine';
-import { templateLoader } from './templateLoader';
-import { governmentTemplates } from './governmentTemplates';
+import { governmentTemplates } from '../templates/hindi/governmentTemplates';
 import { dataService } from './dataService';
-import { generateAIDraft, getAvailableProviders, getProviderDisplayName } from './aiClient';
+import { generateAIDraft, getProviderDisplayName } from './aiClient';
 
 const GLOBAL_SYSTEM_PROMPT =
   'You write procurement documents in structured HTML with precise headings and concise government formatting.';
@@ -49,6 +48,7 @@ export interface AdvancedDraftRequest {
   showPageBoundaryGuide?: boolean;
   showPrintBleedMargin?: boolean;
   forceTemplateFallback?: boolean;
+  customTemplateId?: string;
 }
 
 export interface DraftResponse {
@@ -122,16 +122,7 @@ function calculateTotals(items: TenderItem[]): { baseAmount: number; taxAmount: 
   };
 }
 
-function buildContext(request: AdvancedDraftRequest, language: Language, itemsTableHTML: string, totalAmount: number) {
-  return {
-    tenderTitle: request.tender.title,
-    tenderNumber: request.tender.tenderNumber,
-    departmentName: request.tender.departmentProfileId,
-    dateLabel: new Date().toLocaleDateString(language === 'hindi' ? 'hi-IN' : 'en-IN'),
-    itemsTableHTML,
-    totalAmountLabel: `Rs. ${totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-  };
-}
+
 
 function simulateAIDraftHTML(
   request: AdvancedDraftRequest,
@@ -195,14 +186,20 @@ async function buildContentPages(
   departmentName: string,
   firm: Firm
 ): Promise<{ pages: string[]; fallbackUsed: boolean }> {
-  // Use structured government templates for Vigyapti and Supply Aadesh
-  if (request.docType === 'vigyapti' || request.docType === 'supply_aadesh') {
+  // Use structured government templates for Vigyapti, Supply Aadesh, and Quotations
+  if (
+    request.docType === 'vigyapti' ||
+    request.docType === 'supply_aadesh' ||
+    request.docType === 'quotation_main' ||
+    request.docType === 'quotation_alt_1' ||
+    request.docType === 'quotation_alt_2'
+  ) {
     try {
       const placeName = request.tender.placeName || '';
       const districtName = request.tender.districtName || '';
 
       if (request.docType === 'vigyapti') {
-        const html = governmentTemplates.generateVigyapti({
+        const html = await governmentTemplates.generateVigyapti({
           placeName,
           districtName,
           departmentName,
@@ -217,15 +214,213 @@ async function buildContentPages(
       }
 
       if (request.docType === 'supply_aadesh') {
-        const firm = request.targetFirm || request.mainFirm;
-        const html = governmentTemplates.generateSupplyAadesh({
+        const targetFirm = request.targetFirm || request.mainFirm;
+        const html = await governmentTemplates.generateSupplyAadesh({
           placeName,
           districtName,
           departmentName,
           tenderNumber: request.tender.tenderNumber,
           orderDate: new Date().toLocaleDateString(language === 'hindi' ? 'hi-IN' : 'en-IN'),
-          firm,
+          firm: targetFirm,
           items: adjustedItems,
+          language,
+        });
+        return { pages: [html], fallbackUsed: false };
+      }
+
+      if (
+        request.docType === 'quotation_main' ||
+        request.docType === 'quotation_alt_1' ||
+        request.docType === 'quotation_alt_2'
+      ) {
+        // Resolve subject using the phrase pack
+        let subject = '';
+        if (adjustedItems.length > 0) {
+          const firstItem = adjustedItems[0].productName;
+          const mappings = await dataService.documentPhraseMappings.list();
+          // Find mapping containing the keyword
+          const matchedPack = mappings.find(m =>
+            m.keywords.some(k => firstItem.toLowerCase().includes(k.toLowerCase()))
+          );
+          if (matchedPack) {
+            if (request.docType === 'quotation_main') {
+              subject = language === 'hindi'
+                ? matchedPack.phrases.quotationMain?.hindi || matchedPack.phrases.quotation.purchaseLine
+                : matchedPack.phrases.quotationMain?.english || matchedPack.phrases.quotation.purchaseLine;
+            } else if (request.docType === 'quotation_alt_1') {
+              subject = language === 'hindi'
+                ? matchedPack.phrases.quotationAltHindi?.subject || matchedPack.phrases.quotation.purchaseLine
+                : matchedPack.phrases.quotationAltEnglish?.subject || matchedPack.phrases.quotation.purchaseLine;
+            } else if (request.docType === 'quotation_alt_2') {
+              subject = language === 'hindi'
+                ? matchedPack.phrases.quotationAltHindi?.subject || matchedPack.phrases.quotation.purchaseLine
+                : matchedPack.phrases.quotationAltEnglish?.subject || matchedPack.phrases.quotation.purchaseLine;
+            }
+          }
+        }
+        if (!subject) {
+          subject = language === 'hindi' ? 'आवश्यक सामग्री के दर प्रस्तुत करने' : 'Submission of rates for items';
+        }
+
+        // Resolve item names based on document type (main, alt1, alt2)
+        const quotationItems = await Promise.all(
+          adjustedItems.map(async (item) => {
+            const rawName = item.productName.trim();
+            const mappings = await dataService.itemHindiMappings.list();
+            const matchedMapping = mappings.find(m =>
+              m.hindiName.trim() === rawName || m.englishName.toLowerCase().trim() === rawName.toLowerCase()
+            );
+
+            let productName = rawName;
+            if (matchedMapping) {
+              if (language === 'hindi') {
+                if (request.docType === 'quotation_main') {
+                  productName = matchedMapping.hindiName;
+                } else if (request.docType === 'quotation_alt_1') {
+                  productName = matchedMapping.altHindiName || matchedMapping.hindiName;
+                } else if (request.docType === 'quotation_alt_2') {
+                  productName = matchedMapping.altHindiName || matchedMapping.hindiName;
+                }
+              } else {
+                if (request.docType === 'quotation_main') {
+                  productName = matchedMapping.englishName;
+                } else if (request.docType === 'quotation_alt_1') {
+                  productName = matchedMapping.altEnglishName1 || matchedMapping.englishName;
+                } else if (request.docType === 'quotation_alt_2') {
+                  productName = matchedMapping.altEnglishName2 || matchedMapping.englishName;
+                }
+              }
+            }
+
+            return {
+              productName,
+              rate: item.rate,
+              unit: item.unit,
+            };
+          })
+        );
+
+        const targetFirm = request.targetFirm || request.mainFirm;
+        const customTemplateId = request.customTemplateId || targetFirm.customQuotationTemplateId;
+
+        if (customTemplateId) {
+          const customTpl = await dataService.customTemplates.get(customTemplateId);
+          if (customTpl) {
+            // Resolve item names based on custom template's docType and language
+            const customQuotationItems = await Promise.all(
+              adjustedItems.map(async (item) => {
+                const rawName = item.productName.trim();
+                const mappings = await dataService.itemHindiMappings.list();
+                const matchedMapping = mappings.find(m =>
+                  m.hindiName.trim() === rawName || m.englishName.toLowerCase().trim() === rawName.toLowerCase()
+                );
+
+                let productName = rawName;
+                let description = item.description || '';
+
+                if (matchedMapping) {
+                  if (customTpl.language === 'hindi') {
+                    productName = matchedMapping.hindiName;
+                    if (customTpl.docType === 'quotation_alt_1' || customTpl.docType === 'quotation_alt_2') {
+                      productName = matchedMapping.altHindiName || matchedMapping.hindiName;
+                    }
+                    description = matchedMapping.hindiDescription || item.description || '';
+                  } else {
+                    productName = matchedMapping.englishName;
+                    if (customTpl.docType === 'quotation_alt_1') {
+                      productName = matchedMapping.altEnglishName1 || matchedMapping.englishName;
+                    } else if (customTpl.docType === 'quotation_alt_2') {
+                      productName = matchedMapping.altEnglishName2 || matchedMapping.englishName;
+                    }
+                    description = matchedMapping.englishDescription || item.description || '';
+                  }
+                }
+
+                return {
+                  productName,
+                  description,
+                  rate: item.rate,
+                  unit: item.unit,
+                };
+              })
+            );
+
+            const escapeHTML = (str: string) =>
+              str
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+
+            const itemsListHTML = customQuotationItems.map((item, idx) => {
+              const rateText = customTpl.language === 'hindi'
+                ? `Rs. ${item.rate.toLocaleString('en-IN')} प्रति ${item.unit || 'नग'}`
+                : `Rs. ${item.rate.toLocaleString('en-IN')} per ${item.unit || 'Nos'}`;
+              
+              const specLabel = customTpl.language === 'hindi' ? 'स्पेसिफिकेशन:-' : 'Specification:';
+              const specHTML = item.description 
+                ? `<div style="font-size: 15px; color: #334155; margin-top: 4px; line-height: 1.5; font-weight: normal; max-width: 70%; text-align: left;">
+                     <strong style="color: #0f172a; text-decoration: underline;">${specLabel}</strong> ${escapeHTML(item.description)}
+                   </div>`
+                : '';
+
+              return `
+                <div style="margin-bottom: 24px; font-family: sans-serif;">
+                  <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div style="font-size: 16px; font-weight: bold; color: #0f172a; flex: 1; text-align: left;">
+                      ${idx + 1}. ${escapeHTML(item.productName)}
+                    </div>
+                    <div style="text-align: right; min-width: 220px; font-weight: bold; font-size: 16px; color: #0f172a; margin-left: 20px;">
+                      ${escapeHTML(rateText)}
+                    </div>
+                  </div>
+                  ${specHTML}
+                </div>
+              `;
+            }).join('');
+
+            let resolvedFirmName = targetFirm.name;
+            if (customTpl.language === 'hindi' && targetFirm.vendorHindiName) {
+              resolvedFirmName = targetFirm.vendorHindiName;
+            }
+
+            const compiledContent = customTpl.content
+              .replace(/\{\{tenderNumber\}\}/g, escapeHTML(request.tender.tenderNumber || ''))
+              .replace(/\{\{placeName\}\}/g, escapeHTML(placeName))
+              .replace(/\{\{districtName\}\}/g, escapeHTML(districtName))
+              .replace(/\{\{subject\}\}/g, escapeHTML(subject))
+              .replace(/\{\{firmName\}\}/g, escapeHTML(resolvedFirmName))
+              .replace(/\{\{items\}\}/g, itemsListHTML);
+
+            const activeFont = customTpl.fontFamily || 'Noto Sans Devanagari';
+            const html = `
+              <div class="custom-template-wrapper" style="width: 100%;">
+                <style>
+                  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;500;700&family=Inter:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700&display=swap');
+                  
+                  .custom-template-wrapper,
+                  .custom-template-wrapper *,
+                  .quotation-body,
+                  .quotation-body * {
+                    font-family: '${activeFont}', sans-serif !important;
+                  }
+                </style>
+                ${compiledContent}
+              </div>
+            `;
+
+            return { pages: [html], fallbackUsed: false };
+          }
+        }
+
+        const html = await governmentTemplates.generateQuotation({
+          tenderNumber: request.tender.tenderNumber,
+          placeName,
+          districtName,
+          items: quotationItems,
+          subject,
+          firmName: targetFirm.name,
           language,
         });
         return { pages: [html], fallbackUsed: false };

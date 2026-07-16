@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Firm, Settings, PurposeMapping, HindiMapping, PlaceMapping, VersioningSettings, DocumentPhraseMapping } from '@/types';
+import { Firm, Settings, PurposeMapping, HindiMapping, PlaceMapping, VersioningSettings, DocumentPhraseMapping, CustomTemplate } from '@/types';
 
 import { dataService } from '@/services/dataService';
 import {
@@ -48,6 +48,19 @@ export default function SettingsPage() {
   const [generatingPhrasePack, setGeneratingPhrasePack] = useState(false);
   const [expandedPhraseId, setExpandedPhraseId] = useState<string | null>(null);
 
+  // Custom template state
+  const [customTemplates, setCustomTemplates] = useState<CustomTemplate[]>([]);
+  const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
+  const [templateDialogMode, setTemplateDialogMode] = useState<'add' | 'edit'>('add');
+  const [currentTemplate, setCurrentTemplate] = useState<CustomTemplate | null>(null);
+  const [templateFormData, setTemplateFormData] = useState({
+    name: '',
+    docType: 'quotation_main' as any,
+    language: 'hindi' as any,
+    content: '',
+    fontFamily: 'Noto Sans Devanagari',
+  });
+  const [templateFormErrors, setTemplateFormErrors] = useState<Record<string, string>>({});
 
   // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -98,18 +111,20 @@ export default function SettingsPage() {
   const loadMappings = async () => {
     setLoadingMappings(true);
     try {
-      const [purposes, items, vendors, places, phrasePacks] = await Promise.all([
+      const [purposes, items, vendors, places, phrasePacks, templatesList] = await Promise.all([
         dataService.purposeMappings.list(),
         dataService.itemHindiMappings.list(),
         dataService.vendorHindiMappings.list(),
         dataService.placeMappings.list(),
         dataService.documentPhraseMappings.list(),
+        dataService.customTemplates.list(),
       ]);
       setPurposeMappings(purposes);
       setItemHindiMappings(items);
       setVendorHindiMappings(vendors);
       setPlaceMappings(places);
       setDocumentPhraseMappings(phrasePacks);
+      setCustomTemplates(templatesList);
 
     } catch (error) {
       console.error('Error loading mappings:', error);
@@ -325,6 +340,11 @@ export default function SettingsPage() {
       professionalPurpose: '',
       englishName: '',
       hindiName: '',
+      englishDescription: '',
+      hindiDescription: '',
+      altHindiName: '',
+      altEnglishName1: '',
+      altEnglishName2: '',
       language: 'hindi',
       type: type === 'purpose' ? undefined : type,
     });
@@ -347,6 +367,11 @@ export default function SettingsPage() {
       setFormData({
         englishName: mapping.englishName,
         hindiName: mapping.hindiName,
+        englishDescription: mapping.englishDescription || '',
+        hindiDescription: mapping.hindiDescription || '',
+        altHindiName: mapping.altHindiName || '',
+        altEnglishName1: mapping.altEnglishName1 || '',
+        altEnglishName2: mapping.altEnglishName2 || '',
         type: mapping.type,
       });
     }
@@ -396,6 +421,362 @@ export default function SettingsPage() {
     }
   };
 
+  // Custom Template Handlers
+  const openAddTemplateDialog = () => {
+    setTemplateDialogMode('add');
+    setCurrentTemplate(null);
+    setTemplateFormData({
+      name: '',
+      docType: 'quotation_main',
+      language: 'hindi',
+      content: getSampleQuotationTemplate('hindi'),
+      fontFamily: 'Noto Sans Devanagari',
+    });
+    setTemplateFormErrors({});
+    setTemplateDialogOpen(true);
+  };
+
+  const openEditTemplateDialog = (template: any) => {
+    setTemplateDialogMode('edit');
+    setCurrentTemplate(template);
+    setTemplateFormData({
+      name: template.name,
+      docType: template.docType,
+      language: template.language,
+      content: template.content,
+      fontFamily: template.fontFamily || 'Noto Sans Devanagari',
+    });
+    setTemplateFormErrors({});
+    setTemplateDialogOpen(true);
+  };
+
+  const handleDeleteTemplate = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this template?')) return;
+    try {
+      await dataService.customTemplates.delete(id);
+      setCustomTemplates((prev) => prev.filter((t) => t.id !== id));
+    } catch (err) {
+      console.error('Error deleting template:', err);
+      alert('Failed to delete template');
+    }
+  };
+
+  const validateTemplateForm = () => {
+    const errors: Record<string, string> = {};
+    if (!templateFormData.name?.trim()) errors.name = 'Name is required';
+    if (!templateFormData.content?.trim()) errors.content = 'Content is required';
+    setTemplateFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleSaveTemplate = async () => {
+    if (!validateTemplateForm()) return;
+    try {
+      if (templateDialogMode === 'add') {
+        const created = await dataService.customTemplates.create({
+          name: templateFormData.name.trim(),
+          docType: templateFormData.docType,
+          language: templateFormData.language,
+          content: templateFormData.content,
+          fontFamily: templateFormData.fontFamily,
+        });
+        setCustomTemplates((prev) => [created, ...prev]);
+      } else if (currentTemplate) {
+        const updated = await dataService.customTemplates.update(currentTemplate.id, {
+          name: templateFormData.name.trim(),
+          docType: templateFormData.docType,
+          language: templateFormData.language,
+          content: templateFormData.content,
+          fontFamily: templateFormData.fontFamily,
+        });
+        setCustomTemplates((prev) =>
+          prev.map((t) => (t.id === currentTemplate.id ? (updated || t) : t))
+        );
+      }
+      setTemplateDialogOpen(false);
+    } catch (err) {
+      console.error('Error saving template:', err);
+      alert('Failed to save template');
+    }
+  };
+
+  function getSampleQuotationTemplate(lang?: 'hindi' | 'english'): string {
+    const isHindi = (lang || templateFormData.language) === 'hindi';
+    if (isHindi) {
+      return `<div class="quotation-body" style="font-family: 'Kruti Dev 010', 'Mangal', 'Noto Sans Devanagari', sans-serif; font-size: 16px; line-height: 1.8; color: #1e293b; padding: 20px 40px;">
+  <div style="text-align: center; margin-bottom: 30px; font-weight: bold; line-height: 1.5;">
+    <p style="font-size: 18px; margin: 0;">प्रति,</p>
+    <p style="font-size: 18px; margin: 0; margin-left: 20px;">श्रीमान मुख्य नगर पालिका अधिकारी</p>
+    <p style="font-size: 18px; margin: 0; margin-left: 20px;">नगर परिषद {{placeName}}</p>
+    <p style="font-size: 18px; margin: 0; margin-left: 20px;">जिला {{districtName}} (म.प्र.)</p>
+  </div>
+
+  <div style="margin: 20px 0; font-weight: bold; font-size: 17px;">
+    विषय:- {{subject}} बावत ।
+  </div>
+
+  <div style="margin: 15px 0;">
+    महोदय,
+    <p style="text-indent: 40px; margin-top: 5px;">
+      उपरोक्त विषयांतर्गत निवेदन है कि आपकी संस्था द्वारा आवश्यक सामग्री प्रदाय करने हेतु आमंत्रित निविदा सूचना/कोटेशन आमंत्रण सूचना क्रमांक {{tenderNumber}} के तारतम्य में हमारी फर्म द्वारा सामग्री की न्यूनतम दरें निम्नानुसार प्रस्तुत हैं:-
+    </p>
+  </div>
+
+  <div style="margin: 25px 0 20px 20px; border-left: 2px solid #e2e8f0; padding-left: 15px;">
+    {{items}}
+  </div>
+
+  <div style="margin: 20px 0; font-weight: bold;">
+    शर्तें:-
+    <ol style="margin: 5px 0 0 20px; font-weight: normal; list-style-type: decimal;">
+      <li>जी.एस.टी. अलग से देय होगा।</li>
+      <li>सामग्री की आपूर्ति आदेशानुसार समयावधि में कर दी जावेगी।</li>
+    </ol>
+  </div>
+
+  <div style="margin-top: 40px; float: right; text-align: center; min-width: 220px;">
+    <p style="margin-bottom: 30px;">भवदीय,</p>
+    <p style="font-weight: bold; margin: 0;">कृते: {{firmName}}</p>
+    <p style="font-size: 14px; color: #64748b; margin: 0;">(अधिकृत हस्ताक्षरकर्ता)</p>
+  </div>
+  <div style="clear: both;"></div>
+</div>`;
+    } else {
+      return `<div class="quotation-body" style="font-family: Arial, sans-serif; font-size: 16px; line-height: 1.6; color: #1e293b; padding: 20px 40px;">
+  <div style="margin-bottom: 25px; font-weight: bold;">
+    <p style="margin: 0;">To,</p>
+    <p style="margin: 0; margin-left: 20px;">The Chief Municipal Officer,</p>
+    <p style="margin: 0; margin-left: 20px;">Municipal Council {{placeName}},</p>
+    <p style="margin: 0; margin-left: 20px;">District {{districtName}} (M.P.)</p>
+  </div>
+
+  <div style="margin: 20px 0; font-weight: bold; font-size: 17px; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px;">
+    Subject: {{subject}}
+  </div>
+
+  <div style="margin: 15px 0;">
+    Dear Sir,
+    <p style="text-indent: 40px; margin-top: 5px;">
+      With reference to your quotation invitation notice number {{tenderNumber}} for the supply of required materials, we are pleased to submit our lowest rates as follow:
+    </p>
+  </div>
+
+  <div style="margin: 25px 0 20px 20px; border-left: 2px solid #e2e8f0; padding-left: 15px;">
+    {{items}}
+  </div>
+
+  <div style="margin: 20px 0; font-weight: bold;">
+    Terms & Conditions:
+    <ol style="margin: 5px 0 0 20px; font-weight: normal; list-style-type: decimal;">
+      <li>GST will be charged extra as applicable.</li>
+      <li>The supply of items will be completed within the scheduled timeframe.</li>
+    </ol>
+  </div>
+
+  <div style="margin-top: 40px; float: right; text-align: center; min-width: 220px;">
+    <p style="margin-bottom: 30px;">Sincerely yours,</p>
+    <p style="font-weight: bold; margin: 0;">For: {{firmName}}</p>
+    <p style="font-size: 14px; color: #64748b; margin: 0;">(Authorized Signatory)</p>
+  </div>
+  <div style="clear: both;"></div>
+</div>`;
+    }
+  }
+
+  const getCompiledPreviewHTML = () => {
+    const rawContent = templateFormData.content || '';
+    const isHindi = templateFormData.language === 'hindi';
+    
+    const mockContext = {
+      tenderNumber: 'TEND-2026-9876',
+      placeName: isHindi ? 'दतिया' : 'Datia',
+      districtName: isHindi ? 'दतिया' : 'Datia',
+      subject: isHindi 
+        ? 'सफाई सामग्री (डस्टबिन) प्रदाय करने हेतु न्यूनतम दरें प्रस्तुत करने बावत।' 
+        : 'Submission of lowest rates for supply of materials.',
+      firmName: isHindi 
+        ? 'माग्रा इंडस्ट्रियल सप्लायर्स' 
+        : 'Magra Industrial Suppliers',
+      items: isHindi ? [
+        { 
+          productName: 'हाथ कचरा गाड़ी M.S', 
+          description: 'साइज़ 990x533x355 mm, फ्रेम एंगल साइज़ 32x32x3 mm, एक्सल रौड एसएस 20 mm, व्हील 2 नग 457 mm, व्हील चैनल रबड़ सहित, 14 नग तान 10 mm, नगर पालिका का नाम और क्रम संख्या अंकित ।',
+          rate: 10300, 
+          unit: 'नग' 
+        },
+        { 
+          productName: 'डस्टबिन (घरेलू उपयोग हेतु वितरण)', 
+          description: 'क्षमता: 12 लीटर, सामग्री: प्रथम श्रेणी HDPE प्लास्टिक, रंग: हरा एवं नीला',
+          rate: 165, 
+          unit: 'नग' 
+        }
+      ] : [
+        { 
+          productName: 'Hand Garbage Cart M.S', 
+          description: 'Size 990x533x355 mm, frame angle size 32x32x3 mm, axle rod SS 20 mm, wheel 2 nos 457 mm, with wheel channel rubber, 14 nos spokes 10 mm, municipal name and serial number marked.',
+          rate: 10300, 
+          unit: 'Nos' 
+        },
+        { 
+          productName: 'Dustbin (Domestic Distribution)', 
+          description: 'Capacity: 12 Liters, material: first grade HDPE plastic, color: green and blue',
+          rate: 165, 
+          unit: 'Nos' 
+        }
+      ]
+    };
+
+    const itemsListHTML = mockContext.items.map((item, idx) => {
+      const rateText = isHindi
+        ? `Rs. ${item.rate.toLocaleString('en-IN')} प्रति ${item.unit}`
+        : `Rs. ${item.rate.toLocaleString('en-IN')} per ${item.unit}`;
+      
+      const specLabel = isHindi ? 'स्पेसिफिकेशन:-' : 'Specification:';
+      const specHTML = item.description 
+        ? `<div style="font-size: 15px; color: #334155; margin-top: 4px; line-height: 1.5; font-weight: normal; max-width: 70%; text-align: left;">
+             <strong style="color: #0f172a; text-decoration: underline;">${specLabel}</strong> ${item.description}
+           </div>`
+        : '';
+
+      return `
+        <div style="margin-bottom: 24px; font-family: sans-serif;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+            <div style="font-size: 16px; font-weight: bold; color: #0f172a; flex: 1; text-align: left;">
+              ${idx + 1}. ${item.productName}
+            </div>
+            <div style="text-align: right; min-width: 220px; font-weight: bold; font-size: 16px; color: #0f172a; margin-left: 20px;">
+              ${rateText}
+            </div>
+          </div>
+          ${specHTML}
+        </div>
+      `;
+    }).join('');
+
+    const compiled = rawContent
+      .replace(/\{\{tenderNumber\}\}/g, mockContext.tenderNumber)
+      .replace(/\{\{placeName\}\}/g, mockContext.placeName)
+      .replace(/\{\{districtName\}\}/g, mockContext.districtName)
+      .replace(/\{\{subject\}\}/g, mockContext.subject)
+      .replace(/\{\{firmName\}\}/g, mockContext.firmName)
+      .replace(/\{\{items\}\}/g, itemsListHTML);
+
+    const activeFont = templateFormData.fontFamily || 'Noto Sans Devanagari';
+
+    return `
+      <div class="custom-template-preview-wrapper" style="width: 100%;">
+        <style>
+          @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;500;700&family=Inter:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700&display=swap');
+          
+          .custom-template-preview-wrapper,
+          .custom-template-preview-wrapper *,
+          .quotation-body,
+          .quotation-body * {
+            font-family: '${activeFont}', sans-serif !important;
+          }
+        </style>
+        ${compiled}
+      </div>
+    `;
+  };
+
+  const getTemplatePreviewHTML = (template: CustomTemplate) => {
+    const rawContent = template.content || '';
+    const isHindi = template.language === 'hindi';
+    
+    const mockContext = {
+      tenderNumber: 'TEND-2026-9876',
+      placeName: isHindi ? 'दतिया' : 'Datia',
+      districtName: isHindi ? 'दतिया' : 'Datia',
+      subject: isHindi 
+        ? 'सफाई सामग्री (डस्टबिन) प्रदाय करने हेतु न्यूनतम दरें प्रस्तुत करने बावत।' 
+        : 'Submission of lowest rates for supply of materials.',
+      firmName: isHindi 
+        ? 'माग्रा इंडस्ट्रियल सप्लायर्स' 
+        : 'Magra Industrial Suppliers',
+      items: isHindi ? [
+        { 
+          productName: 'हाथ कचरा गाड़ी M.S', 
+          description: 'साइज़ 990x533x355 mm, फ्रेम एंगल साइज़ 32x32x3 mm, एक्सल रौड एसएस 20 mm, व्हील 2 नग 457 mm, व्हील चैनल रबड़ सहित, 14 नग तान 10 mm, नगर पालिका का नाम और क्रम संख्या अंकित ।',
+          rate: 10300, 
+          unit: 'नग' 
+        },
+        { 
+          productName: 'डस्टबिन (घरेलू उपयोग हेतु वितरण)', 
+          description: 'क्षमता: 12 लीटर, सामग्री: प्रथम श्रेणी HDPE प्लास्टिक, रंग: हरा एवं नीला',
+          rate: 165, 
+          unit: 'नग' 
+        }
+      ] : [
+        { 
+          productName: 'Hand Garbage Cart M.S', 
+          description: 'Size 990x533x355 mm, frame angle size 32x32x3 mm, axle rod SS 20 mm, wheel 2 nos 457 mm, with wheel channel rubber, 14 nos spokes 10 mm, municipal name and serial number marked.',
+          rate: 10300, 
+          unit: 'Nos' 
+        },
+        { 
+          productName: 'Dustbin (Domestic Distribution)', 
+          description: 'Capacity: 12 Liters, material: first grade HDPE plastic, color: green and blue',
+          rate: 165, 
+          unit: 'Nos' 
+        }
+      ]
+    };
+
+    const itemsListHTML = mockContext.items.map((item, idx) => {
+      const rateText = isHindi
+        ? `Rs. ${item.rate.toLocaleString('en-IN')} प्रति ${item.unit}`
+        : `Rs. ${item.rate.toLocaleString('en-IN')} per ${item.unit}`;
+      
+      const specLabel = isHindi ? 'स्पेसिफिकेशन:-' : 'Specification:';
+      const specHTML = item.description 
+        ? `<div style="font-size: 13px; color: #475569; margin-top: 3px; line-height: 1.4; font-weight: normal; max-width: 75%; text-align: left;">
+             <strong style="color: #334155;">${specLabel}</strong> ${item.description}
+           </div>`
+        : '';
+
+      return `
+        <div style="margin-bottom: 16px; font-family: sans-serif; font-size: 14px;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+            <div style="font-weight: bold; color: #0f172a; flex: 1; text-align: left;">
+              ${idx + 1}. ${item.productName}
+            </div>
+            <div style="text-align: right; min-width: 160px; font-weight: bold; color: #0f172a; margin-left: 10px;">
+              ${rateText}
+            </div>
+          </div>
+          ${specHTML}
+        </div>
+      `;
+    }).join('');
+
+    const compiled = rawContent
+      .replace(/\{\{tenderNumber\}\}/g, mockContext.tenderNumber)
+      .replace(/\{\{placeName\}\}/g, mockContext.placeName)
+      .replace(/\{\{districtName\}\}/g, mockContext.districtName)
+      .replace(/\{\{subject\}\}/g, mockContext.subject)
+      .replace(/\{\{firmName\}\}/g, mockContext.firmName)
+      .replace(/\{\{items\}\}/g, itemsListHTML);
+
+    const activeFont = template.fontFamily || 'Noto Sans Devanagari';
+
+    return `
+      <div class="custom-template-card-preview-wrapper" style="width: 100%;">
+        <style>
+          @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;500;700&family=Inter:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700&display=swap');
+          
+          .custom-template-card-preview-wrapper,
+          .custom-template-card-preview-wrapper *,
+          .quotation-body,
+          .quotation-body * {
+            font-family: '${activeFont}', sans-serif !important;
+          }
+        </style>
+        ${compiled}
+      </div>
+    `;
+  };
+
   const validateForm = () => {
     const errors: Record<string, string> = {};
     
@@ -418,6 +799,9 @@ export default function SettingsPage() {
 
     setGeneratingHindi(true);
     try {
+      let transliteratedName = englishName;
+      let transliteratedDesc = '';
+
       if (englishName && englishDesc) {
         // Send both in a single request with a separator
         const combinedText = `${englishName} ||| ${englishDesc}`;
@@ -438,14 +822,8 @@ export default function SettingsPage() {
         const data = await response.json();
         if (data.transliteratedText) {
           const parts = data.transliteratedText.split('|||');
-          const transliteratedName = parts[0]?.trim() || englishName;
-          const transliteratedDesc = parts[1]?.trim() || '';
-
-          setFormData((prev: any) => ({
-            ...prev,
-            hindiName: transliteratedName,
-            hindiDescription: transliteratedDesc,
-          }));
+          transliteratedName = parts[0]?.trim() || englishName;
+          transliteratedDesc = parts[1]?.trim() || '';
         }
       } else {
         // Send name only
@@ -465,10 +843,38 @@ export default function SettingsPage() {
 
         const data = await response.json();
         if (data.transliteratedText) {
-          setFormData((prev: any) => ({
-            ...prev,
-            hindiName: data.transliteratedText,
-          }));
+          transliteratedName = data.transliteratedText;
+        }
+      }
+
+      setFormData((prev: any) => ({
+        ...prev,
+        hindiName: transliteratedName,
+        hindiDescription: transliteratedDesc,
+      }));
+
+      // Generate alternative names if this is an item
+      if (dialogType === 'item') {
+        try {
+          const altResponse = await fetch('/api/ai/generate-alternates', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              itemName: englishName,
+              description: englishDesc || '',
+            }),
+          });
+          if (altResponse.ok) {
+            const altData = await altResponse.json();
+            setFormData((prev: any) => ({
+              ...prev,
+              altHindiName: altData.altHindi || '',
+              altEnglishName1: altData.altEnglish1 || '',
+              altEnglishName2: altData.altEnglish2 || '',
+            }));
+          }
+        } catch (altError) {
+          console.error('Failed to generate alt names in settings dialog:', altError);
         }
       }
 
@@ -510,6 +916,9 @@ export default function SettingsPage() {
           hindiName: formData.hindiName.trim(),
           englishDescription: formData.englishDescription?.trim() || '',
           hindiDescription: formData.hindiDescription?.trim() || '',
+          altHindiName: formData.altHindiName?.trim() || '',
+          altEnglishName1: formData.altEnglishName1?.trim() || '',
+          altEnglishName2: formData.altEnglishName2?.trim() || '',
           type: dialogType as 'item' | 'vendor',
           usageCount: 0,
           isAutoGenerated: false,
@@ -527,6 +936,9 @@ export default function SettingsPage() {
               hindiName: formData.hindiName.trim(),
               englishDescription: formData.englishDescription?.trim() || '',
               hindiDescription: formData.hindiDescription?.trim() || '',
+              altHindiName: formData.altHindiName?.trim() || '',
+              altEnglishName1: formData.altEnglishName1?.trim() || '',
+              altEnglishName2: formData.altEnglishName2?.trim() || '',
               updatedAt: new Date().toISOString(),
             });
           } else {
@@ -534,6 +946,9 @@ export default function SettingsPage() {
               hindiName: formData.hindiName.trim(),
               englishDescription: formData.englishDescription?.trim() || '',
               hindiDescription: formData.hindiDescription?.trim() || '',
+              altHindiName: formData.altHindiName?.trim() || '',
+              altEnglishName1: formData.altEnglishName1?.trim() || '',
+              altEnglishName2: formData.altEnglishName2?.trim() || '',
               updatedAt: new Date().toISOString(),
             });
           }
@@ -695,14 +1110,14 @@ export default function SettingsPage() {
           </CardHeader>
           <CardContent>
             <Tabs defaultValue="phrasepacks" className="w-full">
-              <TabsList className="grid w-full grid-cols-4">
-                <TabsTrigger value="purpose">Purpose Library</TabsTrigger>
-                <TabsTrigger value="item">Item Hindi Mappings</TabsTrigger>
-                <TabsTrigger value="phrasepacks" className="flex items-center gap-1.5">
+              <TabsList className="grid w-full grid-cols-4 gap-1 bg-slate-100 p-1 rounded-xl">
+                <TabsTrigger value="purpose" className="rounded-lg text-xs font-semibold py-1.5">Purpose Library</TabsTrigger>
+                <TabsTrigger value="item" className="rounded-lg text-xs font-semibold py-1.5">Item Mappings</TabsTrigger>
+                <TabsTrigger value="phrasepacks" className="flex items-center gap-1.5 rounded-lg text-xs font-semibold py-1.5">
                   <Package className="h-3.5 w-3.5" />
                   Phrase Packs
                 </TabsTrigger>
-                <TabsTrigger value="locations">Locations</TabsTrigger>
+                <TabsTrigger value="locations" className="rounded-lg text-xs font-semibold py-1.5">Locations</TabsTrigger>
               </TabsList>
 
               
@@ -817,6 +1232,16 @@ export default function SettingsPage() {
                                 <span className="font-medium text-slate-400">विवरण:</span> {mapping.hindiDescription}
                               </p>
                             )}
+                             {mapping.altHindiName && (
+                              <p className="text-xs text-slate-500 mt-1 ml-4">
+                                <span className="font-medium text-blue-500">Alt Hindi:</span> {mapping.altHindiName}
+                              </p>
+                            )}
+                            {(mapping.altEnglishName1 || mapping.altEnglishName2) && (
+                              <p className="text-xs text-slate-500 mt-0.5 ml-4">
+                                <span className="font-medium text-blue-500">Alt English:</span> {[mapping.altEnglishName1, mapping.altEnglishName2].filter(Boolean).join(', ') || 'None'}
+                              </p>
+                            )}
                             <p className="mt-2 text-xs text-slate-400">
                               Usage: {mapping.usageCount} | Auto-generated: {mapping.isAutoGenerated ? 'Yes' : 'No'}
                             </p>
@@ -850,7 +1275,10 @@ export default function SettingsPage() {
                       setPhraseFormData({
                         categoryName: '',
                         keywords: '',
+                        englishDescription: '',
                         supplyOrderSubject: '',
+                        quotationMainEnglish: '',
+                        quotationMainHindi: '',
                         quotationPurchaseLine: '',
                         quotationAltHindi: '',
                         quotationAltEnglish: '',
@@ -912,7 +1340,10 @@ export default function SettingsPage() {
                                 setPhraseFormData({
                                   categoryName: pack.categoryName,
                                   keywords: pack.keywords.join(', '),
+                                  englishDescription: pack.englishDescription || '',
                                   supplyOrderSubject: pack.phrases.supplyOrder.subject,
+                                  quotationMainEnglish: pack.phrases.quotationMain?.english || '',
+                                  quotationMainHindi: pack.phrases.quotationMain?.hindi || '',
                                   quotationPurchaseLine: pack.phrases.quotation.purchaseLine,
                                   quotationAltHindi: pack.phrases.quotationAltHindi.subject,
                                   quotationAltEnglish: pack.phrases.quotationAltEnglish.subject,
@@ -1037,6 +1468,81 @@ export default function SettingsPage() {
                 )}
               </TabsContent>
             </Tabs>
+          </CardContent>
+        </Card>
+
+        {/* Custom HTML Layout Templates Card */}
+        <Card className="mt-6">
+          <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+            <div className="space-y-1 text-left">
+              <CardTitle className="flex items-center gap-2 text-xl font-bold text-slate-800">
+                <FileText className="h-5 w-5 text-blue-600 shrink-0" />
+                Custom HTML Templates
+              </CardTitle>
+              <CardDescription className="text-slate-500 text-sm font-medium">
+                Manage custom HTML layouts for quotation and bidding documents.
+              </CardDescription>
+            </div>
+            <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm shrink-0" onClick={openAddTemplateDialog}>
+              Add Custom Template
+            </Button>
+          </CardHeader>
+          <CardContent className="space-y-4 pt-6">
+            {loadingMappings ? (
+              <p className="text-sm text-slate-500">Loading templates...</p>
+            ) : customTemplates.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/60 p-10 text-center">
+                <FileText className="h-10 w-10 text-slate-300 mx-auto mb-3" />
+                <p className="text-sm font-medium text-slate-600">No custom templates yet</p>
+                <p className="text-xs text-slate-400 mt-1">Add a custom template above to design your own quotation layouts.</p>
+              </div>
+            ) : (
+              <div className="grid gap-6 sm:grid-cols-2">
+                {customTemplates.map((template) => (
+                  <div key={template.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
+                    <div>
+                      <div className="flex justify-between items-start gap-2 border-b border-slate-100 pb-3">
+                        <p className="font-semibold text-slate-800 text-sm text-left">
+                          {template.name}
+                        </p>
+                        <div className="flex flex-wrap gap-1.5 shrink-0 justify-end max-w-[200px]">
+                          <span className="inline-flex px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-600 border border-blue-100 uppercase tracking-wider">
+                            {template.docType === 'quotation_main'
+                              ? 'Main'
+                              : template.docType === 'quotation_alt_1'
+                              ? 'Alt A'
+                              : 'Alt B'}
+                          </span>
+                          <span className="inline-flex px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-100 uppercase tracking-wider">
+                            {template.language}
+                          </span>
+                          <span className="inline-flex px-2 py-0.5 rounded-md text-[10px] font-bold bg-violet-50 text-violet-600 border border-violet-100 uppercase tracking-wider">
+                            {template.fontFamily || 'Noto Sans Devanagari'}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      {/* Rendered HTML Live Preview inside the card */}
+                      <div className="mt-4 border border-slate-200/80 rounded-xl bg-slate-50/50 p-4 h-[250px] overflow-y-auto shadow-inner">
+                        <div 
+                          className="w-full text-slate-800 text-xs text-left"
+                          dangerouslySetInnerHTML={{ __html: getTemplatePreviewHTML(template) }}
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-slate-100">
+                      <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => openEditTemplateDialog(template)}>
+                        Edit Template
+                      </Button>
+                      <Button variant="destructive" size="sm" className="h-8 text-xs" onClick={() => handleDeleteTemplate(template.id)}>
+                        Delete
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -1434,6 +1940,51 @@ export default function SettingsPage() {
                     />
                   </div>
                 </div>
+
+                {dialogType === 'item' && (
+                  <div className="space-y-4 p-3 bg-blue-50/20 rounded-xl border border-blue-100/80">
+                    <h4 className="text-xs font-bold text-blue-600 uppercase tracking-wider">Alternative Names (for alternate bidding firms)</h4>
+                    
+                    <div className="space-y-1.5">
+                      <Label htmlFor="altHindiName" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                        Alternative Hindi Name <span className="text-slate-400 font-normal">(Optional)</span>
+                      </Label>
+                      <Input
+                        id="altHindiName"
+                        className="focus-visible:ring-blue-500 border-slate-200 h-10 rounded-lg bg-white shadow-sm"
+                        value={formData.altHindiName || ''}
+                        onChange={(e) => setFormData({ ...formData, altHindiName: e.target.value })}
+                        placeholder="e.g., प्लास्टिक डस्टबिन"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="altEnglishName1" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                        Alternative English Name 1 <span className="text-slate-400 font-normal">(Optional)</span>
+                      </Label>
+                      <Input
+                        id="altEnglishName1"
+                        className="focus-visible:ring-blue-500 border-slate-200 h-10 rounded-lg bg-white shadow-sm"
+                        value={formData.altEnglishName1 || ''}
+                        onChange={(e) => setFormData({ ...formData, altEnglishName1: e.target.value })}
+                        placeholder="e.g., Plastic Waste Bin"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="altEnglishName2" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                        Alternative English Name 2 <span className="text-slate-400 font-normal">(Optional)</span>
+                      </Label>
+                      <Input
+                        id="altEnglishName2"
+                        className="focus-visible:ring-blue-500 border-slate-200 h-10 rounded-lg bg-white shadow-sm"
+                        value={formData.altEnglishName2 || ''}
+                        onChange={(e) => setFormData({ ...formData, altEnglishName2: e.target.value })}
+                        placeholder="e.g., 12L Garbage Bin"
+                      />
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -1685,7 +2236,7 @@ export default function SettingsPage() {
                   bill: { itemDescription: phraseFormData.billItemDescription || '' },
                 };
 
-                if (phraseDialogMode === 'add') {
+                 if (phraseDialogMode === 'add') {
                   const created = await dataService.documentPhraseMappings.create({
                     categoryName: phraseFormData.categoryName.trim(),
                     categoryId: slug,
@@ -1694,6 +2245,7 @@ export default function SettingsPage() {
                     generatedByAI: false,
                     approved: true,
                     usageCount: 0,
+                    englishDescription: phraseFormData.englishDescription || '',
                   });
                   setDocumentPhraseMappings((prev) => [created, ...prev]);
                 } else if (currentPhrase) {
@@ -1703,6 +2255,7 @@ export default function SettingsPage() {
                     keywords: Array.from(new Set([slug, ...keywords])),
                     phrases,
                     approved: true,
+                    englishDescription: phraseFormData.englishDescription || '',
                   });
                   setDocumentPhraseMappings((prev) =>
                     prev.map((p) => (p.id === currentPhrase.id ? (updated || p) : p))
@@ -1712,6 +2265,193 @@ export default function SettingsPage() {
               }}
             >
               {phraseDialogMode === 'add' ? 'Add Phrase Pack' : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Custom Template Dialog */}
+      <Dialog open={templateDialogOpen} onOpenChange={setTemplateDialogOpen}>
+        <DialogContent className="sm:max-w-[1240px] w-[95vw] p-0 overflow-hidden bg-slate-50/95 backdrop-blur-xl border border-white/20 rounded-2xl shadow-2xl">
+          <DialogHeader className="bg-white/80 border-b border-slate-100 px-6 py-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-50 rounded-xl">
+                <FileText className="h-5 w-5 text-blue-600" />
+              </div>
+              <div>
+                <DialogTitle className="text-lg font-bold text-slate-800">
+                  {templateDialogMode === 'add' ? 'Create Custom Template' : 'Edit Custom Template'}
+                </DialogTitle>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Design layouts for quotation and bidding documents. Code HTML on the left and see the rendered results live on the right.
+                </p>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 bg-white max-h-[72vh] overflow-hidden">
+            {/* Left Side: Editor Form */}
+            <div className="p-6 space-y-4 overflow-y-auto border-r border-slate-100 max-h-[72vh]">
+              <div className="space-y-1.5">
+                <Label htmlFor="tplName" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  Template Name <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="tplName"
+                  className="focus-visible:ring-blue-500 border-slate-200 h-9 rounded-lg bg-white shadow-sm"
+                  value={templateFormData.name}
+                  onChange={(e) => setTemplateFormData({ ...templateFormData, name: e.target.value })}
+                  placeholder="e.g., Nagar Parishad Standard Quotation Layout"
+                />
+                {templateFormErrors.name && (
+                  <p className="text-xs text-red-500 font-medium">{templateFormErrors.name}</p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="tplDocType" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Document Type
+                  </Label>
+                  <select
+                    id="tplDocType"
+                    className="w-full focus-visible:ring-blue-500 border border-slate-200 h-9 rounded-lg bg-white px-3 shadow-sm text-sm"
+                    value={templateFormData.docType}
+                    onChange={(e) => setTemplateFormData({ ...templateFormData, docType: e.target.value as any })}
+                  >
+                    <option value="quotation_main">Quotation - Main</option>
+                    <option value="quotation_alt_1">Quotation - Alt A</option>
+                    <option value="quotation_alt_2">Quotation - Alt B</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="tplLanguage" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Language
+                  </Label>
+                  <select
+                    id="tplLanguage"
+                    className="w-full focus-visible:ring-blue-500 border border-slate-200 h-9 rounded-lg bg-white px-3 shadow-sm text-sm"
+                    value={templateFormData.language}
+                    onChange={(e) => {
+                      const newLang = e.target.value as any;
+                      const prevLang = templateFormData.language;
+                      const prevDefault = getSampleQuotationTemplate(prevLang);
+                      const shouldAutoSwitch = !templateFormData.content?.trim() || templateFormData.content.trim() === prevDefault.trim();
+                      
+                      // Auto-switch default font based on language choice too
+                      const targetFont = newLang === 'hindi' ? 'Noto Sans Devanagari' : 'Inter';
+                      
+                      setTemplateFormData({
+                        ...templateFormData,
+                        language: newLang,
+                        content: shouldAutoSwitch ? getSampleQuotationTemplate(newLang) : templateFormData.content,
+                        fontFamily: targetFont,
+                      });
+                    }}
+                  >
+                    <option value="hindi">Hindi</option>
+                    <option value="english">English</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="tplFontFamily" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Font Family
+                  </Label>
+                  <select
+                    id="tplFontFamily"
+                    className="w-full focus-visible:ring-blue-500 border border-slate-200 h-9 rounded-lg bg-white px-3 shadow-sm text-sm"
+                    value={templateFormData.fontFamily}
+                    onChange={(e) => setTemplateFormData({ ...templateFormData, fontFamily: e.target.value })}
+                  >
+                    <optgroup label="Hindi Professional Fonts">
+                      <option value="Noto Sans Devanagari">Noto Sans Devanagari</option>
+                      <option value="Poppins">Poppins</option>
+                      <option value="Montserrat">Montserrat</option>
+                      <option value="Kruti Dev 010">Kruti Dev 010</option>
+                    </optgroup>
+                    <optgroup label="English Professional Fonts">
+                      <option value="Inter">Inter</option>
+                      <option value="Arial">Arial</option>
+                      <option value="Georgia">Georgia</option>
+                      <option value="Times New Roman">Times New Roman</option>
+                    </optgroup>
+                  </select>
+                </div>
+              </div>
+
+              {/* Helper box for placeholders */}
+              <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Available Variables (Click to copy)</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { tag: '{{tenderNumber}}', desc: 'Tender No' },
+                    { tag: '{{placeName}}', desc: 'Location' },
+                    { tag: '{{districtName}}', desc: 'District' },
+                    { tag: '{{subject}}', desc: 'Subject' },
+                    { tag: '{{firmName}}', desc: 'Firm Name' },
+                    { tag: '{{items}}', desc: 'Items List' },
+                  ].map((item) => (
+                    <button
+                      key={item.tag}
+                      type="button"
+                      title={`Click to copy: ${item.desc}`}
+                      onClick={() => {
+                        navigator.clipboard.writeText(item.tag);
+                        alert(`Copied ${item.tag} to clipboard!`);
+                      }}
+                      className="inline-flex items-center gap-1 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-md px-2 py-0.5 text-xs font-mono transition-colors shadow-xs"
+                    >
+                      <span className="font-bold text-blue-600">{item.tag}</span>
+                      <span className="text-[9px] text-slate-400">({item.desc})</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="tplContent" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  HTML Content <span className="text-red-500">*</span>
+                </Label>
+                <Textarea
+                  id="tplContent"
+                  className="font-mono text-xs border-slate-200 rounded-lg bg-slate-900 text-slate-100 shadow-sm min-h-[260px] focus-visible:ring-blue-500 focus-visible:border-slate-800"
+                  value={templateFormData.content}
+                  onChange={(e) => setTemplateFormData({ ...templateFormData, content: e.target.value })}
+                  placeholder="Write HTML skeleton here..."
+                />
+                {templateFormErrors.content && (
+                  <p className="text-xs text-red-500 font-medium">{templateFormErrors.content}</p>
+                )}
+              </div>
+            </div>
+
+            {/* Right Side: Live Preview Panel */}
+            <div className="p-6 bg-slate-100/50 flex flex-col max-h-[72vh] overflow-hidden">
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 shrink-0">Rendered Live Preview</p>
+              <div className="flex-1 rounded-xl border border-slate-200 bg-white overflow-y-auto shadow-inner p-4 max-h-[64vh]">
+                <div 
+                  className="w-full h-full min-h-[500px]"
+                  dangerouslySetInnerHTML={{ __html: getCompiledPreviewHTML() }}
+                />
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="bg-slate-50/50 border-t border-slate-100 px-6 py-4 flex gap-2">
+            <Button
+              variant="outline"
+              className="rounded-lg h-10 border-slate-200 hover:bg-slate-100 font-medium"
+              onClick={() => setTemplateDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="rounded-lg h-10 bg-blue-600 hover:bg-blue-700 font-medium"
+              onClick={handleSaveTemplate}
+            >
+              {templateDialogMode === 'add' ? 'Create Template' : 'Save Changes'}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -108,6 +108,7 @@ function normalizeTenderItem(item: Partial<TenderItem>, tenderId: string): Tende
     productName: toSafeString(item.productName || item.description, 'Untitled Item'),
     description: toSafeString(item.description, ''),
     quantity,
+    unit: toSafeString(item.unit, 'piece'),
     rate,
     gstPercent: toSafeGST(item.gstPercent),
     estimatedAmount: toSafeNumber(item.estimatedAmount, undefined),
@@ -241,6 +242,7 @@ function normalizeFirm(
     headerSpacing?: number;
     footerSpacing?: number;
     pageMargin?: number;
+    layoutReferenceWidth?: number;
     contentStartY?: number;
     pagePaddingLeft?: number;
     signatureOffsetX?: number;
@@ -270,6 +272,7 @@ function normalizeFirm(
   const headerSpacing = clampNumber(toSafeNumber(firm.headerSpacing, legacyContentStartY), 80, 300);
   const footerSpacing = clampNumber(toSafeNumber(firm.footerSpacing, 120), 40, 220);
   const pageMargin = clampNumber(toSafeNumber(firm.pageMargin, legacyPaddingLeft), 20, 100);
+  const layoutReferenceWidth = clampNumber(toSafeNumber(firm.layoutReferenceWidth, 424), 1, 2000);
 
   const signatureOffsetX = clampNumber(toSafeNumber(firm.signatureOffsetX, 16), 0, 240);
   const signatureOffsetY = clampNumber(toSafeNumber(firm.signatureOffsetY, 16), 0, 240);
@@ -291,6 +294,7 @@ function normalizeFirm(
     headerSpacing,
     footerSpacing,
     pageMargin,
+    layoutReferenceWidth,
     // Keep legacy fields populated so older exports or modules that still read them won't break.
     contentStartY: legacyContentStartY,
     pagePaddingLeft: legacyPaddingLeft,

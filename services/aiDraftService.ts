@@ -4,6 +4,7 @@ import { layoutEngine } from './layoutEngine';
 import { governmentTemplates } from '../templates/hindi/governmentTemplates';
 import { dataService } from './dataService';
 import { generateAIDraft, getProviderDisplayName } from './aiClient';
+import { toHindiUnit } from '../lib/unitUtils';
 
 const GLOBAL_SYSTEM_PROMPT =
   'You write procurement documents in structured HTML with precise headings and concise government formatting.';
@@ -195,8 +196,37 @@ async function buildContentPages(
     request.docType === 'quotation_alt_2'
   ) {
     try {
-      const placeName = request.tender.placeName || '';
-      const districtName = request.tender.districtName || '';
+      // Resolve place and district names according to document language.
+      // Tender stores placeName/districtName as entered (often in Hindi).
+      // For English documents we look up the English name from PlaceMappings.
+      const rawPlaceName = request.tender.placeName || '';
+      const rawDistrictName = request.tender.districtName || '';
+
+      let placeName = rawPlaceName;
+      let districtName = rawDistrictName;
+
+      if (rawPlaceName) {
+        try {
+          const placeMappings = await dataService.placeMappings.list();
+          const matchedPlace = placeMappings.find(
+            (pm) =>
+              pm.englishName.toLowerCase() === rawPlaceName.toLowerCase() ||
+              pm.hindiName === rawPlaceName ||
+              (pm.hindiName && pm.hindiName.trim() === rawPlaceName.trim())
+          );
+          if (matchedPlace) {
+            placeName = language === 'hindi'
+              ? (matchedPlace.hindiName || rawPlaceName)
+              : (matchedPlace.englishName || rawPlaceName);
+            const rawDist = rawDistrictName || matchedPlace.districtName;
+            districtName = language === 'hindi'
+              ? (matchedPlace.districtHindiName || rawDist)
+              : (matchedPlace.districtName || rawDist);
+          }
+        } catch {
+          // If lookup fails, fall through with raw values
+        }
+      }
 
       if (request.docType === 'vigyapti') {
         const html = await governmentTemplates.generateVigyapti({
@@ -321,15 +351,15 @@ async function buildContentPages(
                 if (matchedMapping) {
                   if (customTpl.language === 'hindi') {
                     productName = matchedMapping.hindiName;
-                    if (customTpl.docType === 'quotation_alt_1' || customTpl.docType === 'quotation_alt_2') {
+                    if (request.docType === 'quotation_alt_1' || request.docType === 'quotation_alt_2') {
                       productName = matchedMapping.altHindiName || matchedMapping.hindiName;
                     }
                     description = matchedMapping.hindiDescription || item.description || '';
                   } else {
                     productName = matchedMapping.englishName;
-                    if (customTpl.docType === 'quotation_alt_1') {
+                    if (request.docType === 'quotation_alt_1') {
                       productName = matchedMapping.altEnglishName1 || matchedMapping.englishName;
-                    } else if (customTpl.docType === 'quotation_alt_2') {
+                    } else if (request.docType === 'quotation_alt_2') {
                       productName = matchedMapping.altEnglishName2 || matchedMapping.englishName;
                     }
                     description = matchedMapping.englishDescription || item.description || '';
@@ -339,6 +369,7 @@ async function buildContentPages(
                 return {
                   productName,
                   description,
+                  quantity: item.quantity,
                   rate: item.rate,
                   unit: item.unit,
                 };
@@ -355,7 +386,7 @@ async function buildContentPages(
 
             const itemsListHTML = customQuotationItems.map((item, idx) => {
               const rateText = customTpl.language === 'hindi'
-                ? `Rs. ${item.rate.toLocaleString('en-IN')} प्रति ${item.unit || 'नग'}`
+                ? `Rs. ${item.rate.toLocaleString('en-IN')} प्रति ${toHindiUnit(item.unit)}`
                 : `Rs. ${item.rate.toLocaleString('en-IN')} per ${item.unit || 'Nos'}`;
               
               const specLabel = customTpl.language === 'hindi' ? 'स्पेसिफिकेशन:-' : 'Specification:';
@@ -380,6 +411,28 @@ async function buildContentPages(
               `;
             }).join('');
 
+            const itemRowsHTML = customQuotationItems.map((item, idx) => {
+              const quantity = item.quantity || 1;
+              const unit = item.unit
+                ? (customTpl.language === 'hindi' ? toHindiUnit(item.unit) : item.unit)
+                : (customTpl.language === 'hindi' ? 'नग' : 'piece');
+              const descriptionHTML = item.description
+                ? `<div style="margin-top: 4px; font-weight: normal; line-height: 1.55;">Specification: - ${escapeHTML(item.description)}</div>`
+                : '';
+
+              return `
+                <tr>
+                  <td style="border: 1px solid #111; padding: 4px 8px; text-align: center; vertical-align: top; width: 70px; font-weight: bold;">${idx + 1}.</td>
+                  <td style="border: 1px solid #111; padding: 4px 8px; vertical-align: top;">
+                    <div style="font-weight: bold;">${escapeHTML(item.productName)}</div>
+                    ${descriptionHTML}
+                  </td>
+                  <td style="border: 1px solid #111; padding: 4px 8px; text-align: left; vertical-align: middle; width: 105px;">${quantity} ${escapeHTML(unit)}</td>
+                  <td style="border: 1px solid #111; padding: 4px 8px; text-align: left; vertical-align: middle; width: 150px;">Rs. ${item.rate.toLocaleString('en-IN')}</td>
+                </tr>
+              `;
+            }).join('');
+
             let resolvedFirmName = targetFirm.name;
             if (customTpl.language === 'hindi' && targetFirm.vendorHindiName) {
               resolvedFirmName = targetFirm.vendorHindiName;
@@ -391,6 +444,7 @@ async function buildContentPages(
               .replace(/\{\{districtName\}\}/g, escapeHTML(districtName))
               .replace(/\{\{subject\}\}/g, escapeHTML(subject))
               .replace(/\{\{firmName\}\}/g, escapeHTML(resolvedFirmName))
+              .replace(/\{\{itemRows\}\}/g, itemRowsHTML)
               .replace(/\{\{items\}\}/g, itemsListHTML);
 
             const activeFont = customTpl.fontFamily || 'Noto Sans Devanagari';

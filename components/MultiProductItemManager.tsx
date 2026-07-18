@@ -5,8 +5,12 @@ import { TenderItem, HindiMapping } from '@/types';
 import { dataService } from '@/services/dataService';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { UNIT_OPTIONS } from '@/lib/unitUtils';
 
 const GST_OPTIONS: Array<0 | 5 | 9 | 12 | 18> = [0, 5, 9, 12, 18];
+
+// Sentinel value to indicate "custom" is selected in the dropdown
+const CUSTOM_UNIT_VALUE = '__custom__';
 
 function createRowId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -27,12 +31,19 @@ function createNewItem(tenderId: string): TenderItem {
     productName: '',
     description: '',
     quantity: 1,
+    unit: 'Nos',
     rate: 0,
     gstPercent: 18,
     totalAmount: 0,
     createdAt: now,
     updatedAt: now,
   };
+}
+
+/** Returns true if the unit value is NOT in the known preset list */
+function isCustomUnit(unit: string | undefined): boolean {
+  if (!unit) return false;
+  return !UNIT_OPTIONS.some((u) => u.value === unit);
 }
 
 export interface ItemManagerProps {
@@ -43,6 +54,8 @@ export interface ItemManagerProps {
 
 export function MultiProductItemManager({ tenderId, items, onItemsChange }: ItemManagerProps) {
   const [mappings, setMappings] = useState<HindiMapping[]>([]);
+  // Track which rows are in "custom unit" mode (dropdown shows __custom__ and text input visible)
+  const [customUnitRows, setCustomUnitRows] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     (async () => {
@@ -53,6 +66,17 @@ export function MultiProductItemManager({ tenderId, items, onItemsChange }: Item
         console.error('Error loading item Hindi mappings:', err);
       }
     })();
+  }, []);
+
+  // On initial load, mark rows that already have a custom (non-preset) unit
+  useEffect(() => {
+    const customIds = items
+      .filter((item) => isCustomUnit(item.unit))
+      .map((item) => item.id);
+    if (customIds.length > 0) {
+      setCustomUnitRows((prev) => new Set([...prev, ...customIds]));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const updateItems = (nextItems: TenderItem[]) => {
@@ -83,16 +107,26 @@ export function MultiProductItemManager({ tenderId, items, onItemsChange }: Item
     };
     const next = [...items];
     next.splice(index + 1, 0, duplicate);
+    // If the source was in custom mode, the duplicate starts in custom mode too
+    if (customUnitRows.has(source.id)) {
+      setCustomUnitRows((prev) => new Set([...prev, duplicate.id]));
+    }
     updateItems(next);
   };
 
   const handleRemoveItem = (index: number) => {
+    const removed = items[index];
+    setCustomUnitRows((prev) => {
+      const next = new Set(prev);
+      next.delete(removed.id);
+      return next;
+    });
     updateItems(items.filter((_, i) => i !== index));
   };
 
   const handleChange = (
     index: number,
-    field: 'productName' | 'description' | 'quantity' | 'rate' | 'gstPercent',
+    field: 'productName' | 'description' | 'quantity' | 'unit' | 'rate' | 'gstPercent',
     value: string
   ) => {
     const next = [...items];
@@ -104,6 +138,8 @@ export function MultiProductItemManager({ tenderId, items, onItemsChange }: Item
       current.rate = Number(value) || 0;
     } else if (field === 'gstPercent') {
       current.gstPercent = (Number(value) as 0 | 5 | 9 | 12 | 18) || 0;
+    } else if (field === 'unit') {
+      current.unit = value;
     } else if (field === 'description') {
       current.description = value;
     } else {
@@ -119,6 +155,23 @@ export function MultiProductItemManager({ tenderId, items, onItemsChange }: Item
     current.totalAmount = calculateSubtotal(current);
     next[index] = current;
     updateItems(next);
+  };
+
+  /** Handle dropdown selection change — switches between preset and custom mode */
+  const handleUnitDropdownChange = (index: number, itemId: string, selectedValue: string) => {
+    if (selectedValue === CUSTOM_UNIT_VALUE) {
+      // Enter custom mode — keep existing unit value in text input
+      setCustomUnitRows((prev) => new Set([...prev, itemId]));
+      // Don't change the actual unit value yet — user will type it
+    } else {
+      // Preset selected — leave custom mode, update unit
+      setCustomUnitRows((prev) => {
+        const next = new Set(prev);
+        next.delete(itemId);
+        return next;
+      });
+      handleChange(index, 'unit', selectedValue);
+    }
   };
 
   const subtotal = items.reduce((sum, item) => sum + calculateSubtotal(item), 0);
@@ -139,6 +192,7 @@ export function MultiProductItemManager({ tenderId, items, onItemsChange }: Item
                 <th className="px-3 py-2 text-left font-medium">Product Name</th>
                 <th className="px-3 py-2 text-left font-medium">Description</th>
                 <th className="px-3 py-2 text-center font-medium">Qty</th>
+                <th className="px-3 py-2 text-center font-medium min-w-[140px]">Unit</th>
                 <th className="px-3 py-2 text-center font-medium">Rate</th>
                 <th className="px-3 py-2 text-center font-medium">GST</th>
                 <th className="px-3 py-2 text-right font-medium">Amount</th>
@@ -148,13 +202,17 @@ export function MultiProductItemManager({ tenderId, items, onItemsChange }: Item
             <tbody>
               {items.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-6 text-center text-slate-500">
+                  <td colSpan={8} className="px-4 py-6 text-center text-slate-500">
                     No items yet. Click + Add Item to begin.
                   </td>
                 </tr>
               ) : (
                 items.map((item, index) => {
                   const rowSubtotal = calculateSubtotal(item);
+                  const isCustom = customUnitRows.has(item.id);
+                  // Dropdown shows __custom__ when in custom mode, otherwise the stored unit value
+                  const dropdownValue = isCustom ? CUSTOM_UNIT_VALUE : (item.unit || 'Nos');
+
                   return (
                     <tr key={item.id} className="border-b align-top">
                       <td className="px-3 py-2">
@@ -179,10 +237,37 @@ export function MultiProductItemManager({ tenderId, items, onItemsChange }: Item
                           type="number"
                           min={0}
                           step={1}
-                          className="w-24 rounded border border-slate-300 px-2 py-1 text-center"
+                          className="w-20 rounded border border-slate-300 px-2 py-1 text-center"
                           value={item.quantity}
                           onChange={(event) => handleChange(index, 'quantity', event.target.value)}
                         />
+                      </td>
+                      <td className="px-3 py-2">
+                        {/* Unit dropdown */}
+                        <select
+                          className="w-full rounded border border-slate-300 px-2 py-1 text-center text-sm"
+                          value={dropdownValue}
+                          onChange={(event) =>
+                            handleUnitDropdownChange(index, item.id, event.target.value)
+                          }
+                        >
+                          {UNIT_OPTIONS.map((u) => (
+                            <option key={u.value} value={u.value}>
+                              {u.label}
+                            </option>
+                          ))}
+                          <option value={CUSTOM_UNIT_VALUE}>Custom…</option>
+                        </select>
+                        {/* Custom text input appears below when selected */}
+                        {isCustom && (
+                          <input
+                            className="mt-1 w-full rounded border border-blue-300 bg-blue-50 px-2 py-1 text-center text-sm"
+                            placeholder="Type unit…"
+                            value={item.unit || ''}
+                            onChange={(event) => handleChange(index, 'unit', event.target.value)}
+                            autoFocus
+                          />
+                        )}
                       </td>
                       <td className="px-3 py-2">
                         <input
@@ -196,7 +281,7 @@ export function MultiProductItemManager({ tenderId, items, onItemsChange }: Item
                       </td>
                       <td className="px-3 py-2">
                         <select
-                          className="w-24 rounded border border-slate-300 px-2 py-1 text-center"
+                          className="w-20 rounded border border-slate-300 px-2 py-1 text-center"
                           value={item.gstPercent}
                           onChange={(event) => handleChange(index, 'gstPercent', event.target.value)}
                         >
@@ -238,21 +323,21 @@ export function MultiProductItemManager({ tenderId, items, onItemsChange }: Item
             {items.length > 0 && (
               <tfoot className="bg-slate-50 font-medium">
                 <tr>
-                  <td colSpan={5} className="px-3 py-2 text-right">
+                  <td colSpan={6} className="px-3 py-2 text-right">
                     Subtotal
                   </td>
                   <td className="px-3 py-2 text-right">Rs. {subtotal.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</td>
                   <td />
                 </tr>
                 <tr>
-                  <td colSpan={5} className="px-3 py-2 text-right">
+                  <td colSpan={6} className="px-3 py-2 text-right">
                     GST Total
                   </td>
                   <td className="px-3 py-2 text-right">Rs. {totalGst.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</td>
                   <td />
                 </tr>
                 <tr>
-                  <td colSpan={5} className="px-3 py-2 text-right text-base">
+                  <td colSpan={6} className="px-3 py-2 text-right text-base">
                     Grand Total
                   </td>
                   <td className="px-3 py-2 text-right text-base">

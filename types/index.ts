@@ -172,6 +172,11 @@ export interface Firm extends BaseEntity {
   headerSpacing: number;
   footerSpacing: number;
   pageMargin: number;
+  /**
+   * Width of the A4 preview frame when layout controls were last saved.
+   * Used to scale preview-positioned px values into the final A4 renderer.
+   */
+  layoutReferenceWidth?: number;
 
   /**
    * Legacy layout fields kept for backward compatibility with older stored data.

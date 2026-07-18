@@ -50,6 +50,7 @@ const EMPTY_FORM: FirmFormState = {
   stampOffsetY: 16,
   stampScale: 1,
   stampMode: 'image',
+  layoutReferenceWidth: 0,
   aiPromptQuotation: '',
   aiPromptBill: '',
   firmStyleProfile: 'govt_formal',
@@ -101,6 +102,7 @@ function PreviewFrame({
   showPrintBleedGuide,
   previewBackground,
   zoom,
+  onPageWidthChange,
 }: {
   formData: FirmFormState;
   showLetterheadBackground: boolean;
@@ -108,7 +110,9 @@ function PreviewFrame({
   showPrintBleedGuide: boolean;
   previewBackground: 'white' | 'print';
   zoom: number;
+  onPageWidthChange?: (width: number) => void;
 }) {
+  const pageRef = useRef<HTMLDivElement | null>(null);
   const headerSpacing = clampNumber(formData.headerSpacing, 80, 300);
   const footerSpacing = clampNumber(formData.footerSpacing, 40, 220);
   const pageMargin = clampNumber(formData.pageMargin, 20, 100);
@@ -140,6 +144,24 @@ function PreviewFrame({
     }
   }, [headerImagePath]);
 
+  useEffect(() => {
+    if (!pageRef.current || !onPageWidthChange) return;
+    const updateWidth = () => {
+      const width = pageRef.current?.clientWidth || 0;
+      if (width > 0) onPageWidthChange(Math.round(width));
+    };
+    updateWidth();
+
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', updateWidth);
+      return () => window.removeEventListener('resize', updateWidth);
+    }
+
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(pageRef.current);
+    return () => observer.disconnect();
+  }, [onPageWidthChange]);
+
   return (
     <div className="rounded-xl border bg-slate-50 p-4">
       <div className="mb-3 flex items-center justify-between">
@@ -155,7 +177,7 @@ function PreviewFrame({
             transform: `scale(${zoom})`,
           }}
         >
-          <div className="relative w-full overflow-hidden" style={{ aspectRatio: '210 / 297' }}>
+          <div ref={pageRef} className="relative w-full overflow-hidden" style={{ aspectRatio: '210 / 297' }}>
         {showLetterheadBackground && headerImagePath ? (
           <>
             <div
@@ -357,6 +379,7 @@ export default function ManageFirmsPage() {
   const [showPrintBleedGuide, setShowPrintBleedGuide] = useState(false);
   const [previewBackground, setPreviewBackground] = useState<'white' | 'print'>('white');
   const [previewZoom, setPreviewZoom] = useState(1);
+  const [previewPageWidth, setPreviewPageWidth] = useState(0);
   const [mobilePreviewOpen, setMobilePreviewOpen] = useState(false);
   const [aiSectionOpen, setAiSectionOpen] = useState(false);
   const [billSectionOpen, setBillSectionOpen] = useState(false);
@@ -403,6 +426,7 @@ export default function ManageFirmsPage() {
     setShowPrintBleedGuide(false);
     setPreviewBackground('white');
     setPreviewZoom(1);
+    setPreviewPageWidth(0);
     setMobilePreviewOpen(false);
     setAiSectionOpen(false);
     setBillSectionOpen(false);
@@ -420,6 +444,7 @@ export default function ManageFirmsPage() {
       headerSpacing: firm.headerSpacing ?? firm.contentStartY ?? 170,
       footerSpacing: firm.footerSpacing ?? 120,
       pageMargin: firm.pageMargin ?? firm.pagePaddingLeft ?? 40,
+      layoutReferenceWidth: firm.layoutReferenceWidth || 0,
       signatureOffsetX: firm.signatureOffsetX ?? 16,
       signatureOffsetY: firm.signatureOffsetY ?? 16,
       signatureScale: firm.signatureScale ?? 1,
@@ -454,6 +479,7 @@ export default function ManageFirmsPage() {
     setShowPrintBleedGuide(false);
     setPreviewBackground('white');
     setPreviewZoom(1);
+    setPreviewPageWidth(0);
     setMobilePreviewOpen(false);
     setAiSectionOpen(false);
     setBillSectionOpen(false);
@@ -596,6 +622,7 @@ export default function ManageFirmsPage() {
       headerSpacing: styleSourceFirm.headerSpacing ?? styleSourceFirm.contentStartY ?? 170,
       footerSpacing: styleSourceFirm.footerSpacing ?? 120,
       pageMargin: styleSourceFirm.pageMargin ?? styleSourceFirm.pagePaddingLeft ?? 40,
+      layoutReferenceWidth: styleSourceFirm.layoutReferenceWidth || previous.layoutReferenceWidth,
       signatureOffsetX: styleSourceFirm.signatureOffsetX ?? 16,
       signatureOffsetY: styleSourceFirm.signatureOffsetY ?? 16,
       signatureScale: styleSourceFirm.signatureScale ?? 1,
@@ -639,6 +666,9 @@ export default function ManageFirmsPage() {
       stampScale: clampNumber(formData.stampScale ?? 1, 0.4, 2.2),
       stampMode: (formData.stampMode ?? 'image') as 'image' | 'generic',
     };
+    normalized.contentStartY = normalized.headerSpacing;
+    normalized.pagePaddingLeft = normalized.pageMargin;
+    normalized.layoutReferenceWidth = previewPageWidth || normalized.layoutReferenceWidth || 424;
 
     // Create a clean object for saving to Firestore by deleting UI-only state keys
     const cleanData = { ...normalized };
@@ -1412,6 +1442,7 @@ export default function ManageFirmsPage() {
                     showPrintBleedGuide={showPrintBleedGuide}
                     previewBackground={previewBackground}
                     zoom={previewZoom}
+                    onPageWidthChange={setPreviewPageWidth}
                   />
                 </div>
               </div>
@@ -1563,6 +1594,7 @@ export default function ManageFirmsPage() {
                   headerSpacing: previewFirm.headerSpacing ?? previewFirm.contentStartY ?? EMPTY_FORM.headerSpacing,
                   footerSpacing: previewFirm.footerSpacing ?? EMPTY_FORM.footerSpacing,
                   pageMargin: previewFirm.pageMargin ?? previewFirm.pagePaddingLeft ?? EMPTY_FORM.pageMargin,
+                  layoutReferenceWidth: previewFirm.layoutReferenceWidth || EMPTY_FORM.layoutReferenceWidth,
                   signatureOffsetX: previewFirm.signatureOffsetX ?? EMPTY_FORM.signatureOffsetX,
                   signatureOffsetY: previewFirm.signatureOffsetY ?? EMPTY_FORM.signatureOffsetY,
                   signatureScale: previewFirm.signatureScale ?? EMPTY_FORM.signatureScale,

@@ -92,9 +92,50 @@ function withTimestamps<T extends { id: string; createdAt: string; updatedAt: st
 function normalizeTenderItemTotals(items: TenderItem[]): TenderItem[] {
   return items.map((item) => ({
     ...item,
+    unit: item.unit || 'piece',
     totalAmount: Math.round(item.quantity * item.rate * 100) / 100,
     updatedAt: item.updatedAt || nowIso(),
   }));
+}
+
+function toSafeNumber(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) return min;
+  return Math.min(max, Math.max(min, value));
+}
+
+function normalizeFirmLayoutFields(
+  firm: Partial<Firm> & {
+    marginTopPx?: number;
+    marginLeftPx?: number;
+    letterStartMarginTop?: number;
+    letterStartMarginLeft?: number;
+  }
+): Firm {
+  const legacyContentStartY = Math.max(
+    0,
+    toSafeNumber(firm.contentStartY ?? firm.letterStartMarginTop ?? firm.marginTopPx, 170)
+  );
+  const legacyPaddingLeft = Math.max(
+    0,
+    toSafeNumber(firm.pagePaddingLeft ?? firm.letterStartMarginLeft ?? firm.marginLeftPx, 40)
+  );
+  const headerSpacing = clampNumber(toSafeNumber(firm.headerSpacing, legacyContentStartY), 80, 300);
+  const pageMargin = clampNumber(toSafeNumber(firm.pageMargin, legacyPaddingLeft), 20, 100);
+  const layoutReferenceWidth = clampNumber(toSafeNumber(firm.layoutReferenceWidth, 424), 1, 2000);
+
+  return {
+    ...(firm as Firm),
+    headerSpacing,
+    footerSpacing: clampNumber(toSafeNumber(firm.footerSpacing, 120), 40, 220),
+    pageMargin,
+    layoutReferenceWidth,
+    contentStartY: headerSpacing,
+    pagePaddingLeft: pageMargin,
+  };
 }
 
 function collectionPath(name: CollectionName): string {
@@ -209,16 +250,29 @@ export class FirestoreDB {
 
   // Firms
   createFirm(data: Omit<Firm, 'id' | 'createdAt' | 'updatedAt'>): Promise<Firm> {
-    return this.createEntity('firms', data);
+    return this.createEntity('firms', {
+      ...data,
+      contentStartY: data.headerSpacing,
+      pagePaddingLeft: data.pageMargin,
+      layoutReferenceWidth: data.layoutReferenceWidth || 424,
+    });
   }
-  getFirm(id: string): Promise<Firm | undefined> {
-    return this.getEntity('firms', id);
+  async getFirm(id: string): Promise<Firm | undefined> {
+    const firm = await this.getEntity('firms', id);
+    return firm ? normalizeFirmLayoutFields(firm) : undefined;
   }
-  listFirms(): Promise<Firm[]> {
-    return this.listEntities('firms');
+  async listFirms(): Promise<Firm[]> {
+    const firms = await this.listEntities('firms');
+    return firms.map((firm) => normalizeFirmLayoutFields(firm));
   }
   updateFirm(id: string, data: Partial<Omit<Firm, 'id' | 'createdAt'>>): Promise<Firm | undefined> {
-    return this.updateEntity('firms', id, data as any);
+    const synced = { ...data };
+    if (typeof synced.headerSpacing === 'number') synced.contentStartY = synced.headerSpacing;
+    if (typeof synced.pageMargin === 'number') synced.pagePaddingLeft = synced.pageMargin;
+    if (typeof synced.layoutReferenceWidth !== 'number') delete synced.layoutReferenceWidth;
+    return this.updateEntity('firms', id, synced as any).then((firm) =>
+      firm ? normalizeFirmLayoutFields(firm) : undefined
+    );
   }
   deleteFirm(id: string): Promise<boolean> {
     return this.deleteEntity('firms', id);
@@ -315,6 +369,7 @@ export class FirestoreDB {
       id: uuid(),
       createdAt,
       updatedAt: createdAt,
+      unit: data.unit || 'piece',
       totalAmount: Math.round(data.quantity * data.rate * 100) / 100,
     };
 
@@ -813,4 +868,3 @@ export class FirestoreDB {
     return this.deleteEntity('customTemplates', id);
   }
 }
-

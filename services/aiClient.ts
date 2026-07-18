@@ -58,7 +58,7 @@ async function geminiAIDraft(request: AIDraftRequest, apiKey: string, model: str
       content: content,
       provider: 'gemini',
       model: normalizedModel,
-      tokensUsed: response.usage?.totalTokens,
+      tokensUsed: (response as any).usageMetadata?.totalTokenCount || (response as any).usage?.totalTokens,
     };
   } catch (error) {
     console.error('Gemini AI error:', error);
@@ -253,7 +253,16 @@ async function geminiTransliterate(
     const normalizedModel = normalizeGeminiModel(model);
     const geminiModel = genAI.getGenerativeModel({ model: normalizedModel });
     
-    const prompt = `Transliterate "${request.text}" from ${request.sourceLanguage} to ${request.targetLanguage}. Return only the transliterated text.`;
+    const prompt = `You are a professional translator and transliterator between English and Hindi.
+Translate and/or transliterate the following text from ${request.sourceLanguage} to ${request.targetLanguage}:
+"${request.text}"
+
+CRITICAL RULES:
+1. Semantically TRANSLATE descriptive words, common nouns, and adjectives (e.g., 'domestic distribution' should be translated to 'घरेलू उपयोग हेतु वितरण', and 'घरेलू उपयोग हेतु वितरण' should be translated to 'domestic distribution'). Do not phonetically transliterate them.
+2. Phonetically TRANSLITERATE brand names, technical abbreviations, or loanwords that are commonly used in the target language (e.g., 'HDPE' -> 'एचडीपीई', 'Litre' -> 'लीटर', 'Dustbin' -> 'डस्टबिन', 'synthetic rubber' -> 'सिंथेटिक रबर').
+3. Keep the translation natural and professional for municipal tender/procurement contexts.
+4. If there is a separator like '|||', preserve the separator '|||' in the exact same position in the output.
+5. Return ONLY the final translated/transliterated text. Do not add quotes, markdown formatting, explanations, or introductory text.`;
     
     const result = await geminiModel.generateContent(prompt);
     const response = await result.response;
@@ -279,14 +288,22 @@ async function openaiTransliterate(
   try {
     const openai = new OpenAI({ apiKey });
     
+    const systemPrompt = `You are a professional translator and transliterator between English and Hindi.
+CRITICAL RULES:
+1. Semantically TRANSLATE descriptive words, common nouns, and adjectives (e.g., 'domestic distribution' -> 'घरेलू उपयोग हेतु वितरण', 'घरेलू उपयोग हेतु वितरण' -> 'domestic distribution'). Do not phonetically transliterate them.
+2. Phonetically TRANSLITERATE brand names, technical abbreviations, or loanwords that are commonly used in the target language (e.g., 'HDPE' -> 'एचडीपीई', 'Litre' -> 'लीटर', 'Dustbin' -> 'डस्टबिन', 'synthetic rubber' -> 'सिंथेटिक रबर').
+3. Keep the translation natural and professional for municipal tender/procurement contexts.
+4. If there is a separator like '|||', preserve the separator '|||' in the exact same position in the output.
+5. Return ONLY the final translated/transliterated text. Do not add quotes, markdown formatting, explanations, or introductory text.`;
+
     const completion = await openai.chat.completions.create({
       model: model,
       messages: [
-        { role: 'system', content: `Transliterate text from ${request.sourceLanguage} to ${request.targetLanguage}. Return only the transliterated text.` },
-        { role: 'user', content: request.text },
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: `Translate/transliterate from ${request.sourceLanguage} to ${request.targetLanguage}: "${request.text}"` },
       ],
-      temperature: 0.3,
-      max_tokens: 500,
+      temperature: 0.2,
+      max_tokens: 1000,
     });
     
     const transliteratedText = completion.choices[0]?.message?.content?.trim() || request.text;
@@ -311,14 +328,22 @@ async function groqTransliterate(
   try {
     const groq = new Groq({ apiKey });
     
+    const systemPrompt = `You are a professional translator and transliterator between English and Hindi.
+CRITICAL RULES:
+1. Semantically TRANSLATE descriptive words, common nouns, and adjectives (e.g., 'domestic distribution' -> 'घरेलू उपयोग हेतु वितरण', 'घरेलू उपयोग हेतु वितरण' -> 'domestic distribution'). Do not phonetically transliterate them.
+2. Phonetically TRANSLITERATE brand names, technical abbreviations, or loanwords that are commonly used in the target language (e.g., 'HDPE' -> 'एचडीपीई', 'Litre' -> 'लीटर', 'Dustbin' -> 'डस्टबिन', 'synthetic rubber' -> 'सिंथेटिक रबर').
+3. Keep the translation natural and professional for municipal tender/procurement contexts.
+4. If there is a separator like '|||', preserve the separator '|||' in the exact same position in the output.
+5. Return ONLY the final translated/transliterated text. Do not add quotes, markdown formatting, explanations, or introductory text.`;
+
     const chatCompletion = await groq.chat.completions.create({
       model: model,
       messages: [
-        { role: 'system', content: `Transliterate text from ${request.sourceLanguage} to ${request.targetLanguage}. Return only the transliterated text.` },
-        { role: 'user', content: request.text },
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: `Translate/transliterate from ${request.sourceLanguage} to ${request.targetLanguage}: "${request.text}"` },
       ],
-      temperature: 0.3,
-      max_tokens: 500,
+      temperature: 0.2,
+      max_tokens: 1000,
     });
     
     const transliteratedText = chatCompletion.choices[0]?.message?.content?.trim() || request.text;

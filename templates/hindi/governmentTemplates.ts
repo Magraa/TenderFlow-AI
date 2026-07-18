@@ -1,6 +1,7 @@
 import { Firm, TenderItem } from '@/types';
 import { aiContextGenerator } from '../../services/aiContextGenerator';
 import { getHindiItemName, getHindiVendorName } from '../../services/mappingService';
+import { toHindiUnit } from '../../lib/unitUtils';
 
 /**
  * Government Document Template Generator
@@ -74,10 +75,16 @@ async function generateMunicipalCorporationVigyapti(context: VigyaptiContext): P
         const itemName = context.language === 'hindi' 
           ? await getHindiItemName(item.productName)
           : item.productName;
+        const descriptionHTML = item.description 
+          ? `<div style="font-size: 13px; font-weight: normal; margin-top: 4px; color: #444;">विवरण: ${escapeHTML(item.description)}</div>`
+          : '';
         return `
         <tr>
           <td class="mc-vigyapti-center mc-vigyapti-serial">${index + 1}.</td>
-          <td class="mc-vigyapti-item"><strong>${escapeHTML(itemName)}</strong></td>
+          <td class="mc-vigyapti-item">
+            <strong>${escapeHTML(itemName)}</strong>
+            ${descriptionHTML}
+          </td>
           <td class="mc-vigyapti-amount">${formatTenderAmount(item)}</td>
         </tr>
       `;
@@ -256,10 +263,18 @@ async function generateMunicipalCorporationSupplyAadesh(context: SupplyAadeshCon
         const itemName = context.language === 'hindi'
           ? await getHindiItemName(item.productName)
           : item.productName;
-        const qtyUnit = `${item.quantity} ${item.unit || ''}`.trim();
+        const qtyUnit = context.language === 'hindi'
+          ? `${item.quantity} ${toHindiUnit(item.unit)}`.trim()
+          : `${item.quantity} ${item.unit || ''}`.trim();
+        const descriptionHTML = item.description 
+          ? `<div style="font-size: 13px; font-weight: normal; margin-top: 4px; color: #444;">${context.language === 'hindi' ? 'विवरण' : 'Description'}: ${escapeHTML(item.description)}</div>`
+          : '';
         return `
           <tr>
-            <td class="mc-sa-cell mc-sa-item">${escapeHTML(itemName)}</td>
+            <td class="mc-sa-cell mc-sa-item">
+              <strong>${escapeHTML(itemName)}</strong>
+              ${descriptionHTML}
+            </td>
             <td class="mc-sa-cell mc-sa-qty">${escapeHTML(qtyUnit)}</td>
             <td class="mc-sa-cell mc-sa-rate">Rs.</td>
           </tr>
@@ -448,7 +463,7 @@ async function generateItemsTable(items: TenderItem[], language: 'hindi' | 'engl
         <td style="border: 1px solid #000; padding: 8px;">${escapeHTML(itemName)}</td>
         <td style="border: 1px solid #000; padding: 8px;">${escapeHTML(item.description || '-')}</td>
         <td style="border: 1px solid #000; padding: 8px; text-align: center;">${item.quantity}</td>
-        <td style="border: 1px solid #000; padding: 8px; text-align: center;">${escapeHTML(item.unit || 'Nos')}</td>
+        <td style="border: 1px solid #000; padding: 8px; text-align: center;">${escapeHTML(language === 'hindi' ? toHindiUnit(item.unit) : (item.unit || 'Nos'))}</td>
         <td style="border: 1px solid #000; padding: 8px; text-align: right;">₹${item.rate.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
         <td style="border: 1px solid #000; padding: 8px; text-align: right;">₹${estimatedAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
       </tr>
@@ -690,7 +705,7 @@ export async function generateQuotation(context: QuotationContext): Promise<stri
 
   const itemsLinesHTML = context.items.map((item, idx) => {
     const rateText = isHindi 
-      ? `Rs. ${item.rate.toLocaleString('en-IN')} प्रति ${item.unit || 'नग'}`
+      ? `Rs. ${item.rate.toLocaleString('en-IN')} प्रति ${toHindiUnit(item.unit)}`
       : `Rs. ${item.rate.toLocaleString('en-IN')} per ${item.unit || 'Nos'}`;
     return `
       <div style="display: flex; justify-content: space-between; max-width: 600px; margin-bottom: 12px; font-size: 16px;">

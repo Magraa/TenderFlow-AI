@@ -7,13 +7,20 @@ You must output ONLY valid JSON. Do not include markdown code blocks, explanatio
 
 function buildUserPrompt(itemName: string, description?: string): string {
   const descText = description?.trim() ? `\nItem Description: ${description}` : "";
-  return `Generate alternative item names for this item to be used across different mock quotations.
+  return `Generate alternative names for the EXACT SAME item to be used across different mock quotations (to simulate bids from alternate firms).
 Item Name: ${itemName}${descText}
 
+CRITICAL RULES:
+- The alternatives MUST refer to the EXACT SAME physical product. Do NOT change the product type, size, capacity, or material.
+- You MUST analyze both the Item Name and the Item Description to extract important specifications (e.g., capacity/volume like "12L" or "12 Litres" or "12 लीटर", material like "HDPE" or "M.S." or "माइल्ड स्टील", size, or color).
+- Combine these extracted specifications into the alternative names to make them realistic, specific, and professional.
+- Do NOT use simple, generic suffixes like "Alt A", "Alt B", "Alt 1", "Alternative", or "वैकल्पिक" in the generated names. Instead, vary the phrasing naturally (e.g., for "डस्टबिन (घरेलू उपयोग हेतु वितरण)" with description "12 लीटर", generate "घरेलू कचरा पात्र (12 लीटर)" or "12L HDPE Waste Bin").
+- Keep the names concise (2-5 words max).
+
 Requirements:
-1. "altHindi": One short alternative Hindi name. E.g. if the item is "डस्टबिन 12L (First Grade)", the alternative could be "कचरा पेटी (प्लास्टिक)" or "प्लास्टिक डस्टबिन".
-2. "altEnglish1": First short alternative English name. E.g. "HDPE Waste Bin" or "Plastic Garbage Bin".
-3. "altEnglish2": Second short alternative English name. E.g. "Cylindrical Trash Can" or "12L Litter Bin".
+1. "altHindi": One short alternative Hindi name — same product, naturally rephrased (e.g., word order change, using synonyms like 'कचरा पात्र' instead of 'डस्टबिन', or including capacity/material).
+2. "altEnglish1": First short alternative English name — same product, naturally rephrased (e.g., "12L Household Dustbin").
+3. "altEnglish2": Second short alternative English name — same product, naturally rephrased (e.g., "Household Waste Bin (12L)").
 
 Return exactly this JSON structure (do not wrap in markdown \`\`\`json blocks, return raw text):
 {

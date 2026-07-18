@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { CustomTemplate, DocumentVersion, Firm, Settings, Tender, TenderDocType, TenderDocument } from '@/types';
 import { dataService } from '@/services/dataService';
 import { documentService } from '@/services/documentService';
+import { layoutEngine } from '@/services/layoutEngine';
 import { pdfService } from '@/services/pdfService';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -151,6 +152,17 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
     if (docType === 'firm_bill') return tender.language;
     if (docType === 'vigyapti') return tender.language;
     return tender.language;
+  };
+
+  const getSyncedDocumentHTML = (document: TenderDocument, docType: TenderDocType): string => {
+    const targetFirm = getFirmForDocType(docType);
+    if (!targetFirm || !documentService.documentUsesLetterhead(docType)) {
+      return document.contentHTML;
+    }
+
+    return layoutEngine.syncLetterheadLayoutHTML(document.contentHTML, targetFirm, {
+      lockHeaderPosition: document.lockHeaderPosition,
+    });
   };
 
   const refreshDocuments = async () => {
@@ -344,8 +356,9 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
     const current = getDocument(activeTab);
     if (!current || !tender) return;
     try {
+      const syncedContent = getSyncedDocumentHTML(current, activeTab);
       await pdfService.downloadPDF(
-        current.contentHTML,
+        syncedContent,
         `${tender.tenderNumber}-${activeTab}-${Date.now()}.pdf`
       );
     } catch {
@@ -356,7 +369,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
   const printDocument = () => {
     const current = getDocument(activeTab);
     if (!current) return;
-    pdfService.printHTML(current.contentHTML);
+    pdfService.printHTML(getSyncedDocumentHTML(current, activeTab));
   };
 
   const handleStatusChange = async (nextStatus: 'draft' | 'final') => {
@@ -505,7 +518,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
 
                     {(() => {
                       const isQuotationType = docType === 'quotation_main' || docType === 'quotation_alt_1' || docType === 'quotation_alt_2';
-                      const availableTemplates = isQuotationType ? customTemplates.filter(t => t.docType === docType) : [];
+                      const availableTemplates = isQuotationType ? customTemplates : [];
                       
                       return (
                         <div className="flex flex-wrap items-center gap-3">
@@ -676,7 +689,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
                         <div>
                           <p className="mb-2 text-sm font-medium">Preview</p>
                           <DocumentViewer 
-                            content={current.contentHTML} 
+                            content={getSyncedDocumentHTML(current, docType)}
                             docType={docType} 
                             tender={tender}
                             mainFirm={mainFirm || undefined}

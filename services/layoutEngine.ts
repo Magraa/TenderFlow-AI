@@ -22,6 +22,9 @@ export interface ItemTablePage {
 
 const A4_WIDTH_MM = 210;
 const A4_HEIGHT_MM = 297;
+const CSS_PX_PER_MM = 96 / 25.4;
+const A4_WIDTH_PX = A4_WIDTH_MM * CSS_PX_PER_MM;
+const LEGACY_FIRM_PREVIEW_WIDTH_PX = 424;
 const DEFAULT_ROWS_PER_PAGE = 14;
 
 function escapeHTML(value: string): string {
@@ -59,6 +62,44 @@ export function detectHeaderHeightPlaceholder(_headerImagePath?: string): number
   return 140;
 }
 
+export function resolveFirmLayoutMetrics(firm: Firm, options: LayoutOptions = {}) {
+  const headerSafeZonePx = Math.max(0, options.headerSafeZonePx ?? 120);
+  const detectedHeaderHeight = detectHeaderHeightPlaceholder(firm.headerImagePath);
+  // Firm controls are set in the rendered manage-firms A4 preview. Scale from
+  // that measured preview width into the actual CSS A4 page used by final preview/PDF.
+  const referenceWidth = Math.max(1, firm.layoutReferenceWidth ?? LEGACY_FIRM_PREVIEW_WIDTH_PX);
+  const previewToA4Scale = A4_WIDTH_PX / referenceWidth;
+  const resolvedHeaderSpacing = (firm.headerSpacing ?? firm.contentStartY ?? 170) * previewToA4Scale;
+  const resolvedFooterSpacing = (firm.footerSpacing ?? 120) * previewToA4Scale;
+  const resolvedPageMargin = (firm.pageMargin ?? firm.pagePaddingLeft ?? 40) * previewToA4Scale;
+  const signatureOffsetX = (firm.signatureOffsetX ?? 16) * previewToA4Scale;
+  const signatureOffsetY = (firm.signatureOffsetY ?? 16) * previewToA4Scale;
+  const signatureScale = firm.signatureScale ?? 1;
+  const signatureRotateDeg = firm.signatureRotateDeg ?? 0;
+  const stampOffsetX = (firm.stampOffsetX ?? 140) * previewToA4Scale;
+  const stampOffsetY = (firm.stampOffsetY ?? 16) * previewToA4Scale;
+  const stampScale = firm.stampScale ?? 1;
+
+  const snappedContentStart = snapToGrid(resolvedHeaderSpacing, 4);
+  const contentStartY = options.lockHeaderPosition === false
+    ? Math.max(0, snappedContentStart)
+    : Math.max(detectedHeaderHeight + 8, snappedContentStart);
+
+  return {
+    contentStartY,
+    pageMargin: Math.max(0, snapToGrid(resolvedPageMargin, 4)),
+    footerReserve: Math.max(0, snapToGrid(resolvedFooterSpacing, 4)),
+    headerSafeZonePx,
+    signatureOffsetX: Math.max(0, snapToGrid(signatureOffsetX, 2)),
+    signatureOffsetY: Math.max(0, snapToGrid(signatureOffsetY, 2)),
+    signatureScale: Math.max(0.1, Math.round(signatureScale * 100) / 100),
+    signatureRotateDeg: Math.round(signatureRotateDeg),
+    stampOffsetX: Math.max(0, snapToGrid(stampOffsetX, 2)),
+    stampOffsetY: Math.max(0, snapToGrid(stampOffsetY, 2)),
+    stampScale: Math.max(0.1, Math.round(stampScale * 100) / 100),
+  };
+}
+
 export function calculateItemAmounts(item: TenderItem): { subtotal: number; gstAmount: number; total: number } {
   const subtotal = Math.round(item.quantity * item.rate * 100) / 100;
   const gstAmount = Math.round(((subtotal * item.gstPercent) / 100) * 100) / 100;
@@ -77,42 +118,24 @@ function getLetterheadBackgroundStyle(firm: Firm): string {
 }
 
 export function generateFirmLayoutCSS(firm: Firm, options: LayoutOptions = {}): string {
-  const headerSafeZonePx = Math.max(0, options.headerSafeZonePx ?? 120);
-  const detectedHeaderHeight = detectHeaderHeightPlaceholder(firm.headerImagePath);
-  const resolvedHeaderSpacing = firm.headerSpacing ?? firm.contentStartY ?? 170;
-  const resolvedFooterSpacing = firm.footerSpacing ?? 120;
-  const resolvedPageMargin = firm.pageMargin ?? firm.pagePaddingLeft ?? 40;
-  const signatureOffsetX = firm.signatureOffsetX ?? 16;
-  const signatureOffsetY = firm.signatureOffsetY ?? 16;
-  const signatureScale = firm.signatureScale ?? 1;
-  const signatureRotateDeg = firm.signatureRotateDeg ?? 0;
-  const stampOffsetX = firm.stampOffsetX ?? 140;
-  const stampOffsetY = firm.stampOffsetY ?? 16;
-  const stampScale = firm.stampScale ?? 1;
-
-  const snappedContentStart = snapToGrid(resolvedHeaderSpacing, 4);
-  const startY = options.lockHeaderPosition === false
-    ? Math.max(0, snappedContentStart)
-    : Math.max(detectedHeaderHeight + 8, snappedContentStart);
-  const pageMargin = Math.max(0, snapToGrid(resolvedPageMargin, 4));
-  const footerReserve = Math.max(0, snapToGrid(resolvedFooterSpacing, 4));
+  const metrics = resolveFirmLayoutMetrics(firm, options);
 
   return `
     :root {
       --page-width: ${A4_WIDTH_MM}mm;
       --page-height: ${A4_HEIGHT_MM}mm;
-      --content-start-y: ${startY}px;
-      --content-left: ${pageMargin}px;
-      --content-right: ${pageMargin}px;
-      --content-bottom: ${footerReserve}px;
-      --safe-zone-height: ${headerSafeZonePx}px;
-      --signature-offset-x: ${Math.max(0, snapToGrid(signatureOffsetX, 2))}px;
-      --signature-offset-y: ${Math.max(0, snapToGrid(signatureOffsetY, 2))}px;
-      --signature-scale: ${Math.max(0.1, Math.round(signatureScale * 100) / 100)};
-      --signature-rotate: ${Math.round(signatureRotateDeg)}deg;
-      --stamp-offset-x: ${Math.max(0, snapToGrid(stampOffsetX, 2))}px;
-      --stamp-offset-y: ${Math.max(0, snapToGrid(stampOffsetY, 2))}px;
-      --stamp-scale: ${Math.max(0.1, Math.round(stampScale * 100) / 100)};
+      --content-start-y: ${metrics.contentStartY}px;
+      --content-left: ${metrics.pageMargin}px;
+      --content-right: ${metrics.pageMargin}px;
+      --content-bottom: ${metrics.footerReserve}px;
+      --safe-zone-height: ${metrics.headerSafeZonePx}px;
+      --signature-offset-x: ${metrics.signatureOffsetX}px;
+      --signature-offset-y: ${metrics.signatureOffsetY}px;
+      --signature-scale: ${metrics.signatureScale};
+      --signature-rotate: ${metrics.signatureRotateDeg}deg;
+      --stamp-offset-x: ${metrics.stampOffsetX}px;
+      --stamp-offset-y: ${metrics.stampOffsetY}px;
+      --stamp-scale: ${metrics.stampScale};
       --bleed: 6px;
     }
 
@@ -284,6 +307,41 @@ export function generateFirmLayoutCSS(firm: Firm, options: LayoutOptions = {}): 
       }
     }
   `;
+}
+
+export function syncLetterheadLayoutHTML(
+  contentHTML: string,
+  firm: Firm,
+  options: LayoutOptions = {}
+): string {
+  if (!contentHTML || !contentHTML.includes('--content-start-y')) return contentHTML;
+
+  const metrics = resolveFirmLayoutMetrics(firm, options);
+  const replacements: Array<[RegExp, string]> = [
+    [/--content-start-y:\s*[^;]+;/, `--content-start-y: ${metrics.contentStartY}px;`],
+    [/--content-left:\s*[^;]+;/, `--content-left: ${metrics.pageMargin}px;`],
+    [/--content-right:\s*[^;]+;/, `--content-right: ${metrics.pageMargin}px;`],
+    [/--content-bottom:\s*[^;]+;/, `--content-bottom: ${metrics.footerReserve}px;`],
+    [/--safe-zone-height:\s*[^;]+;/, `--safe-zone-height: ${metrics.headerSafeZonePx}px;`],
+    [/--signature-offset-x:\s*[^;]+;/, `--signature-offset-x: ${metrics.signatureOffsetX}px;`],
+    [/--signature-offset-y:\s*[^;]+;/, `--signature-offset-y: ${metrics.signatureOffsetY}px;`],
+    [/--signature-scale:\s*[^;]+;/, `--signature-scale: ${metrics.signatureScale};`],
+    [/--signature-rotate:\s*[^;]+;/, `--signature-rotate: ${metrics.signatureRotateDeg}deg;`],
+    [/--stamp-offset-x:\s*[^;]+;/, `--stamp-offset-x: ${metrics.stampOffsetX}px;`],
+    [/--stamp-offset-y:\s*[^;]+;/, `--stamp-offset-y: ${metrics.stampOffsetY}px;`],
+    [/--stamp-scale:\s*[^;]+;/, `--stamp-scale: ${metrics.stampScale};`],
+  ];
+
+  let synced = contentHTML;
+  for (const [pattern, replacement] of replacements) {
+    synced = synced.replace(pattern, replacement);
+  }
+
+  if (firm.headerImagePath) {
+    synced = synced.replace(/background-image:\s*url\((['"]?).*?\1\);/, `background-image: url('${firm.headerImagePath}');`);
+  }
+
+  return synced;
 }
 
 function renderGuides(options: LayoutOptions): string {
@@ -537,6 +595,8 @@ export const layoutEngine = {
   detectHeaderHeightPlaceholder,
   generateFirmLayoutCSS,
   generateItemsTablePages,
+  resolveFirmLayoutMetrics,
   snapToGrid,
+  syncLetterheadLayoutHTML,
   wrapInA4Page,
 };

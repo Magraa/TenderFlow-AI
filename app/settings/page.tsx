@@ -10,6 +10,7 @@ import {
   normalizeVersioningSettings,
   validateVersioningSetting,
 } from '@/services/versioningSettings';
+import { toHindiUnit } from '@/lib/unitUtils';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -542,41 +543,44 @@ export default function SettingsPage() {
   <div style="clear: both;"></div>
 </div>`;
     } else {
-      return `<div class="quotation-body" style="font-family: Arial, sans-serif; font-size: 16px; line-height: 1.6; color: #1e293b; padding: 20px 40px;">
-  <div style="margin-bottom: 25px; font-weight: bold;">
-    <p style="margin: 0;">To,</p>
-    <p style="margin: 0; margin-left: 20px;">The Chief Municipal Officer,</p>
-    <p style="margin: 0; margin-left: 20px;">Municipal Council {{placeName}},</p>
-    <p style="margin: 0; margin-left: 20px;">District {{districtName}} (M.P.)</p>
+      return `<div class="quotation-body" style="font-family: Arial, sans-serif; font-size: 15px; line-height: 1.7; color: #000; padding: 30px 50px;">
+
+  <div style="margin-bottom: 20px;">
+    <p style="margin: 0; font-size: 15px;">To,</p>
   </div>
 
-  <div style="margin: 20px 0; font-weight: bold; font-size: 17px; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px;">
-    Subject: {{subject}}
+  <div style="text-align: center; margin-bottom: 30px; line-height: 1.8;">
+    <p style="margin: 0; font-size: 15px;">Chief Municipal Officer</p>
+    <p style="margin: 0; font-size: 15px;">City Council {{placeName}}</p>
+    <p style="margin: 0; font-size: 15px;">Distt. {{districtName}} (M.P.)</p>
   </div>
 
-  <div style="margin: 15px 0;">
-    Dear Sir,
-    <p style="text-indent: 40px; margin-top: 5px;">
-      With reference to your quotation invitation notice number {{tenderNumber}} for the supply of required materials, we are pleased to submit our lowest rates as follow:
-    </p>
+  <div style="margin: 24px 0 20px 0; font-size: 15px; text-decoration: underline;">
+    <strong>Subject :</strong>&nbsp; {{subject}}
   </div>
 
-  <div style="margin: 25px 0 20px 20px; border-left: 2px solid #e2e8f0; padding-left: 15px;">
-    {{items}}
-  </div>
+  <table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 15px;">
+    <thead>
+      <tr>
+        <th style="border: 1px solid #000; padding: 6px 10px; text-align: center; width: 60px; font-weight: bold;">S.No.</th>
+        <th style="border: 1px solid #000; padding: 6px 10px; text-align: left; font-weight: bold;">Item Name</th>
+        <th style="border: 1px solid #000; padding: 6px 10px; text-align: center; width: 100px; font-weight: bold;">Qty.</th>
+        <th style="border: 1px solid #000; padding: 6px 10px; text-align: left; width: 130px; font-weight: bold;">Rate</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{itemRows}}
+    </tbody>
+  </table>
 
-  <div style="margin: 20px 0; font-weight: bold;">
-    Terms & Conditions:
-    <ol style="margin: 5px 0 0 20px; font-weight: normal; list-style-type: decimal;">
-      <li>GST will be charged extra as applicable.</li>
-      <li>The supply of items will be completed within the scheduled timeframe.</li>
-    </ol>
+  <div style="text-align: right; margin: 10px 0 30px 0; font-size: 15px;">
+    Note: GST Extra
   </div>
 
   <div style="margin-top: 40px; float: right; text-align: center; min-width: 220px;">
-    <p style="margin-bottom: 30px;">Sincerely yours,</p>
-    <p style="font-weight: bold; margin: 0;">For: {{firmName}}</p>
-    <p style="font-size: 14px; color: #64748b; margin: 0;">(Authorized Signatory)</p>
+    <p style="margin-bottom: 30px; font-size: 15px;">Sincerely yours,</p>
+    <p style="font-weight: bold; margin: 0; font-size: 15px;">For: {{firmName}}</p>
+    <p style="font-size: 13px; color: #64748b; margin: 0;">(Authorized Signatory)</p>
   </div>
   <div style="clear: both;"></div>
 </div>`;
@@ -628,8 +632,8 @@ export default function SettingsPage() {
 
     const itemsListHTML = mockContext.items.map((item, idx) => {
       const rateText = isHindi
-        ? `Rs. ${item.rate.toLocaleString('en-IN')} प्रति ${item.unit}`
-        : `Rs. ${item.rate.toLocaleString('en-IN')} per ${item.unit}`;
+        ? `Rs. ${item.rate.toLocaleString('en-IN')} प्रति ${toHindiUnit(item.unit)}`
+        : `Rs. ${item.rate.toLocaleString('en-IN')} per ${item.unit || 'Nos'}`;
       
       const specLabel = isHindi ? 'स्पेसिफिकेशन:-' : 'Specification:';
       const specHTML = item.description 
@@ -653,13 +657,33 @@ export default function SettingsPage() {
       `;
     }).join('');
 
+    const itemRowsHTML = mockContext.items.map((item, idx) => {
+      const quantity = 1;
+      const unit = item.unit || 'piece';
+      const descHTML = item.description
+        ? `<div style="margin-top: 3px; font-weight: normal; font-size: 13px; line-height: 1.5;">Specification: - ${item.description}</div>`
+        : '';
+      return `
+        <tr>
+          <td style="border: 1px solid #000; padding: 4px 8px; text-align: center; vertical-align: top; font-weight: bold;">${idx + 1}.</td>
+          <td style="border: 1px solid #000; padding: 4px 8px; vertical-align: top;">
+            <div style="font-weight: bold;">${item.productName}</div>
+            ${descHTML}
+          </td>
+          <td style="border: 1px solid #000; padding: 4px 8px; text-align: center; vertical-align: middle;">${quantity} ${unit}</td>
+          <td style="border: 1px solid #000; padding: 4px 8px; text-align: left; vertical-align: middle;">Rs. ${item.rate.toLocaleString('en-IN')}</td>
+        </tr>
+      `;
+    }).join('');
+
     const compiled = rawContent
       .replace(/\{\{tenderNumber\}\}/g, mockContext.tenderNumber)
       .replace(/\{\{placeName\}\}/g, mockContext.placeName)
       .replace(/\{\{districtName\}\}/g, mockContext.districtName)
       .replace(/\{\{subject\}\}/g, mockContext.subject)
       .replace(/\{\{firmName\}\}/g, mockContext.firmName)
-      .replace(/\{\{items\}\}/g, itemsListHTML);
+      .replace(/\{\{items\}\}/g, itemsListHTML)
+      .replace(/\{\{itemRows\}\}/g, itemRowsHTML);
 
     const activeFont = templateFormData.fontFamily || 'Noto Sans Devanagari';
 
@@ -725,8 +749,8 @@ export default function SettingsPage() {
 
     const itemsListHTML = mockContext.items.map((item, idx) => {
       const rateText = isHindi
-        ? `Rs. ${item.rate.toLocaleString('en-IN')} प्रति ${item.unit}`
-        : `Rs. ${item.rate.toLocaleString('en-IN')} per ${item.unit}`;
+        ? `Rs. ${item.rate.toLocaleString('en-IN')} प्रति ${toHindiUnit(item.unit)}`
+        : `Rs. ${item.rate.toLocaleString('en-IN')} per ${item.unit || 'Nos'}`;
       
       const specLabel = isHindi ? 'स्पेसिफिकेशन:-' : 'Specification:';
       const specHTML = item.description 
@@ -750,13 +774,33 @@ export default function SettingsPage() {
       `;
     }).join('');
 
+    const itemRowsHTML = mockContext.items.map((item, idx) => {
+      const quantity = 1;
+      const unit = item.unit || 'piece';
+      const descHTML = item.description
+        ? `<div style="margin-top: 3px; font-weight: normal; font-size: 13px; line-height: 1.5;">Specification: - ${item.description}</div>`
+        : '';
+      return `
+        <tr>
+          <td style="border: 1px solid #000; padding: 4px 8px; text-align: center; vertical-align: top; font-weight: bold;">${idx + 1}.</td>
+          <td style="border: 1px solid #000; padding: 4px 8px; vertical-align: top;">
+            <div style="font-weight: bold;">${item.productName}</div>
+            ${descHTML}
+          </td>
+          <td style="border: 1px solid #000; padding: 4px 8px; text-align: center; vertical-align: middle;">${quantity} ${unit}</td>
+          <td style="border: 1px solid #000; padding: 4px 8px; text-align: left; vertical-align: middle;">Rs. ${item.rate.toLocaleString('en-IN')}</td>
+        </tr>
+      `;
+    }).join('');
+
     const compiled = rawContent
       .replace(/\{\{tenderNumber\}\}/g, mockContext.tenderNumber)
       .replace(/\{\{placeName\}\}/g, mockContext.placeName)
       .replace(/\{\{districtName\}\}/g, mockContext.districtName)
       .replace(/\{\{subject\}\}/g, mockContext.subject)
       .replace(/\{\{firmName\}\}/g, mockContext.firmName)
-      .replace(/\{\{items\}\}/g, itemsListHTML);
+      .replace(/\{\{items\}\}/g, itemsListHTML)
+      .replace(/\{\{itemRows\}\}/g, itemRowsHTML);
 
     const activeFont = template.fontFamily || 'Noto Sans Devanagari';
 
@@ -892,8 +936,90 @@ export default function SettingsPage() {
     }
   };
 
+  const handleGenerateEnglishFromHindi = async () => {
+    const hindiName = formData.hindiName?.trim();
+    const hindiDesc = formData.hindiDescription?.trim();
+    if (!hindiName && !hindiDesc) return;
+
+    setGeneratingHindi(true);
+    try {
+      let transliteratedName = '';
+      let transliteratedDesc = '';
+
+      const sourceText = hindiDesc
+        ? `${hindiName || ''} ||| ${hindiDesc}`
+        : (hindiName || '');
+
+      const response = await fetch('/api/ai/transliterate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: sourceText,
+          sourceLanguage: 'hindi',
+          targetLanguage: 'english',
+        }),
+      });
+
+      if (!response.ok) throw new Error('Transliteration failed');
+
+      const data = await response.json();
+      if (data.transliteratedText) {
+        if (hindiDesc) {
+          const parts = data.transliteratedText.split('|||');
+          transliteratedName = parts[0]?.trim() || '';
+          transliteratedDesc = parts[1]?.trim() || '';
+        } else {
+          transliteratedName = data.transliteratedText.trim();
+        }
+      }
+
+      setFormData((prev: any) => ({
+        ...prev,
+        englishName: transliteratedName || prev.englishName,
+        englishDescription: transliteratedDesc || prev.englishDescription,
+      }));
+
+      // Also generate alternative names from the resolved English name
+      if (dialogType === 'item' && transliteratedName) {
+        try {
+          const altResponse = await fetch('/api/ai/generate-alternates', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              itemName: transliteratedName,
+              description: transliteratedDesc || '',
+            }),
+          });
+          if (altResponse.ok) {
+            const altData = await altResponse.json();
+            setFormData((prev: any) => ({
+              ...prev,
+              altHindiName: altData.altHindi || prev.altHindiName || '',
+              altEnglishName1: altData.altEnglish1 || prev.altEnglishName1 || '',
+              altEnglishName2: altData.altEnglish2 || prev.altEnglishName2 || '',
+            }));
+          }
+        } catch (altError) {
+          console.error('Failed to generate alt names from Hindi:', altError);
+        }
+      }
+
+      setFormErrors((prev) => {
+        const next = { ...prev };
+        delete next.englishName;
+        return next;
+      });
+    } catch (error) {
+      console.error('Error generating English from Hindi:', error);
+      alert('Failed to generate English from Hindi. Please enter manually.');
+    } finally {
+      setGeneratingHindi(false);
+    }
+  };
+
   const handleSaveMapping = async () => {
     if (!validateForm()) return;
+
     
     try {
       if (dialogType === 'purpose') {
@@ -933,6 +1059,7 @@ export default function SettingsPage() {
         } else if (currentMapping) {
           if (dialogType === 'item') {
             await dataService.itemHindiMappings.update(currentMapping.id, {
+              englishName: formData.englishName.trim(),
               hindiName: formData.hindiName.trim(),
               englishDescription: formData.englishDescription?.trim() || '',
               hindiDescription: formData.hindiDescription?.trim() || '',
@@ -943,6 +1070,7 @@ export default function SettingsPage() {
             });
           } else {
             await dataService.vendorHindiMappings.update(currentMapping.id, {
+              englishName: formData.englishName.trim(),
               hindiName: formData.hindiName.trim(),
               englishDescription: formData.englishDescription?.trim() || '',
               hindiDescription: formData.hindiDescription?.trim() || '',
@@ -1898,18 +2026,35 @@ export default function SettingsPage() {
                   </div>
                 </div>
 
-                <div className="flex justify-center py-1">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full h-10 border-blue-200 hover:border-blue-300 hover:bg-blue-50 text-blue-600 font-semibold rounded-lg shadow-sm transition-all flex items-center justify-center gap-2"
-                    loading={generatingHindi}
-                    disabled={!formData.englishName?.trim() || generatingHindi}
-                    onClick={handleGenerateAllHindi}
-                  >
-                    {!generatingHindi && <Sparkles className="h-4 w-4 text-blue-500" />}
-                    Generate Hindi Transliteration
-                  </Button>
+                <div className="flex flex-col gap-2 py-1">
+                  {/* English → Hindi button: shown when English name is filled */}
+                  {formData.englishName?.trim() && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full h-10 border-blue-200 hover:border-blue-300 hover:bg-blue-50 text-blue-600 font-semibold rounded-lg shadow-sm transition-all flex items-center justify-center gap-2"
+                      loading={generatingHindi}
+                      disabled={generatingHindi}
+                      onClick={handleGenerateAllHindi}
+                    >
+                      {!generatingHindi && <Sparkles className="h-4 w-4 text-blue-500" />}
+                      Generate Hindi Transliteration
+                    </Button>
+                  )}
+                  {/* Hindi → English button: shown when Hindi name/desc is filled but English name is empty */}
+                  {(formData.hindiName?.trim() || formData.hindiDescription?.trim()) && !formData.englishName?.trim() && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full h-10 border-emerald-200 hover:border-emerald-300 hover:bg-emerald-50 text-emerald-700 font-semibold rounded-lg shadow-sm transition-all flex items-center justify-center gap-2"
+                      loading={generatingHindi}
+                      disabled={generatingHindi}
+                      onClick={handleGenerateEnglishFromHindi}
+                    >
+                      {!generatingHindi && <Sparkles className="h-4 w-4 text-emerald-500" />}
+                      Generate English from Hindi
+                    </Button>
+                  )}
                 </div>
 
                 <div className="space-y-4 p-3 bg-slate-50/50 rounded-xl border border-slate-100/80">

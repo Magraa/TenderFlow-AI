@@ -1494,8 +1494,10 @@ export default function SettingsPage() {
                   </div>
                 ) : filteredItemHindiMappings.length === 0 ? (
                   <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-slate-500 text-sm space-y-2">
-                    <p className="font-medium text-slate-700">No items match "{itemSearchQuery}"</p>
+                    <p className="font-medium text-slate-700">{`No items match "${itemSearchQuery}"`}</p>
                     <Button variant="outline" size="sm" onClick={() => setItemSearchQuery('')} className="h-7 text-xs">
+
+
                       Clear Search
                     </Button>
                   </div>

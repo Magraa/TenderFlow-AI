@@ -88,8 +88,10 @@ export function LocationSearchInput({ id, value, onChange, onSelect }: LocationS
               onClick={() => setAddOpen(true)}
             >
               <Plus className="h-4 w-4" />
-              Add "{value.trim()}"
+              {`Add "${value.trim()}"`}
             </button>
+
+
           )}
         </div>
       )}

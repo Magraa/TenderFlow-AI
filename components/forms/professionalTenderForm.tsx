@@ -106,7 +106,7 @@ export function ProfessionalTenderForm() {
           defaultLanguage: 'english',
         });
       } else if (mcProfiles.length > 1) {
-        const [keep, ...rest] = mcProfiles;
+        const [, ...rest] = mcProfiles;
         for (const dupe of rest) {
           try {
             await dataService.departmentProfiles.delete(dupe.id);
@@ -132,7 +132,8 @@ export function ProfessionalTenderForm() {
           defaultLanguage: 'english',
         });
       } else if (othersProfiles.length > 1) {
-        const [keep, ...rest] = othersProfiles;
+        const [, ...rest] = othersProfiles;
+
         for (const dupe of rest) {
           try {
             await dataService.departmentProfiles.delete(dupe.id);

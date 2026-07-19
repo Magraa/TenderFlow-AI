@@ -1,8 +1,8 @@
 import { getFirebaseStorage } from '@/services/firebase/firebaseClient';
 import { ref, uploadBytes, getDownloadURL, deleteObject, uploadBytesResumable, StorageError } from 'firebase/storage';
-import { v4 as uuid } from 'uuid';
 
 export type ImageType = 'letterhead' | 'signature' | 'stamp';
+
 
 const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB limit
 const ALLOWED_MIME_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
@@ -124,34 +124,29 @@ export async function uploadFirmImageWithProgress(
 
   try {
     // Upload with progress tracking
-    const snapshot = await uploadBytesResumable(storageRef, file);
+    const uploadTask = uploadBytesResumable(storageRef, file);
 
     // Track progress
-    snapshot.on(
-      'state_changed',
-      (snapshot) => {
-        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-        onProgress(progress);
-      },
-      (error) => {
-        console.error(`Error uploading ${imageType} image:`, error);
-        throw error;
-      },
-      async () => {
-        // Upload complete
-        onProgress(100);
-      }
-    );
-
-    // Wait for upload to complete
     await new Promise<void>((resolve, reject) => {
-      snapshot.on(
+      uploadTask.on(
         'state_changed',
-        () => {},
-        reject,
-        resolve
+        (snapshot) => {
+          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          onProgress(progress);
+        },
+        (error) => {
+          console.error(`Error uploading ${imageType} image:`, error);
+          reject(error);
+        },
+        () => {
+          onProgress(100);
+          resolve();
+        }
       );
     });
+
+    const snapshot = uploadTask.snapshot;
+
 
     // Get download URL
     const downloadUrl = await getDownloadURL(snapshot.ref);

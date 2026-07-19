@@ -19,7 +19,7 @@ import { dataService } from '@/services/dataService';
 
 // Configuration
 const BATCH_SIZE = 10; // Process 10 firms at a time
-const RETRY_COUNT = 3; // Retry failed uploads 3 times
+
 
 interface FirmWithBase64 {
   id: string;

@@ -187,7 +187,8 @@ describe('Purpose Library Lookup by Category', () => {
         fc.asyncProperty(
           fc.string({ minLength: 1, maxLength: 50 }), // category with possible special chars
           fc.string({ minLength: 1, maxLength: 200 }), // purpose with possible special chars
-          fc.constantFrom<'hindi', 'english'>('hindi', 'english'),
+          fc.constantFrom<'hindi' | 'english'>('hindi', 'english'),
+
           async (category, purpose, language) => {
             // Setup: Create a purpose mapping with special characters
             await setPurposeByCategory(category, purpose, language);

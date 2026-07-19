@@ -6,6 +6,7 @@ import { dataService } from '@/services/dataService';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { UNIT_OPTIONS } from '@/lib/unitUtils';
+import { X } from 'lucide-react';
 
 const GST_OPTIONS: Array<0 | 5 | 9 | 12 | 18> = [0, 5, 9, 12, 18];
 
@@ -225,12 +226,24 @@ export function MultiProductItemManager({ tenderId, items, onItemsChange }: Item
                         />
                       </td>
                       <td className="px-3 py-2">
-                        <input
-                          className="w-full rounded border border-slate-300 px-2 py-1"
-                          value={item.description || ''}
-                          onChange={(event) => handleChange(index, 'description', event.target.value)}
-                          placeholder="Optional description"
-                        />
+                        <div className="relative flex items-center">
+                          <input
+                            className="w-full rounded border border-slate-300 px-2 py-1 pr-6"
+                            value={item.description || ''}
+                            onChange={(event) => handleChange(index, 'description', event.target.value)}
+                            placeholder="Optional description"
+                          />
+                          {item.description?.trim() ? (
+                            <button
+                              type="button"
+                              title="Clear Description"
+                              onClick={() => handleChange(index, 'description', '')}
+                              className="absolute right-1.5 text-slate-400 hover:text-slate-600 p-0.5 rounded-full transition-colors"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          ) : null}
+                        </div>
                       </td>
                       <td className="px-3 py-2">
                         <input
@@ -355,11 +368,24 @@ export function MultiProductItemManager({ tenderId, items, onItemsChange }: Item
         </Button>
 
         <datalist id="product-suggestions">
-          {mappings.map((m) => (
-            <option key={m.id} value={m.englishName}>
-              {m.englishDescription ? `${m.englishName} - ${m.englishDescription}` : m.englishName}
-            </option>
-          ))}
+          {mappings.flatMap((m) => {
+            const opts = [];
+            if (m.rawName) {
+              opts.push(
+                <option key={`${m.id}-raw`} value={m.rawName}>
+                  {m.rawDescription ? `${m.rawName} - ${m.rawDescription}` : m.rawName}
+                </option>
+              );
+            }
+            if (m.englishName && m.englishName !== m.rawName) {
+              opts.push(
+                <option key={`${m.id}-en`} value={m.englishName}>
+                  {m.englishDescription ? `${m.englishName} - ${m.englishDescription}` : m.englishName}
+                </option>
+              );
+            }
+            return opts;
+          })}
         </datalist>
       </CardContent>
     </Card>

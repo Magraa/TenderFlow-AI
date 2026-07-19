@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { Firm, Settings, PurposeMapping, HindiMapping, PlaceMapping, VersioningSettings, DocumentPhraseMapping, CustomTemplate } from '@/types';
 
@@ -20,7 +20,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AddPlaceDialog } from '@/components/forms/Location/AddPlaceDialog';
-import { Sparkles, FileText, Languages, Package, ChevronDown, ChevronUp } from 'lucide-react';
+import { Sparkles, FileText, Languages, Package, ChevronDown, ChevronUp, Search, X } from 'lucide-react';
 
 import { Textarea } from '@/components/ui/textarea';
 
@@ -41,6 +41,39 @@ export default function SettingsPage() {
   const [placeMappings, setPlaceMappings] = useState<PlaceMapping[]>([]);
   const [documentPhraseMappings, setDocumentPhraseMappings] = useState<DocumentPhraseMapping[]>([]);
   const [loadingMappings, setLoadingMappings] = useState(false);
+
+  // Search state for item mappings
+  const [itemSearchQuery, setItemSearchQuery] = useState('');
+
+  const filteredItemHindiMappings = useMemo(() => {
+    if (!itemSearchQuery.trim()) return itemHindiMappings;
+    const q = itemSearchQuery.toLowerCase().trim();
+    return itemHindiMappings.filter((m) => {
+      const raw = (m.rawName || '').toLowerCase();
+      const rawDesc = (m.rawDescription || '').toLowerCase();
+      const eng = (m.englishName || '').toLowerCase();
+      const engDesc = (m.englishDescription || '').toLowerCase();
+      const hin = (m.hindiName || '').toLowerCase();
+      const hinDesc = (m.hindiDescription || '').toLowerCase();
+      const altHin1 = (m.altHindiName || '').toLowerCase();
+      const altHin2 = (m.altHindiName2 || '').toLowerCase();
+      const altEng1 = (m.altEnglishName1 || '').toLowerCase();
+      const altEng2 = (m.altEnglishName2 || '').toLowerCase();
+
+      return (
+        raw.includes(q) ||
+        rawDesc.includes(q) ||
+        eng.includes(q) ||
+        engDesc.includes(q) ||
+        hin.includes(q) ||
+        hinDesc.includes(q) ||
+        altHin1.includes(q) ||
+        altHin2.includes(q) ||
+        altEng1.includes(q) ||
+        altEng2.includes(q)
+      );
+    });
+  }, [itemHindiMappings, itemSearchQuery]);
 
   // Phrase pack dialog state
   const [phraseDialogOpen, setPhraseDialogOpen] = useState(false);
@@ -1382,15 +1415,25 @@ export default function SettingsPage() {
                 )}
               </TabsContent>
               
-              <TabsContent value="item" className="space-y-4">
-                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
-                  <p className="text-sm text-slate-500">Map English item names to Hindi transliterations.</p>
-                  <div className="flex gap-2">
+              <TabsContent value="item" className="space-y-4 pt-2">
+                {/* Header & Main Actions */}
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 bg-slate-50/80 p-3.5 rounded-xl border border-slate-200/80">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                      <Package className="h-4 w-4 text-emerald-600" />
+                      Item Mappings & Raw Library
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Manage English item names, raw JSON imported names, and Hindi transliterations.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
                     <Button 
                       variant="outline" 
                       size="sm"
                       onClick={() => openExportDialog('itemHindi')}
                       disabled={exporting || itemHindiMappings.length === 0}
+                      className="h-8 text-xs bg-white"
                     >
                       Export
                     </Button>
@@ -1399,64 +1442,135 @@ export default function SettingsPage() {
                       size="sm"
                       onClick={() => openImportDialog('itemHindi')}
                       disabled={importing}
+                      className="h-8 text-xs bg-white"
                     >
                       Import
                     </Button>
-                    <Button onClick={() => openAddDialog('item')}>
-                      Add Mapping
+                    <Button 
+                      size="sm"
+                      onClick={() => openAddDialog('item')}
+                      className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
+                    >
+                      + Add Mapping
                     </Button>
                   </div>
                 </div>
+
+                {/* Search Bar & Summary Bar */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <Input
+                      placeholder="Search by Raw Item Name, English Name, Hindi, or Specification..."
+                      value={itemSearchQuery}
+                      onChange={(e) => setItemSearchQuery(e.target.value)}
+                      className="pl-9 pr-8 h-9 border-slate-300 rounded-lg text-xs bg-white focus-visible:ring-emerald-500 shadow-2xs"
+                    />
+                    {itemSearchQuery && (
+                      <button
+                        onClick={() => setItemSearchQuery('')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2 text-xs text-slate-500 shrink-0 self-center sm:self-auto">
+                    <span className="font-semibold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200">
+                      Showing {filteredItemHindiMappings.length} of {itemHindiMappings.length} items
+                    </span>
+                  </div>
+                </div>
+
+                {/* Scrollable Items Container */}
                 {loadingMappings ? (
-                  <p className="text-sm text-slate-500">Loading mappings...</p>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-8 text-center text-sm text-slate-500">
+                    Loading item mappings...
+                  </div>
                 ) : itemHindiMappings.length === 0 ? (
-                  <p className="text-sm text-slate-500">No item Hindi mappings configured.</p>
+                  <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/60 p-10 text-center text-slate-500 text-sm">
+                    No item mappings configured.
+                  </div>
+                ) : filteredItemHindiMappings.length === 0 ? (
+                  <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-slate-500 text-sm space-y-2">
+                    <p className="font-medium text-slate-700">No items match "{itemSearchQuery}"</p>
+                    <Button variant="outline" size="sm" onClick={() => setItemSearchQuery('')} className="h-7 text-xs">
+                      Clear Search
+                    </Button>
+                  </div>
                 ) : (
-                  <div className="space-y-2">
-                    {itemHindiMappings.map((mapping) => (
-                      <div key={mapping.id} className="rounded border border-slate-200 p-3 text-sm">
-                        <div className="flex justify-between items-start">
-                          <div className="flex-1">
+                  <div className="max-h-[550px] overflow-y-auto pr-1.5 space-y-2.5 custom-scrollbar border border-slate-200 rounded-xl p-2.5 bg-slate-50/40">
+                    {filteredItemHindiMappings.map((mapping) => (
+                      <div 
+                        key={mapping.id} 
+                        className="rounded-xl border border-slate-200/90 bg-white p-3.5 text-sm shadow-2xs hover:border-slate-300 transition-all"
+                      >
+                        <div className="flex flex-col sm:flex-row justify-between items-start gap-3">
+                          <div className="flex-1 space-y-1.5 min-w-0">
+                            {/* Raw Name Pill if present */}
                             {mapping.rawName && (
-                              <p className="text-xs font-semibold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 inline-block mb-1">
-                                Raw Input: {mapping.rawName} {mapping.rawDescription ? `(${mapping.rawDescription})` : ''}
-                              </p>
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span className="text-xs font-semibold text-amber-900 bg-amber-50 px-2.5 py-0.5 rounded-md border border-amber-200 inline-flex items-center gap-1">
+                                  <span className="text-[10px] font-extrabold uppercase text-amber-600">Raw Item:</span>
+                                  {mapping.rawName} {mapping.rawDescription ? `(${mapping.rawDescription})` : ''}
+                                </span>
+                              </div>
                             )}
-                            <p className="font-medium">
-                              <span className="text-slate-500">English:</span> {mapping.englishName}
-                            </p>
-                            {mapping.englishDescription && (
-                              <p className="text-xs text-slate-500 mt-0.5 ml-4">
-                                <span className="font-medium text-slate-400">Desc:</span> {mapping.englishDescription}
-                              </p>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-0.5">
+                              <div>
+                                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider text-[10px]">English Name</p>
+                                <p className="font-medium text-slate-800 text-xs sm:text-sm">
+                                  {mapping.englishName || <span className="text-slate-400 italic">Not set (Raw item stored)</span>}
+                                </p>
+                                {mapping.englishDescription && (
+                                  <p className="text-xs text-slate-500 mt-0.5">
+                                    {mapping.englishDescription}
+                                  </p>
+                                )}
+                              </div>
+
+                              <div>
+                                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider text-[10px]">Hindi Transliteration</p>
+                                <p className="font-medium text-slate-800 text-xs sm:text-sm">
+                                  {mapping.hindiName || <span className="text-slate-400 italic">Not set (Pending AI)</span>}
+                                </p>
+                                {mapping.hindiDescription && (
+                                  <p className="text-xs text-slate-500 mt-0.5">
+                                    {mapping.hindiDescription}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+
+                            {(mapping.altHindiName || mapping.altHindiName2 || mapping.altEnglishName1 || mapping.altEnglishName2) && (
+                              <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-100 text-[11px] text-slate-500">
+                                {(mapping.altHindiName || mapping.altHindiName2) && (
+                                  <span>
+                                    <strong className="text-blue-600 font-semibold">Alt Hindi:</strong> {[mapping.altHindiName, mapping.altHindiName2].filter(Boolean).join(' | ')}
+                                  </span>
+                                )}
+                                {(mapping.altEnglishName1 || mapping.altEnglishName2) && (
+                                  <span>
+                                    <strong className="text-blue-600 font-semibold">Alt English:</strong> {[mapping.altEnglishName1, mapping.altEnglishName2].filter(Boolean).join(' | ')}
+                                  </span>
+                                )}
+                              </div>
                             )}
-                            <p className="mt-1.5 font-medium">
-                              <span className="text-slate-500">Hindi:</span> {mapping.hindiName}
-                            </p>
-                            {mapping.hindiDescription && (
-                              <p className="text-xs text-slate-500 mt-0.5 ml-4">
-                                <span className="font-medium text-slate-400">विवरण:</span> {mapping.hindiDescription}
-                              </p>
-                            )}
-                            {(mapping.altHindiName || mapping.altHindiName2) && (
-                              <p className="text-xs text-slate-500 mt-1 ml-4">
-                                <span className="font-medium text-blue-500">Alt Hindi:</span> {[mapping.altHindiName, mapping.altHindiName2].filter(Boolean).join(' | ') || 'None'}
-                              </p>
-                            )}
-                            {(mapping.altEnglishName1 || mapping.altEnglishName2) && (
-                              <p className="text-xs text-slate-500 mt-0.5 ml-4">
-                                <span className="font-medium text-blue-500">Alt English:</span> {[mapping.altEnglishName1, mapping.altEnglishName2].filter(Boolean).join(' | ') || 'None'}
-                              </p>
-                            )}
-                            <p className="mt-2 text-xs text-slate-400">
-                              Usage: {mapping.usageCount} | Auto-generated: {mapping.isAutoGenerated ? 'Yes' : 'No'}
-                            </p>
+
+                            <div className="flex items-center gap-3 text-[11px] text-slate-400 pt-0.5">
+                              <span>Usage: <strong className="text-slate-600 font-semibold">{mapping.usageCount}</strong></span>
+                              <span>•</span>
+                              <span>Auto-generated: {mapping.isAutoGenerated ? 'Yes (AI)' : 'No (Raw/Manual)'}</span>
+                            </div>
                           </div>
-                          <div className="flex space-x-2">
-                            <Button variant="outline" size="sm" onClick={() => openEditDialog('item', mapping)}>
+
+                          <div className="flex items-center space-x-2 shrink-0 self-end sm:self-start pt-2 sm:pt-0">
+                            <Button variant="outline" size="sm" className="h-7 text-xs px-2.5" onClick={() => openEditDialog('item', mapping)}>
                               Edit
                             </Button>
-                            <Button variant="destructive" size="sm" onClick={() => deleteMapping('item', mapping.id)}>
+                            <Button variant="destructive" size="sm" className="h-7 text-xs px-2.5" onClick={() => deleteMapping('item', mapping.id)}>
                               Delete
                             </Button>
                           </div>

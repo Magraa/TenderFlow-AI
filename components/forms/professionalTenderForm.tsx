@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { DepartmentProfile, Firm, Settings, TenderItem, DocumentPhraseMapping } from '@/types';
 import { dataService } from '@/services/dataService';
 import { getOrGeneratePhrasePack } from '@/services/documentPhraseService';
+import { getOrCreateItemMappingPack } from '@/services/mappingService';
 
 import { tenderUtility } from '@/services/tenderUtility';
 import { Button } from '@/components/ui/button';
@@ -235,11 +236,14 @@ export function ProfessionalTenderForm() {
       const now = new Date().toISOString();
       const tenderNumber = await tenderUtility.generateTenderNumber();
 
-      // Get/Generate phrase packs for each item based on strategy
+      // Get/Generate phrase packs and AI item mappings for each tender item
       const itemsWithCategories = [];
       for (const item of items) {
         let categoryId = '';
         try {
+          // Generate full AI mapping pack (englishName, hindiName, altHindiName1, altHindiName2) for Tender documents
+          await getOrCreateItemMappingPack(item.productName, item.description);
+
           const pack = await getOrGeneratePhrasePack(item.productName, item.description, {
             mode: phrasePackMode,
             categoryId: selectedPhraseCategoryId,
@@ -248,7 +252,7 @@ export function ProfessionalTenderForm() {
             categoryId = pack.categoryId;
           }
         } catch (err) {
-          console.error('Failed to get/generate phrase pack for item:', item.productName, err);
+          console.error('Failed to get/generate pack for item:', item.productName, err);
         }
         itemsWithCategories.push({
           ...item,

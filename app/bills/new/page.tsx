@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Plus, Trash2, Receipt, Building2, FileText, CheckCircle, AlertTriangle, Sparkles } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Receipt, Building2, FileText, CheckCircle, AlertTriangle, Sparkles, X } from 'lucide-react';
 import { Bill, CustomTemplate, Firm, HindiMapping } from '@/types';
 import { dataService } from '@/services/dataService';
 import { numberToWords } from '@/lib/numberToWords';
@@ -259,7 +259,7 @@ export default function NewBillPage() {
         igstAmount,
         grandTotal,
         amountInWords,
-        status: 'draft',
+        status: 'final',
         showLetterheadBackground: true,
         includeSignature: true,
         includeStamp: true,
@@ -563,12 +563,25 @@ export default function NewBillPage() {
                             )}
                           </div>
 
-                          <Input
-                            value={item.description}
-                            onChange={(e) => handleItemChange(item.id, 'description', e.target.value)}
-                            placeholder="Specification / Description (Optional)"
-                            className="h-7 text-[11px] bg-slate-50 text-slate-600 border-dashed border-slate-300"
-                          />
+                          {/* Description Input with Clear Cross Icon */}
+                          <div className="relative flex items-center">
+                            <Input
+                              value={item.description}
+                              onChange={(e) => handleItemChange(item.id, 'description', e.target.value)}
+                              placeholder="Specification / Description (Optional)"
+                              className="h-7 text-[11px] bg-slate-50 text-slate-600 border-dashed border-slate-300 pr-6"
+                            />
+                            {item.description?.trim() ? (
+                              <button
+                                type="button"
+                                title="Clear Description"
+                                onClick={() => handleItemChange(item.id, 'description', '')}
+                                className="absolute right-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 p-0.5 rounded-full transition-colors"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            ) : null}
+                          </div>
                         </td>
                         <td className="py-2.5 px-3 align-top pt-3">
                           <Input

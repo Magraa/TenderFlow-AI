@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Printer, Trash2, Receipt, Edit, Plus, CheckCircle, AlertTriangle, Sparkles } from 'lucide-react';
+import { ArrowLeft, Printer, Trash2, Receipt, Edit, Plus, CheckCircle, AlertTriangle, Sparkles, X } from 'lucide-react';
 import { Bill, CustomTemplate, Firm, HindiMapping } from '@/types';
 import { dataService } from '@/services/dataService';
 import { compileBillHTML } from '@/templates/default/billTemplate';
@@ -93,6 +93,13 @@ export default function BillViewerPage() {
       setExistingBills(billsList);
       setAllItemMappings(mappingsList);
       setLoading(false);
+
+      // Auto trigger print if print=true parameter is present
+      if (typeof window !== 'undefined' && window.location.search.includes('print=true')) {
+        setTimeout(() => {
+          window.print();
+        }, 600);
+      }
     })();
   }, [billId]);
 
@@ -687,12 +694,25 @@ export default function BillViewerPage() {
                             )}
                           </div>
 
-                          <Input
-                            value={item.description}
-                            onChange={(e) => handleEditItemChange(item.id, 'description', e.target.value)}
-                            placeholder="Specification / Description (Optional)"
-                            className="h-6 text-[11px] bg-slate-50 text-slate-600 border-dashed"
-                          />
+                          {/* Description Input with Clear Cross Icon */}
+                          <div className="relative flex items-center">
+                            <Input
+                              value={item.description}
+                              onChange={(e) => handleEditItemChange(item.id, 'description', e.target.value)}
+                              placeholder="Specification / Description (Optional)"
+                              className="h-6 text-[11px] bg-slate-50 text-slate-600 border-dashed pr-6"
+                            />
+                            {item.description?.trim() ? (
+                              <button
+                                type="button"
+                                title="Clear Description"
+                                onClick={() => handleEditItemChange(item.id, 'description', '')}
+                                className="absolute right-1 text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 p-0.5 rounded-full transition-colors"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            ) : null}
+                          </div>
                         </td>
                         <td className="py-1.5 px-2 align-top pt-2.5">
                           <Input

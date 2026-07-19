@@ -11,6 +11,7 @@ import {
   validateVersioningSetting,
 } from '@/services/versioningSettings';
 import { toHindiUnit } from '@/lib/unitUtils';
+import { getSampleBillTemplate } from '@/templates/default/billTemplate';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -339,11 +340,14 @@ export default function SettingsPage() {
     setFormData({
       category: '',
       professionalPurpose: '',
+      rawName: '',
+      rawDescription: '',
       englishName: '',
       hindiName: '',
       englishDescription: '',
       hindiDescription: '',
       altHindiName: '',
+      altHindiName2: '',
       altEnglishName1: '',
       altEnglishName2: '',
       language: 'hindi',
@@ -366,11 +370,14 @@ export default function SettingsPage() {
       });
     } else {
       setFormData({
+        rawName: mapping.rawName || '',
+        rawDescription: mapping.rawDescription || '',
         englishName: mapping.englishName,
         hindiName: mapping.hindiName,
         englishDescription: mapping.englishDescription || '',
         hindiDescription: mapping.hindiDescription || '',
         altHindiName: mapping.altHindiName || '',
+        altHindiName2: mapping.altHindiName2 || '',
         altEnglishName1: mapping.altEnglishName1 || '',
         altEnglishName2: mapping.altEnglishName2 || '',
         type: mapping.type,
@@ -683,7 +690,27 @@ export default function SettingsPage() {
       .replace(/\{\{subject\}\}/g, mockContext.subject)
       .replace(/\{\{firmName\}\}/g, mockContext.firmName)
       .replace(/\{\{items\}\}/g, itemsListHTML)
-      .replace(/\{\{itemRows\}\}/g, itemRowsHTML);
+      .replace(/\{\{itemRows\}\}/g, itemRowsHTML)
+      .replace(/\{\{invoiceNumber\}\}/g, '922')
+      .replace(/\{\{invoiceDate\}\}/g, '18/07/2026')
+      .replace(/\{\{recipientDesignation\}\}/g, isHindi ? 'मुख्य नगर पालिका अधिकारी' : 'Chief Municipal Officer')
+      .replace(/\{\{recipientDepartment\}\}/g, isHindi ? 'नगर परिषद बैराड़' : 'City Council Bairad')
+      .replace(/\{\{recipientDistrict\}\}/g, isHindi ? 'जिला शिवपुरी' : 'Distt. Shivpuri')
+      .replace(/\{\{bankName\}\}/g, 'State Bank of India')
+      .replace(/\{\{bankBranch\}\}/g, 'Transport Nagar, Gwalior')
+      .replace(/\{\{ifscCode\}\}/g, 'SBIN0016593')
+      .replace(/\{\{accountNumber\}\}/g, '63049227111')
+      .replace(/\{\{panNumber\}\}/g, 'CJWPA8633G')
+      .replace(/\{\{subtotal\}\}/g, '53,100.0')
+      .replace(/\{\{sgstPercent\}\}/g, '9.0')
+      .replace(/\{\{sgstAmount\}\}/g, '4,779.0')
+      .replace(/\{\{cgstPercent\}\}/g, '9.0')
+      .replace(/\{\{cgstAmount\}\}/g, '4,779.0')
+      .replace(/\{\{igstPercent\}\}/g, '0.0')
+      .replace(/\{\{igstAmount\}\}/g, '')
+      .replace(/\{\{grandTotal\}\}/g, '62,658.0')
+      .replace(/\{\{amountInWords\}\}/g, 'Sixty Two Thousand Six Hundred Fifty Eight only')
+      .replace(/\{\{signatureHTML\}\}/g, '<span style="font-size:12px; color:#64748b;">[Signature]</span>');
 
     const activeFont = templateFormData.fontFamily || 'Noto Sans Devanagari';
 
@@ -1017,10 +1044,50 @@ export default function SettingsPage() {
     }
   };
 
+  const handleGenerateAllFromRaw = async () => {
+    const rawName = (formData.rawName || formData.englishName || formData.hindiName || '').trim();
+    const rawDesc = (formData.rawDescription || formData.englishDescription || formData.hindiDescription || '').trim();
+
+    if (!rawName) {
+      alert('Please enter Raw Original Item Name first.');
+      return;
+    }
+
+    setGeneratingHindi(true);
+    try {
+      const res = await fetch('/api/ai/generate-alternates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rawName, rawDescription: rawDesc, itemName: rawName, description: rawDesc }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setFormData((prev: any) => ({
+          ...prev,
+          rawName,
+          rawDescription: rawDesc,
+          englishName: data.englishName || prev.englishName || rawName,
+          englishDescription: data.englishDescription || prev.englishDescription || rawDesc,
+          hindiName: data.hindiName || prev.hindiName || rawName,
+          hindiDescription: data.hindiDescription || prev.hindiDescription || rawDesc,
+          altHindiName: data.altHindiName || data.altHindi || prev.altHindiName || '',
+          altHindiName2: data.altHindiName2 || prev.altHindiName2 || '',
+          altEnglishName1: data.altEnglishName1 || data.altEnglish1 || prev.altEnglishName1 || '',
+          altEnglishName2: data.altEnglishName2 || data.altEnglish2 || prev.altEnglishName2 || '',
+        }));
+      }
+    } catch (err) {
+      console.error('Failed to generate full item mapping pack:', err);
+      alert('Failed to generate with AI. Please fill fields manually.');
+    } finally {
+      setGeneratingHindi(false);
+    }
+  };
+
   const handleSaveMapping = async () => {
     if (!validateForm()) return;
 
-    
     try {
       if (dialogType === 'purpose') {
         if (dialogMode === 'add') {
@@ -1038,11 +1105,14 @@ export default function SettingsPage() {
         }
       } else {
         const mappingData = {
+          rawName: formData.rawName?.trim() || '',
+          rawDescription: formData.rawDescription?.trim() || '',
           englishName: formData.englishName.trim(),
           hindiName: formData.hindiName.trim(),
           englishDescription: formData.englishDescription?.trim() || '',
           hindiDescription: formData.hindiDescription?.trim() || '',
           altHindiName: formData.altHindiName?.trim() || '',
+          altHindiName2: formData.altHindiName2?.trim() || '',
           altEnglishName1: formData.altEnglishName1?.trim() || '',
           altEnglishName2: formData.altEnglishName2?.trim() || '',
           type: dialogType as 'item' | 'vendor',
@@ -1059,11 +1129,14 @@ export default function SettingsPage() {
         } else if (currentMapping) {
           if (dialogType === 'item') {
             await dataService.itemHindiMappings.update(currentMapping.id, {
+              rawName: formData.rawName?.trim() || '',
+              rawDescription: formData.rawDescription?.trim() || '',
               englishName: formData.englishName.trim(),
               hindiName: formData.hindiName.trim(),
               englishDescription: formData.englishDescription?.trim() || '',
               hindiDescription: formData.hindiDescription?.trim() || '',
               altHindiName: formData.altHindiName?.trim() || '',
+              altHindiName2: formData.altHindiName2?.trim() || '',
               altEnglishName1: formData.altEnglishName1?.trim() || '',
               altEnglishName2: formData.altEnglishName2?.trim() || '',
               updatedAt: new Date().toISOString(),
@@ -1344,6 +1417,11 @@ export default function SettingsPage() {
                       <div key={mapping.id} className="rounded border border-slate-200 p-3 text-sm">
                         <div className="flex justify-between items-start">
                           <div className="flex-1">
+                            {mapping.rawName && (
+                              <p className="text-xs font-semibold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 inline-block mb-1">
+                                Raw Input: {mapping.rawName} {mapping.rawDescription ? `(${mapping.rawDescription})` : ''}
+                              </p>
+                            )}
                             <p className="font-medium">
                               <span className="text-slate-500">English:</span> {mapping.englishName}
                             </p>
@@ -1360,14 +1438,14 @@ export default function SettingsPage() {
                                 <span className="font-medium text-slate-400">विवरण:</span> {mapping.hindiDescription}
                               </p>
                             )}
-                             {mapping.altHindiName && (
+                            {(mapping.altHindiName || mapping.altHindiName2) && (
                               <p className="text-xs text-slate-500 mt-1 ml-4">
-                                <span className="font-medium text-blue-500">Alt Hindi:</span> {mapping.altHindiName}
+                                <span className="font-medium text-blue-500">Alt Hindi:</span> {[mapping.altHindiName, mapping.altHindiName2].filter(Boolean).join(' | ') || 'None'}
                               </p>
                             )}
                             {(mapping.altEnglishName1 || mapping.altEnglishName2) && (
                               <p className="text-xs text-slate-500 mt-0.5 ml-4">
-                                <span className="font-medium text-blue-500">Alt English:</span> {[mapping.altEnglishName1, mapping.altEnglishName2].filter(Boolean).join(', ') || 'None'}
+                                <span className="font-medium text-blue-500">Alt English:</span> {[mapping.altEnglishName1, mapping.altEnglishName2].filter(Boolean).join(' | ') || 'None'}
                               </p>
                             )}
                             <p className="mt-2 text-xs text-slate-400">
@@ -1997,6 +2075,51 @@ export default function SettingsPage() {
             
             {dialogType !== 'purpose' && (
               <>
+                {/* Raw Input Section */}
+                <div className="space-y-3 p-3.5 bg-amber-50/40 rounded-xl border border-amber-200/60">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold text-amber-900 uppercase tracking-wider">Raw Original Input (Given by User)</h4>
+                    <span className="text-[10px] text-amber-700 bg-amber-100 px-2 py-0.5 rounded font-medium">Original Input</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="rawName" className="text-xs font-semibold uppercase tracking-wider text-slate-600">
+                      Raw Item Name
+                    </Label>
+                    <Input
+                      id="rawName"
+                      className="focus-visible:ring-amber-500 border-amber-200 h-9 rounded-lg bg-white shadow-xs text-xs font-medium"
+                      value={formData.rawName || ''}
+                      onChange={(e) => setFormData({ ...formData, rawName: e.target.value })}
+                      placeholder="e.g., Safety goggles 30 nos HDPE..."
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="rawDescription" className="text-xs font-semibold uppercase tracking-wider text-slate-600">
+                      Raw Description <span className="text-slate-400 font-normal">(Optional)</span>
+                    </Label>
+                    <Textarea
+                      id="rawDescription"
+                      className="focus-visible:ring-amber-500 border-amber-200 rounded-lg bg-white shadow-xs min-h-[50px] text-xs"
+                      value={formData.rawDescription || ''}
+                      onChange={(e) => setFormData({ ...formData, rawDescription: e.target.value })}
+                      placeholder="Raw description or specs as typed by user..."
+                    />
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full h-9 border-amber-300 hover:border-amber-400 hover:bg-amber-100 text-amber-900 font-bold rounded-lg shadow-xs transition-all flex items-center justify-center gap-2 text-xs"
+                    loading={generatingHindi}
+                    disabled={generatingHindi}
+                    onClick={handleGenerateAllFromRaw}
+                  >
+                    {!generatingHindi && <Sparkles className="h-4 w-4 text-amber-600" />}
+                    Generate Full Item Pack with AI (English, Hindi & Alternates)
+                  </Button>
+                </div>
+
+                {/* Primary English Section */}
                 <div className="space-y-4 p-3 bg-slate-50/50 rounded-xl border border-slate-100/80">
                   <div className="space-y-1.5">
                     <Label htmlFor="englishName" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
@@ -2032,7 +2155,7 @@ export default function SettingsPage() {
                     <Button
                       type="button"
                       variant="outline"
-                      className="w-full h-10 border-blue-200 hover:border-blue-300 hover:bg-blue-50 text-blue-600 font-semibold rounded-lg shadow-sm transition-all flex items-center justify-center gap-2"
+                      className="w-full h-9 border-blue-200 hover:border-blue-300 hover:bg-blue-50 text-blue-600 font-semibold rounded-lg shadow-sm transition-all flex items-center justify-center gap-2 text-xs"
                       loading={generatingHindi}
                       disabled={generatingHindi}
                       onClick={handleGenerateAllHindi}
@@ -2046,7 +2169,7 @@ export default function SettingsPage() {
                     <Button
                       type="button"
                       variant="outline"
-                      className="w-full h-10 border-emerald-200 hover:border-emerald-300 hover:bg-emerald-50 text-emerald-700 font-semibold rounded-lg shadow-sm transition-all flex items-center justify-center gap-2"
+                      className="w-full h-9 border-emerald-200 hover:border-emerald-300 hover:bg-emerald-50 text-emerald-700 font-semibold rounded-lg shadow-sm transition-all flex items-center justify-center gap-2 text-xs"
                       loading={generatingHindi}
                       disabled={generatingHindi}
                       onClick={handleGenerateEnglishFromHindi}
@@ -2057,6 +2180,7 @@ export default function SettingsPage() {
                   )}
                 </div>
 
+                {/* Primary Hindi Section */}
                 <div className="space-y-4 p-3 bg-slate-50/50 rounded-xl border border-slate-100/80">
                   <div className="space-y-1.5">
                     <Label htmlFor="hindiName" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
@@ -2090,43 +2214,60 @@ export default function SettingsPage() {
                   <div className="space-y-4 p-3 bg-blue-50/20 rounded-xl border border-blue-100/80">
                     <h4 className="text-xs font-bold text-blue-600 uppercase tracking-wider">Alternative Names (for alternate bidding firms)</h4>
                     
-                    <div className="space-y-1.5">
-                      <Label htmlFor="altHindiName" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                        Alternative Hindi Name <span className="text-slate-400 font-normal">(Optional)</span>
-                      </Label>
-                      <Input
-                        id="altHindiName"
-                        className="focus-visible:ring-blue-500 border-slate-200 h-10 rounded-lg bg-white shadow-sm"
-                        value={formData.altHindiName || ''}
-                        onChange={(e) => setFormData({ ...formData, altHindiName: e.target.value })}
-                        placeholder="e.g., प्लास्टिक डस्टबिन"
-                      />
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="altHindiName" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                          Alt Hindi Name 1 <span className="text-slate-400 font-normal">(Medium)</span>
+                        </Label>
+                        <Input
+                          id="altHindiName"
+                          className="focus-visible:ring-blue-500 border-slate-200 h-9 rounded-lg bg-white shadow-xs text-xs"
+                          value={formData.altHindiName || ''}
+                          onChange={(e) => setFormData({ ...formData, altHindiName: e.target.value })}
+                          placeholder="e.g., प्लास्टिक डस्टबिन"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <Label htmlFor="altHindiName2" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                          Alt Hindi Name 2 <span className="text-slate-400 font-normal">(Short)</span>
+                        </Label>
+                        <Input
+                          id="altHindiName2"
+                          className="focus-visible:ring-blue-500 border-slate-200 h-9 rounded-lg bg-white shadow-xs text-xs"
+                          value={formData.altHindiName2 || ''}
+                          onChange={(e) => setFormData({ ...formData, altHindiName2: e.target.value })}
+                          placeholder="e.g., डस्टबिन 12L"
+                        />
+                      </div>
                     </div>
 
-                    <div className="space-y-1.5">
-                      <Label htmlFor="altEnglishName1" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                        Alternative English Name 1 <span className="text-slate-400 font-normal">(Optional)</span>
-                      </Label>
-                      <Input
-                        id="altEnglishName1"
-                        className="focus-visible:ring-blue-500 border-slate-200 h-10 rounded-lg bg-white shadow-sm"
-                        value={formData.altEnglishName1 || ''}
-                        onChange={(e) => setFormData({ ...formData, altEnglishName1: e.target.value })}
-                        placeholder="e.g., Plastic Waste Bin"
-                      />
-                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="altEnglishName1" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                          Alt English Name 1 <span className="text-slate-400 font-normal">(Medium)</span>
+                        </Label>
+                        <Input
+                          id="altEnglishName1"
+                          className="focus-visible:ring-blue-500 border-slate-200 h-9 rounded-lg bg-white shadow-xs text-xs"
+                          value={formData.altEnglishName1 || ''}
+                          onChange={(e) => setFormData({ ...formData, altEnglishName1: e.target.value })}
+                          placeholder="e.g., Plastic Waste Bin"
+                        />
+                      </div>
 
-                    <div className="space-y-1.5">
-                      <Label htmlFor="altEnglishName2" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                        Alternative English Name 2 <span className="text-slate-400 font-normal">(Optional)</span>
-                      </Label>
-                      <Input
-                        id="altEnglishName2"
-                        className="focus-visible:ring-blue-500 border-slate-200 h-10 rounded-lg bg-white shadow-sm"
-                        value={formData.altEnglishName2 || ''}
-                        onChange={(e) => setFormData({ ...formData, altEnglishName2: e.target.value })}
-                        placeholder="e.g., 12L Garbage Bin"
-                      />
+                      <div className="space-y-1.5">
+                        <Label htmlFor="altEnglishName2" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                          Alt English Name 2 <span className="text-slate-400 font-normal">(Short)</span>
+                        </Label>
+                        <Input
+                          id="altEnglishName2"
+                          className="focus-visible:ring-blue-500 border-slate-200 h-9 rounded-lg bg-white shadow-xs text-xs"
+                          value={formData.altEnglishName2 || ''}
+                          onChange={(e) => setFormData({ ...formData, altEnglishName2: e.target.value })}
+                          placeholder="e.g., 12L Garbage Bin"
+                        />
+                      </div>
                     </div>
                   </div>
                 )}
@@ -2462,11 +2603,29 @@ export default function SettingsPage() {
                     id="tplDocType"
                     className="w-full focus-visible:ring-blue-500 border border-slate-200 h-9 rounded-lg bg-white px-3 shadow-sm text-sm"
                     value={templateFormData.docType}
-                    onChange={(e) => setTemplateFormData({ ...templateFormData, docType: e.target.value as any })}
+                    onChange={(e) => {
+                      const newDocType = e.target.value as any;
+                      const isTargetBill = newDocType === 'firm_bill';
+                      const isPrevBill = templateFormData.docType === 'firm_bill';
+                      
+                      let newContent = templateFormData.content;
+                      if (isTargetBill && !isPrevBill) {
+                        newContent = getSampleBillTemplate();
+                      } else if (!isTargetBill && isPrevBill) {
+                        newContent = getSampleQuotationTemplate(templateFormData.language);
+                      }
+
+                      setTemplateFormData({
+                        ...templateFormData,
+                        docType: newDocType,
+                        content: newContent,
+                      });
+                    }}
                   >
                     <option value="quotation_main">Quotation - Main</option>
                     <option value="quotation_alt_1">Quotation - Alt A</option>
                     <option value="quotation_alt_2">Quotation - Alt B</option>
+                    <option value="firm_bill">Bill / Invoice</option>
                   </select>
                 </div>
 
@@ -2481,7 +2640,8 @@ export default function SettingsPage() {
                     onChange={(e) => {
                       const newLang = e.target.value as any;
                       const prevLang = templateFormData.language;
-                      const prevDefault = getSampleQuotationTemplate(prevLang);
+                      const isBill = templateFormData.docType === 'firm_bill';
+                      const prevDefault = isBill ? getSampleBillTemplate() : getSampleQuotationTemplate(prevLang);
                       const shouldAutoSwitch = !templateFormData.content?.trim() || templateFormData.content.trim() === prevDefault.trim();
                       
                       // Auto-switch default font based on language choice too
@@ -2490,7 +2650,7 @@ export default function SettingsPage() {
                       setTemplateFormData({
                         ...templateFormData,
                         language: newLang,
-                        content: shouldAutoSwitch ? getSampleQuotationTemplate(newLang) : templateFormData.content,
+                        content: shouldAutoSwitch ? (isBill ? getSampleBillTemplate() : getSampleQuotationTemplate(newLang)) : templateFormData.content,
                         fontFamily: targetFont,
                       });
                     }}
@@ -2530,14 +2690,30 @@ export default function SettingsPage() {
               <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Available Variables (Click to copy)</p>
                 <div className="flex flex-wrap gap-1.5">
-                  {[
+                  {(templateFormData.docType === 'firm_bill' ? [
+                    { tag: '{{invoiceNumber}}', desc: 'Invoice No' },
+                    { tag: '{{invoiceDate}}', desc: 'Invoice Date' },
+                    { tag: '{{recipientDesignation}}', desc: 'Recipient Designation' },
+                    { tag: '{{recipientDepartment}}', desc: 'Recipient Dept' },
+                    { tag: '{{recipientDistrict}}', desc: 'Recipient Distt' },
+                    { tag: '{{firmName}}', desc: 'Firm Name' },
+                    { tag: '{{bankName}}', desc: 'Bank Name' },
+                    { tag: '{{bankBranch}}', desc: 'Bank Branch' },
+                    { tag: '{{ifscCode}}', desc: 'IFSC Code' },
+                    { tag: '{{accountNumber}}', desc: 'Account No' },
+                    { tag: '{{panNumber}}', desc: 'PAN No' },
+                    { tag: '{{itemRows}}', desc: 'Item Rows' },
+                    { tag: '{{subtotal}}', desc: 'Subtotal' },
+                    { tag: '{{grandTotal}}', desc: 'Grand Total' },
+                    { tag: '{{amountInWords}}', desc: 'Amount in Words' },
+                  ] : [
                     { tag: '{{tenderNumber}}', desc: 'Tender No' },
                     { tag: '{{placeName}}', desc: 'Location' },
                     { tag: '{{districtName}}', desc: 'District' },
                     { tag: '{{subject}}', desc: 'Subject' },
                     { tag: '{{firmName}}', desc: 'Firm Name' },
                     { tag: '{{items}}', desc: 'Items List' },
-                  ].map((item) => (
+                  ]).map((item) => (
                     <button
                       key={item.tag}
                       type="button"

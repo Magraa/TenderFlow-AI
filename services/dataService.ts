@@ -13,6 +13,7 @@ import {
   TenderDocument,
   TenderItem,
   CustomTemplate,
+  Bill,
 } from '@/types';
 
 import { db } from '@/services/db';
@@ -152,6 +153,15 @@ export const dataService = {
     update: (id: string, data: Partial<Omit<CustomTemplate, 'id' | 'createdAt'>>) =>
       db.updateCustomTemplate(id, data),
     delete: (id: string) => db.deleteCustomTemplate(id),
+  },
+
+  // Bills
+  bills: {
+    create: (data: Omit<Bill, 'id' | 'createdAt' | 'updatedAt'>) => db.createBill(data),
+    get: (id: string) => db.getBill(id),
+    list: () => db.listBills(),
+    update: (id: string, data: Partial<Omit<Bill, 'id' | 'createdAt'>>) => db.updateBill(id, data),
+    delete: (id: string) => db.deleteBill(id),
   },
 };
 

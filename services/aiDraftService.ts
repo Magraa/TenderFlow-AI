@@ -304,20 +304,20 @@ async function buildContentPages(
             let productName = rawName;
             if (matchedMapping) {
               if (language === 'hindi') {
-                if (request.docType === 'quotation_main') {
+                if (request.docType === 'quotation_main' || request.docType === 'supply_aadesh') {
                   productName = matchedMapping.hindiName;
                 } else if (request.docType === 'quotation_alt_1') {
                   productName = matchedMapping.altHindiName || matchedMapping.hindiName;
                 } else if (request.docType === 'quotation_alt_2') {
-                  productName = matchedMapping.altHindiName || matchedMapping.hindiName;
+                  productName = matchedMapping.altHindiName2 || matchedMapping.altHindiName || matchedMapping.hindiName;
                 }
               } else {
-                if (request.docType === 'quotation_main') {
+                if (request.docType === 'quotation_main' || request.docType === 'supply_aadesh') {
                   productName = matchedMapping.englishName;
                 } else if (request.docType === 'quotation_alt_1') {
                   productName = matchedMapping.altEnglishName1 || matchedMapping.englishName;
                 } else if (request.docType === 'quotation_alt_2') {
-                  productName = matchedMapping.altEnglishName2 || matchedMapping.englishName;
+                  productName = matchedMapping.altEnglishName2 || matchedMapping.altEnglishName1 || matchedMapping.englishName;
                 }
               }
             }
@@ -350,17 +350,21 @@ async function buildContentPages(
 
                 if (matchedMapping) {
                   if (customTpl.language === 'hindi') {
-                    productName = matchedMapping.hindiName;
-                    if (request.docType === 'quotation_alt_1' || request.docType === 'quotation_alt_2') {
+                    if (request.docType === 'quotation_alt_1') {
                       productName = matchedMapping.altHindiName || matchedMapping.hindiName;
+                    } else if (request.docType === 'quotation_alt_2') {
+                      productName = matchedMapping.altHindiName2 || matchedMapping.altHindiName || matchedMapping.hindiName;
+                    } else {
+                      productName = matchedMapping.hindiName;
                     }
                     description = matchedMapping.hindiDescription || item.description || '';
                   } else {
-                    productName = matchedMapping.englishName;
                     if (request.docType === 'quotation_alt_1') {
                       productName = matchedMapping.altEnglishName1 || matchedMapping.englishName;
                     } else if (request.docType === 'quotation_alt_2') {
-                      productName = matchedMapping.altEnglishName2 || matchedMapping.englishName;
+                      productName = matchedMapping.altEnglishName2 || matchedMapping.altEnglishName1 || matchedMapping.englishName;
+                    } else {
+                      productName = matchedMapping.englishName;
                     }
                     description = matchedMapping.englishDescription || item.description || '';
                   }

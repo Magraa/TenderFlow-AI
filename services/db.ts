@@ -81,7 +81,12 @@ type ExposedKeys =
   | 'getCustomTemplate'
   | 'listCustomTemplates'
   | 'updateCustomTemplate'
-  | 'deleteCustomTemplate';
+  | 'deleteCustomTemplate'
+  | 'createBill'
+  | 'getBill'
+  | 'listBills'
+  | 'updateBill'
+  | 'deleteBill';
 
 
 type DbAdapter = {
@@ -196,5 +201,12 @@ export const db: DbAdapter = {
   listCustomTemplates: async (...args) => (await getAdapter()).listCustomTemplates(...args),
   updateCustomTemplate: async (...args) => (await getAdapter()).updateCustomTemplate(...args),
   deleteCustomTemplate: async (...args) => (await getAdapter()).deleteCustomTemplate(...args),
+
+  // Bills
+  createBill: async (...args) => (await getAdapter()).createBill(...args),
+  getBill: async (...args) => (await getAdapter()).getBill(...args),
+  listBills: async (...args) => (await getAdapter()).listBills(...args),
+  updateBill: async (...args) => (await getAdapter()).updateBill(...args),
+  deleteBill: async (...args) => (await getAdapter()).deleteBill(...args),
 };
 

@@ -375,24 +375,37 @@ export function ProfessionalTenderForm() {
               }
             }
 
-            // Generate alternative names using the alternates generator endpoint
+            // Generate alternative names and complete mapping pack using AI
             let altHindiName = '';
+            let altHindiName2 = '';
             let altEnglishName1 = '';
             let altEnglishName2 = '';
+            let genEnglishName = englishName;
+            let genEnglishDesc = englishDescription;
+            let genHindiName = hindiName;
+            let genHindiDesc = hindiDescription;
+
             try {
               const altResponse = await fetch('/api/ai/generate-alternates', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                  itemName: isInputHindi ? inputName : englishName,
+                  rawName: inputName,
+                  rawDescription: item.description?.trim() || '',
+                  itemName: inputName,
                   description: item.description?.trim() || '',
                 }),
               });
               if (altResponse.ok) {
                 const altData = await altResponse.json();
-                altHindiName = altData.altHindi || '';
-                altEnglishName1 = altData.altEnglish1 || '';
-                altEnglishName2 = altData.altEnglish2 || '';
+                if (altData.englishName) genEnglishName = altData.englishName;
+                if (altData.englishDescription) genEnglishDesc = altData.englishDescription;
+                if (altData.hindiName) genHindiName = altData.hindiName;
+                if (altData.hindiDescription) genHindiDesc = altData.hindiDescription;
+                altHindiName = altData.altHindiName || altData.altHindi || '';
+                altHindiName2 = altData.altHindiName2 || '';
+                altEnglishName1 = altData.altEnglishName1 || altData.altEnglish1 || '';
+                altEnglishName2 = altData.altEnglishName2 || altData.altEnglish2 || '';
               }
             } catch (err) {
               console.error('Failed to generate alternate names:', err);
@@ -400,11 +413,14 @@ export function ProfessionalTenderForm() {
 
             // Save new item Hindi mapping
             await dataService.itemHindiMappings.create({
-              englishName,
-              hindiName,
-              englishDescription,
-              hindiDescription,
+              rawName: inputName,
+              rawDescription: item.description?.trim() || '',
+              englishName: genEnglishName,
+              hindiName: genHindiName,
+              englishDescription: genEnglishDesc,
+              hindiDescription: genHindiDesc,
               altHindiName,
+              altHindiName2,
               altEnglishName1,
               altEnglishName2,
               type: 'item',
@@ -416,6 +432,8 @@ export function ProfessionalTenderForm() {
             const patch: any = {
               usageCount: (matched.usageCount || 0) + 1,
             };
+            if (!matched.rawName) patch.rawName = inputName;
+            if (!matched.rawDescription && item.description) patch.rawDescription = item.description.trim();
 
             const inputDesc = item.description?.trim() || '';
             if (inputDesc && (!matched.englishDescription || !matched.hindiDescription)) {
@@ -455,22 +473,25 @@ export function ProfessionalTenderForm() {
             }
 
             // Generate alternative names if missing
-            const needsAlternatesUpdate = !matched.altHindiName || !matched.altEnglishName1 || !matched.altEnglishName2;
+            const needsAlternatesUpdate = !matched.altHindiName || !matched.altHindiName2 || !matched.altEnglishName1 || !matched.altEnglishName2;
             if (needsAlternatesUpdate) {
               try {
                 const altResponse = await fetch('/api/ai/generate-alternates', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
+                    rawName: matched.rawName || inputName,
+                    rawDescription: matched.rawDescription || inputDesc,
                     itemName: matched.hindiName || inputName,
                     description: inputDesc || matched.englishDescription || '',
                   }),
                 });
                 if (altResponse.ok) {
                   const altData = await altResponse.json();
-                  patch.altHindiName = altData.altHindi || '';
-                  patch.altEnglishName1 = altData.altEnglish1 || '';
-                  patch.altEnglishName2 = altData.altEnglish2 || '';
+                  patch.altHindiName = altData.altHindiName || altData.altHindi || matched.altHindiName || '';
+                  patch.altHindiName2 = altData.altHindiName2 || matched.altHindiName2 || '';
+                  patch.altEnglishName1 = altData.altEnglishName1 || altData.altEnglish1 || matched.altEnglishName1 || '';
+                  patch.altEnglishName2 = altData.altEnglishName2 || altData.altEnglish2 || matched.altEnglishName2 || '';
                 }
               } catch (err) {
                 console.error('Failed to update alternate names:', err);

@@ -148,7 +148,7 @@ migrateImages()
 
 ```javascript
 // Tenders collection
-match /tap/{namespace}/tenders/{tenderId} {
+match /tenders/{tenderId} {
   allow read: if isAuthenticated();
   allow create: if isValidTender() && isAuthenticated();
   allow update: if isAuthenticated() && isOwner(tenderId);
@@ -156,7 +156,7 @@ match /tap/{namespace}/tenders/{tenderId} {
 }
 
 // Firms collection
-match /tap/{namespace}/firms/{firmId} {
+match /firms/{firmId} {
   allow read: if isAuthenticated();
   allow create: if isValidFirm() && isAuthenticated();
   allow update: if isAuthenticated() && isOwner(firmId);
@@ -164,7 +164,7 @@ match /tap/{namespace}/firms/{firmId} {
 }
 
 // Documents collection
-match /tap/{namespace}/documents/{documentId} {
+match /documents/{documentId} {
   allow read: if isAuthenticated();
   allow create: if isValidDocument() && isAuthenticated();
   allow update: if isAuthenticated() && isOwner(documentId);

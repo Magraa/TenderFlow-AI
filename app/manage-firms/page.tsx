@@ -872,11 +872,34 @@ export default function ManageFirmsPage() {
                       }
                     >
                       <option value="">-- Use Standard System Template --</option>
-                      {customTemplates.map((template) => (
-                        <option key={template.id} value={template.id}>
-                          {template.name} ({template.language === 'hindi' ? 'Hindi' : 'English'} - {template.docType === 'quotation_main' ? 'Main' : template.docType === 'quotation_alt_1' ? 'Alt A' : 'Alt B'})
-                        </option>
-                      ))}
+                      {customTemplates
+                        .filter((t) => t.docType !== 'firm_bill')
+                        .map((template) => (
+                          <option key={template.id} value={template.id}>
+                            {template.name} ({template.language === 'hindi' ? 'Hindi' : 'English'} - {template.docType === 'quotation_main' ? 'Main' : template.docType === 'quotation_alt_1' ? 'Alt A' : 'Alt B'})
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="custom-bill-template">Custom Bill Template (Optional)</Label>
+                    <select
+                      id="custom-bill-template"
+                      className="h-10 w-full rounded-md border border-slate-300 px-3 py-2 text-sm bg-white"
+                      value={formData.customBillTemplateId || ''}
+                      onChange={(event) =>
+                        setFormData({ ...formData, customBillTemplateId: event.target.value })
+                      }
+                    >
+                      <option value="">-- Use Standard System Bill Template --</option>
+                      {customTemplates
+                        .filter((t) => t.docType === 'firm_bill')
+                        .map((template) => (
+                          <option key={template.id} value={template.id}>
+                            {template.name} ({template.language === 'hindi' ? 'Hindi' : 'English'})
+                          </option>
+                        ))}
                     </select>
                   </div>
 

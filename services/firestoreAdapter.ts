@@ -29,6 +29,7 @@ import {
   TenderDocument,
   TenderItem,
   CustomTemplate,
+  Bill,
 } from '@/types';
 
 import { getFirebaseFirestore } from '@/services/firebase/firebaseClient';
@@ -67,6 +68,7 @@ type Collections = {
   aiLocationCache: AILocationCache;
   documentPhraseMappings: DocumentPhraseMapping;
   customTemplates: CustomTemplate;
+  bills: Bill;
 };
 
 
@@ -139,16 +141,15 @@ function normalizeFirmLayoutFields(
 }
 
 function collectionPath(name: CollectionName): string {
-  // Scope everything under a single app namespace to avoid collisions in shared projects.
-  return `tap/${process.env.NEXT_PUBLIC_FIRESTORE_NAMESPACE || 'default'}/${name}`;
+  return name;
 }
 
 function settingsDocPath(): string {
-  return `tap/${process.env.NEXT_PUBLIC_FIRESTORE_NAMESPACE || 'default'}/settings/default`;
+  return 'settings/default';
 }
 
 function mappingsCollectionPath(type: 'purpose' | 'item' | 'vendor'): string {
-  return `tap/${process.env.NEXT_PUBLIC_FIRESTORE_NAMESPACE || 'default'}/${type}HindiMappings`;
+  return `${type}HindiMappings`;
 }
 
 export class FirestoreDB {
@@ -866,5 +867,30 @@ export class FirestoreDB {
 
   async deleteCustomTemplate(id: string): Promise<boolean> {
     return this.deleteEntity('customTemplates', id);
+  }
+
+  // ─── Bills ─────────────────────────────────────────────────────────────
+
+  async createBill(data: Omit<Bill, 'id' | 'createdAt' | 'updatedAt'>): Promise<Bill> {
+    return this.createEntity('bills', data);
+  }
+
+  async getBill(id: string): Promise<Bill | undefined> {
+    return this.getEntity('bills', id);
+  }
+
+  async listBills(): Promise<Bill[]> {
+    return this.listEntities('bills');
+  }
+
+  async updateBill(
+    id: string,
+    data: Partial<Omit<Bill, 'id' | 'createdAt'>>
+  ): Promise<Bill | undefined> {
+    return this.updateEntity('bills', id, data as any);
+  }
+
+  async deleteBill(id: string): Promise<boolean> {
+    return this.deleteEntity('bills', id);
   }
 }

@@ -39,11 +39,14 @@ export interface PurposeMapping extends BaseEntity {
 }
 
 export interface HindiMapping extends BaseEntity {
+  rawName?: string;
+  rawDescription?: string;
   englishName: string;
   hindiName: string;
   englishDescription?: string;
   hindiDescription?: string;
   altHindiName?: string;
+  altHindiName2?: string;
   altEnglishName1?: string;
   altEnglishName2?: string;
   type: 'item' | 'vendor';
@@ -215,6 +218,43 @@ export interface Firm extends BaseEntity {
   panNumber?: string;
   billInstructions?: string;
   customQuotationTemplateId?: string;
+  customBillTemplateId?: string;
+}
+
+export interface BillItem {
+  id: string;
+  productName: string;
+  description?: string;
+  quantity: number;
+  unit?: string;
+  rate: number;
+  amount: number;
+}
+
+export interface Bill extends BaseEntity {
+  invoiceNumber: string;
+  invoiceDate: string;
+  firmId: string;
+  customTemplateId?: string;
+  recipientDesignation: string;
+  recipientDepartment: string;
+  recipientDistrict: string;
+  recipientAddress?: string;
+  items: BillItem[];
+  sgstPercent: number;
+  cgstPercent: number;
+  igstPercent: number;
+  totalAmount: number;
+  sgstAmount: number;
+  cgstAmount: number;
+  igstAmount: number;
+  grandTotal: number;
+  amountInWords: string;
+  status: 'draft' | 'final';
+  showLetterheadBackground?: boolean;
+  includeSignature?: boolean;
+  includeStamp?: boolean;
+  notes?: string;
 }
 
 export interface DocumentVersion extends BaseEntity {

@@ -16,6 +16,7 @@ import {
   TenderDocument,
   TenderItem,
   CustomTemplate,
+  Bill,
 } from '@/types';
 import {
   Database,
@@ -134,11 +135,14 @@ function normalizePurposeMapping(mapping: Partial<PurposeMapping>): PurposeMappi
 function normalizeHindiMapping(mapping: Partial<HindiMapping>, type: 'item' | 'vendor'): HindiMapping {
   return {
     id: toSafeString(mapping.id, uuid()),
+    rawName: toSafeString(mapping.rawName, ''),
+    rawDescription: toSafeString(mapping.rawDescription, ''),
     englishName: toSafeString(mapping.englishName, ''),
     hindiName: toSafeString(mapping.hindiName, ''),
     englishDescription: toSafeString(mapping.englishDescription, ''),
     hindiDescription: toSafeString(mapping.hindiDescription, ''),
     altHindiName: toSafeString(mapping.altHindiName, ''),
+    altHindiName2: toSafeString(mapping.altHindiName2, ''),
     altEnglishName1: toSafeString(mapping.altEnglishName1, ''),
     altEnglishName2: toSafeString(mapping.altEnglishName2, ''),
     type,
@@ -206,6 +210,49 @@ function normalizeCustomTemplate(template: Partial<CustomTemplate>): CustomTempl
     fontFamily: toSafeString(template.fontFamily, 'Noto Sans Devanagari'),
     createdAt: toSafeString(template.createdAt, nowIso()),
     updatedAt: toSafeString(template.updatedAt, nowIso()),
+  };
+}
+
+function normalizeBill(bill: Partial<Bill>): Bill {
+  const items = Array.isArray(bill.items)
+    ? bill.items.map((item) => ({
+        id: toSafeString(item.id, uuid()),
+        productName: toSafeString(item.productName, 'Item'),
+        description: toSafeString(item.description, ''),
+        quantity: toSafeNumber(item.quantity, 1),
+        unit: toSafeString(item.unit, 'nos'),
+        rate: toSafeNumber(item.rate, 0),
+        amount: toSafeNumber(item.amount, (toSafeNumber(item.quantity, 1) * toSafeNumber(item.rate, 0))),
+      }))
+    : [];
+
+  return {
+    id: toSafeString(bill.id, uuid()),
+    invoiceNumber: toSafeString(bill.invoiceNumber, ''),
+    invoiceDate: toSafeString(bill.invoiceDate, new Date().toISOString().split('T')[0]),
+    firmId: toSafeString(bill.firmId, ''),
+    customTemplateId: toSafeString(bill.customTemplateId, ''),
+    recipientDesignation: toSafeString(bill.recipientDesignation, 'Chief Municipal Officer'),
+    recipientDepartment: toSafeString(bill.recipientDepartment, 'City Council'),
+    recipientDistrict: toSafeString(bill.recipientDistrict, 'District'),
+    recipientAddress: toSafeString(bill.recipientAddress, ''),
+    items,
+    sgstPercent: toSafeNumber(bill.sgstPercent, 9),
+    cgstPercent: toSafeNumber(bill.cgstPercent, 9),
+    igstPercent: toSafeNumber(bill.igstPercent, 0),
+    totalAmount: toSafeNumber(bill.totalAmount, 0),
+    sgstAmount: toSafeNumber(bill.sgstAmount, 0),
+    cgstAmount: toSafeNumber(bill.cgstAmount, 0),
+    igstAmount: toSafeNumber(bill.igstAmount, 0),
+    grandTotal: toSafeNumber(bill.grandTotal, 0),
+    amountInWords: toSafeString(bill.amountInWords, ''),
+    status: bill.status === 'final' ? 'final' : 'draft',
+    showLetterheadBackground: bill.showLetterheadBackground ?? true,
+    includeSignature: bill.includeSignature ?? true,
+    includeStamp: bill.includeStamp ?? true,
+    notes: toSafeString(bill.notes, ''),
+    createdAt: toSafeString(bill.createdAt, nowIso()),
+    updatedAt: toSafeString(bill.updatedAt, nowIso()),
   };
 }
 
@@ -466,6 +513,7 @@ function normalizeDatabase(raw: unknown): Database {
       ? parsed.documentPhraseMappings.map((m: any) => normalizeDocumentPhraseMapping(m))
       : [],
     customTemplates,
+    bills: Array.isArray(parsed.bills) ? parsed.bills.map((b: any) => normalizeBill(b)) : [],
   };
 }
 
@@ -1196,6 +1244,46 @@ class LocalStorageDB {
     if (index === -1) return false;
     arr.splice(index, 1);
     this.db.customTemplates = arr;
+    this.saveToStorage(this.db);
+    return true;
+  }
+
+  // ─── Bills CRUD ──────────────────────────────────────────────
+
+  createBill(data: Omit<Bill, 'id' | 'createdAt' | 'updatedAt'>): Bill {
+    const createdAt = nowIso();
+    const bill = normalizeBill({ ...data, id: uuid(), createdAt, updatedAt: createdAt });
+    if (!this.db.bills) this.db.bills = [];
+    this.db.bills.unshift(bill);
+    this.saveToStorage(this.db);
+    return bill;
+  }
+
+  getBill(id: string): Bill | undefined {
+    return (this.db.bills || []).find((b) => b.id === id);
+  }
+
+  listBills(): Bill[] {
+    return [...(this.db.bills || [])];
+  }
+
+  updateBill(id: string, data: Partial<Omit<Bill, 'id' | 'createdAt'>>): Bill | undefined {
+    const arr = this.db.bills || [];
+    const index = arr.findIndex((b) => b.id === id);
+    if (index === -1) return undefined;
+    const updated = normalizeBill({ ...arr[index], ...data, id, updatedAt: nowIso() });
+    arr[index] = updated;
+    this.db.bills = arr;
+    this.saveToStorage(this.db);
+    return updated;
+  }
+
+  deleteBill(id: string): boolean {
+    const arr = this.db.bills || [];
+    const index = arr.findIndex((b) => b.id === id);
+    if (index === -1) return false;
+    arr.splice(index, 1);
+    this.db.bills = arr;
     this.saveToStorage(this.db);
     return true;
   }

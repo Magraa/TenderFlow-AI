@@ -9,6 +9,7 @@ import {
   Tender,
   TenderDocument,
   CustomTemplate,
+  Bill,
 } from '@/types';
 import { defaultVersioningSettings } from '@/services/versioningSettings';
 
@@ -27,6 +28,7 @@ export interface Database {
   aiLocationCache: AILocationCache[];
   documentPhraseMappings: DocumentPhraseMapping[];
   customTemplates: CustomTemplate[];
+  bills: Bill[];
 }
 
 
@@ -129,6 +131,7 @@ export const defaultDatabase: Database = {
   aiLocationCache: [],
   documentPhraseMappings: [],
   customTemplates: [],
+  bills: [],
 };
 
 

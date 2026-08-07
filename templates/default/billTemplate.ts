@@ -79,10 +79,10 @@ export function getSampleBillTemplate(): string {
   </table>
 
   <!-- Proprietor / Signature block -->
-  <div style="margin-top:25px;display:flex;justify-content:flex-end;">
+  <div style="margin-top:20px;display:flex;justify-content:flex-end;">
     <div style="text-align:right;font-weight:bold;font-size:13px;display:inline-block;">
       <div>FOR: {{firmName}}</div>
-      <div style="min-height:50px;margin:4px 0;display:flex;justify-content:flex-end;align-items:center;">
+      <div style="{{signatureBlockStyle}}">
         {{signatureHTML}}
       </div>
       <div>PROPRIETOR</div>
@@ -204,10 +204,15 @@ export function compileBillHTML(
   const grandTotal = subtotal + sgstAmount + cgstAmount + igstAmount;
   const words = bill.amountInWords || numberToWords(grandTotal);
 
-  const signatureHTML =
-    bill.includeSignature !== false && firm?.signatureImagePath
-      ? `<img src="${firm.signatureImagePath}" alt="Signature" style="max-height:55px;width:auto;object-fit:contain;" />`
-      : '';
+  const hasSignature = bill.includeSignature !== false && Boolean(firm?.signatureImagePath);
+  const signatureHTML = hasSignature
+    ? `<img src="${firm!.signatureImagePath}" alt="Signature" style="max-height:55px;width:auto;object-fit:contain;" />`
+    : '';
+  // When a signature image exists, pull it up so it overlaps the "FOR: {{firmName}}"
+  // line closely instead of leaving a large empty gap above "PROPRIETOR".
+  const signatureBlockStyle = hasSignature
+    ? 'height:38px;margin:-12px 0 -6px 0;display:flex;justify-content:flex-end;align-items:flex-end;'
+    : 'height:14px;margin:4px 0;display:flex;justify-content:flex-end;align-items:center;';
 
   const recipientLines = bill.recipientAddress?.trim()
     ? bill.recipientAddress.split('\n').map((l) => l.trim()).filter(Boolean)
@@ -240,5 +245,6 @@ export function compileBillHTML(
     .replace(/\{\{igstAmount\}\}/g, igstAmount > 0 ? `Rs. ${igstAmount.toLocaleString('en-IN', { minimumFractionDigits: 1 })}` : '')
     .replace(/\{\{grandTotal\}\}/g, grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 1 }))
     .replace(/\{\{amountInWords\}\}/g, words)
-    .replace(/\{\{signatureHTML\}\}/g, signatureHTML);
+    .replace(/\{\{signatureHTML\}\}/g, signatureHTML)
+    .replace(/\{\{signatureBlockStyle\}\}/g, signatureBlockStyle);
 }

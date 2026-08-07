@@ -77,14 +77,21 @@ export default function BillViewerPage() {
       setIncludeSignature(fetchedBill.includeSignature !== false);
       setIncludeStamp(fetchedBill.includeStamp !== false);
 
-      const [fetchedFirm, fetchedTemplate, firmsList, templatesList, billsList, mappingsList] = await Promise.all([
+      const [fetchedFirm, firmsList, templatesList, billsList, mappingsList] = await Promise.all([
         dataService.firms.get(fetchedBill.firmId),
-        fetchedBill.customTemplateId ? dataService.customTemplates.get(fetchedBill.customTemplateId) : undefined,
         dataService.firms.list(),
         dataService.customTemplates.list(),
         dataService.bills.list(),
         dataService.itemHindiMappings.list(),
       ]);
+
+      // Bills without an explicit template pinned fall back to the firm's
+      // currently configured default bill template (Manage Firms), so older
+      // bills automatically pick up a newer default without needing an edit.
+      const effectiveTemplateId = fetchedBill.customTemplateId || fetchedFirm?.customBillTemplateId;
+      const fetchedTemplate = effectiveTemplateId
+        ? await dataService.customTemplates.get(effectiveTemplateId)
+        : undefined;
 
       if (fetchedFirm) setFirm(fetchedFirm);
       if (fetchedTemplate) setCustomTemplate(fetchedTemplate);
@@ -475,21 +482,40 @@ export default function BillViewerPage() {
             />
           )}
 
-          {/* Stamp Image Overlay if enabled */}
-          {includeStamp && firm?.stampImagePath && (
+          {/* Stamp Overlay if enabled (image or generic text stamp) */}
+          {includeStamp && firm && (firm.stampMode === 'generic' || firm.stampImagePath) && (
             <div
               className="absolute pointer-events-none z-20"
               style={{
                 bottom: `${firm.stampOffsetY || 60}px`,
                 right: `${firm.stampOffsetX || 80}px`,
+                transformOrigin: 'bottom right',
                 transform: `scale(${firm.stampScale || 1})`,
               }}
             >
-              <img
-                src={firm.stampImagePath}
-                alt="Stamp"
-                style={{ maxHeight: '100px', width: 'auto', opacity: 0.85 }}
-              />
+              {firm.stampMode === 'generic' ? (
+                <div
+                  className="w-max max-w-none rounded-md border-2 px-2 py-1 text-right uppercase leading-4"
+                  style={{
+                    borderColor: 'rgba(15, 23, 42, 0.25)',
+                    background: 'rgba(255,255,255,0.7)',
+                    fontSize: '10.5px',
+                    fontWeight: 800,
+                    color: 'rgba(15, 23, 42, 0.9)',
+                  }}
+                >
+                  <div style={{ whiteSpace: 'nowrap' }}>
+                    FOR {(firm.name || '').trim().replace(/\s+/g, ' ').toUpperCase() || 'YOUR FIRM NAME'}
+                  </div>
+                  <div style={{ whiteSpace: 'nowrap' }}>PROPRIETOR</div>
+                </div>
+              ) : (
+                <img
+                  src={firm.stampImagePath}
+                  alt="Stamp"
+                  style={{ maxHeight: '100px', width: 'auto', opacity: 0.85 }}
+                />
+              )}
             </div>
           )}
 

@@ -236,6 +236,8 @@ export interface Bill extends BaseEntity {
   invoiceDate: string;
   firmId: string;
   customTemplateId?: string;
+  /** Present when this bill was generated from a tender's "Main Firm Bill" document tab. */
+  tenderId?: string;
   recipientDesignation: string;
   recipientDepartment: string;
   recipientDistrict: string;

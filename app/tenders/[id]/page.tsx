@@ -2,11 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CustomTemplate, DocumentVersion, Firm, Settings, Tender, TenderDocType, TenderDocument } from '@/types';
+import Link from 'next/link';
+import { Bill, BillItem, CustomTemplate, DocumentVersion, Firm, Settings, Tender, TenderDocType, TenderDocument } from '@/types';
 import { dataService } from '@/services/dataService';
 import { documentService } from '@/services/documentService';
 import { layoutEngine } from '@/services/layoutEngine';
 import { pdfService } from '@/services/pdfService';
+import { numberToWords } from '@/lib/numberToWords';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -50,6 +52,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
   const [altFirmA, setAltFirmA] = useState<Firm | null>(null);
   const [altFirmB, setAltFirmB] = useState<Firm | null>(null);
   const [documents, setDocuments] = useState<TenderDocument[]>([]);
+  const [firmBill, setFirmBill] = useState<Bill | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [customTemplates, setCustomTemplates] = useState<CustomTemplate[]>([]);
   const [selectedTemplateByDocType, setSelectedTemplateByDocType] = useState<Record<TenderDocType, string>>({} as any);
@@ -90,13 +93,14 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
       const altAId = currentTender.alternateFirms?.[0] || '';
       const altBId = currentTender.alternateFirms?.[1] || '';
 
-      const [currentMainFirm, altA, altB, docs, loadedSettings, templates] = await Promise.all([
+      const [currentMainFirm, altA, altB, docs, loadedSettings, templates, allBills] = await Promise.all([
         dataService.firms.get(currentTender.mainFirmId),
         altAId ? dataService.firms.get(altAId) : Promise.resolve(null),
         altBId ? dataService.firms.get(altBId) : Promise.resolve(null),
         dataService.documents.listByTender(id),
         dataService.settings.get(),
         dataService.customTemplates.list(),
+        dataService.bills.list(),
       ]);
 
       if (cancelled) return;
@@ -107,6 +111,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
       setDocuments(docs);
       setSettings(loadedSettings);
       setCustomTemplates(templates || []);
+      setFirmBill(allBills.find((b) => b.tenderId === currentTender.id) || null);
       setLoading(false);
     })();
 
@@ -215,6 +220,118 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
     } finally {
       setGenerating(false);
     }
+  };
+
+  // "Main Firm Bill" is generated/edited as a real Bill record (the same entity the
+  // Bills dashboard uses) instead of a free-text AI-drafted TenderDocument, so it
+  // renders with the firm's configured Bill template and shows up in the Bills list.
+  const generateOrSyncFirmBill = async () => {
+    if (!tender || !mainFirm) return;
+    setGenerating(true);
+    setError('');
+    try {
+      const subtotal = tender.items.reduce((sum, item) => sum + item.quantity * item.rate, 0);
+      const gstTotal = tender.items.reduce(
+        (sum, item) => sum + (item.quantity * item.rate * item.gstPercent) / 100,
+        0
+      );
+      const blendedGstPercent = subtotal > 0 ? (gstTotal / subtotal) * 100 : 0;
+      const halfGstPercent = Math.round((blendedGstPercent / 2) * 100) / 100;
+
+      const billItems: BillItem[] = tender.items.map((item) => ({
+        id: item.id,
+        productName: item.productName,
+        description: item.description || '',
+        quantity: item.quantity,
+        unit: item.unit || 'nos',
+        rate: item.rate,
+        amount: Math.round(item.quantity * item.rate * 100) / 100,
+      }));
+
+      const isHindi = tender.language === 'hindi';
+      const recipientDesignation = isHindi ? 'मुख्य नगर पालिका अधिकारी' : 'Chief Municipal Officer';
+      const recipientDepartment = (isHindi ? 'नगर परिषद ' : 'City Council ') + (tender.placeName || '');
+      const recipientDistrict = (isHindi ? 'जिला ' : 'Distt. ') + (tender.districtName || '');
+      const recipientAddress = [recipientDesignation, recipientDepartment.trim(), recipientDistrict.trim()]
+        .filter((line) => line.trim())
+        .join('\n');
+
+      const sgstAmount = Math.round(((subtotal * halfGstPercent) / 100) * 100) / 100;
+      const cgstAmount = sgstAmount;
+      const grandTotal = subtotal + sgstAmount + cgstAmount;
+      const amountInWords = numberToWords(grandTotal);
+
+      if (firmBill) {
+        const updated = await dataService.bills.update(firmBill.id, {
+          items: billItems,
+          recipientDesignation,
+          recipientDepartment: recipientDepartment.trim(),
+          recipientDistrict: recipientDistrict.trim(),
+          recipientAddress,
+          sgstPercent: halfGstPercent,
+          cgstPercent: halfGstPercent,
+          igstPercent: 0,
+          totalAmount: subtotal,
+          sgstAmount,
+          cgstAmount,
+          igstAmount: 0,
+          grandTotal,
+          amountInWords,
+        });
+        if (updated) setFirmBill(updated);
+      } else {
+        const allBills = await dataService.bills.list();
+        const firmBills = allBills.filter((b) => b.firmId === mainFirm.id);
+        let maxNo = 0;
+        firmBills.forEach((b) => {
+          const num = parseInt((b.invoiceNumber || '').replace(/\D/g, ''), 10);
+          if (!isNaN(num) && num > maxNo) maxNo = num;
+        });
+
+        const created = await dataService.bills.create({
+          invoiceNumber: (maxNo + 1).toString(),
+          invoiceDate: new Date().toISOString().split('T')[0],
+          firmId: mainFirm.id,
+          tenderId: tender.id,
+          recipientDesignation,
+          recipientDepartment: recipientDepartment.trim(),
+          recipientDistrict: recipientDistrict.trim(),
+          recipientAddress,
+          items: billItems,
+          sgstPercent: halfGstPercent,
+          cgstPercent: halfGstPercent,
+          igstPercent: 0,
+          totalAmount: subtotal,
+          sgstAmount,
+          cgstAmount,
+          igstAmount: 0,
+          grandTotal,
+          amountInWords,
+          status: tender.status === 'final' ? 'final' : 'draft',
+          showLetterheadBackground: true,
+          includeSignature: true,
+          includeStamp: true,
+        });
+        setFirmBill(created);
+      }
+
+      setSuccess('Main Firm Bill synced from tender items.');
+      setTimeout(() => setSuccess(''), 2500);
+    } catch (generateError) {
+      const message = generateError instanceof Error ? generateError.message : 'Failed to generate bill.';
+      setError(message);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const handleFirmBillToggle = async (
+    field: 'showLetterheadBackground' | 'includeSignature' | 'includeStamp',
+    value: boolean
+  ) => {
+    if (!firmBill) return;
+    const updated = await dataService.bills.update(firmBill.id, { [field]: value });
+    if (updated) setFirmBill(updated);
   };
 
   const updateDocumentOption = async (docType: TenderDocType, updates: Partial<TenderDocument>) => {
@@ -496,6 +613,94 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
               </TabsList>
 
               {DOC_TYPES.map((docType) => {
+                if (docType === 'firm_bill') {
+                  return (
+                    <TabsContent key={docType} value={docType} className="mt-6 space-y-4">
+                      <p className="text-sm text-slate-500">{DOC_CONFIGS[docType].description}</p>
+                      <p className="text-sm text-slate-500">
+                        Target firm: <strong>{mainFirm?.name || 'N/A'}</strong> — generated as a real Bill using the
+                        firm&apos;s configured Bill template (Manage Firms), so it also appears in the Bills dashboard.
+                      </p>
+
+                      <div className="flex flex-wrap items-center gap-3">
+                        <Button onClick={generateOrSyncFirmBill} loading={generating} disabled={generating}>
+                          {firmBill ? 'Sync From Tender Items' : 'Generate Document'}
+                        </Button>
+                        {firmBill && (
+                          <Link href={`/bills/${firmBill.id}`}>
+                            <Button type="button" variant="outline">Open in Bills →</Button>
+                          </Link>
+                        )}
+                        {firmBill && (
+                          <Link href={`/bills/${firmBill.id}?print=true`} target="_blank">
+                            <Button type="button" variant="outline">Print / Export PDF</Button>
+                          </Link>
+                        )}
+                      </div>
+
+                      {firmBill ? (
+                        <>
+                          <div className="space-y-3 rounded-md border border-slate-200 p-3 text-sm">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="rounded-full bg-emerald-100 px-2 py-1 text-xs text-emerald-700">
+                                Invoice No. {firmBill.invoiceNumber} • {firmBill.status}
+                              </span>
+                              <span className="rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-600">
+                                Grand Total Rs. {firmBill.grandTotal.toLocaleString('en-IN')}
+                              </span>
+                            </div>
+                            <div className="flex flex-wrap gap-4">
+                              <label className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={firmBill.showLetterheadBackground !== false}
+                                  onChange={(event) => handleFirmBillToggle('showLetterheadBackground', event.target.checked)}
+                                />
+                                Show Letterhead Background
+                              </label>
+                              <label className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={firmBill.includeSignature !== false}
+                                  onChange={(event) => handleFirmBillToggle('includeSignature', event.target.checked)}
+                                />
+                                Include Signature
+                              </label>
+                              <label className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={firmBill.includeStamp !== false}
+                                  onChange={(event) => handleFirmBillToggle('includeStamp', event.target.checked)}
+                                />
+                                Include Firm Stamp
+                              </label>
+                            </div>
+                            <p className="text-xs text-slate-500">
+                              Item quantities, rates, and totals are pulled from this tender&apos;s items via &quot;Sync From
+                              Tender Items&quot;. Invoice number, recipient text, and template selection are edited on the Bill
+                              page (Open in Bills →).
+                            </p>
+                          </div>
+
+                          <div>
+                            <p className="mb-2 text-sm font-medium">Preview</p>
+                            <iframe
+                              key={firmBill.id + firmBill.updatedAt}
+                              src={`/bills/${firmBill.id}`}
+                              className="w-full h-[900px] rounded-lg border border-slate-200 bg-white"
+                              title="Main Firm Bill Preview"
+                            />
+                          </div>
+                        </>
+                      ) : (
+                        <div className="rounded-lg border-2 border-dashed border-slate-300 p-10 text-center">
+                          <p className="text-slate-500">No bill generated yet. Click &quot;Generate Document&quot; to create one from this tender&apos;s items.</p>
+                        </div>
+                      )}
+                    </TabsContent>
+                  );
+                }
+
                 const current = getDocument(docType);
                 const targetFirm = getFirmForDocType(docType);
                 const docHistory = current ? historyByDocumentId[current.id] || [] : [];

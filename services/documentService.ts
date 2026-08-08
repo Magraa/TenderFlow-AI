@@ -1,5 +1,5 @@
 import { DocumentVersion, Firm, Tender, TenderDocType, TenderDocument } from '@/types';
-import { aiDraftService, DraftResponse } from './aiDraftService';
+import { aiDraftService, DraftResponse, PriceMarkupRange } from './aiDraftService';
 import { dataService } from './dataService';
 import {
   compressContent,
@@ -24,6 +24,7 @@ export interface GenerateDocumentRequest {
   showPrintBleedMargin?: boolean;
   forceTemplateFallback?: boolean;
   customTemplateId?: string;
+  priceMarkupRange?: PriceMarkupRange;
 }
 
 function documentUsesLetterhead(docType: TenderDocType): boolean {
@@ -177,6 +178,7 @@ async function generateAndPersistDocument(request: GenerateDocumentRequest): Pro
     showPrintBleedMargin: request.showPrintBleedMargin,
     forceTemplateFallback: request.forceTemplateFallback,
     customTemplateId: request.customTemplateId,
+    priceMarkupRange: request.priceMarkupRange,
   });
 
   if (existing) {

@@ -482,8 +482,12 @@ export default function BillViewerPage() {
             />
           )}
 
-          {/* Stamp Overlay if enabled (image or generic text stamp) */}
-          {includeStamp && firm && (firm.stampMode === 'generic' || firm.stampImagePath) && (
+          {/* Stamp image overlay if enabled. Bill templates already print their own
+              "FOR: {firmName} / PROPRIETOR" signature line, so the firm's "generic text
+              stamp" mode (used by quotations/supply orders that have no such line) is
+              intentionally NOT rendered here — it would just duplicate that same text
+              on top of itself. Only an actual uploaded stamp image (a real seal) shows. */}
+          {includeStamp && firm?.stampImagePath && (
             <div
               className="absolute pointer-events-none z-20"
               style={{
@@ -493,29 +497,11 @@ export default function BillViewerPage() {
                 transform: `scale(${firm.stampScale || 1})`,
               }}
             >
-              {firm.stampMode === 'generic' ? (
-                <div
-                  className="w-max max-w-none rounded-md border-2 px-2 py-1 text-right uppercase leading-4"
-                  style={{
-                    borderColor: 'rgba(15, 23, 42, 0.25)',
-                    background: 'rgba(255,255,255,0.7)',
-                    fontSize: '10.5px',
-                    fontWeight: 800,
-                    color: 'rgba(15, 23, 42, 0.9)',
-                  }}
-                >
-                  <div style={{ whiteSpace: 'nowrap' }}>
-                    FOR {(firm.name || '').trim().replace(/\s+/g, ' ').toUpperCase() || 'YOUR FIRM NAME'}
-                  </div>
-                  <div style={{ whiteSpace: 'nowrap' }}>PROPRIETOR</div>
-                </div>
-              ) : (
-                <img
-                  src={firm.stampImagePath}
-                  alt="Stamp"
-                  style={{ maxHeight: '100px', width: 'auto', opacity: 0.85 }}
-                />
-              )}
+              <img
+                src={firm.stampImagePath}
+                alt="Stamp"
+                style={{ maxHeight: '100px', width: 'auto', opacity: 0.85 }}
+              />
             </div>
           )}
 

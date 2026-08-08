@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { DocumentVersion, Firm, Tender, VersioningSettings } from '@/types';
 
@@ -15,7 +15,14 @@ interface DocumentViewerProps {
   versioningSettings?: VersioningSettings;
   versions?: DocumentVersion[];
   onManualSave?: () => void;
+  /** Called with the full updated document HTML whenever the user edits directly in the preview. */
+  onContentChange?: (html: string) => void;
 }
+
+// Layout layers that must survive editing untouched (letterhead art, signature/stamp
+// overlays, layout guides) — made non-editable "islands" inside the editable body.
+const NON_EDITABLE_LAYER_SELECTOR =
+  '.letterhead-layer, .signature-layer, .stamp-layer, .safe-zone-guide, .page-boundary-guide, .print-bleed-guide';
 
 const DocumentViewer: React.FC<DocumentViewerProps> = ({
   content,
@@ -25,6 +32,7 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
   versioningSettings,
   versions = [],
   onManualSave,
+  onContentChange,
 }) => {
   const [previewLanguage, setPreviewLanguage] = useState<'hindi' | 'english'>(tenderLanguage);
   const [previewContent, setPreviewContent] = useState(content);
@@ -32,6 +40,9 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
   const pageSize = 10;
   const totalHistoryPages = Math.max(1, Math.ceil(versions.length / pageSize));
   const visibleVersions = versions.slice((historyPage - 1) * pageSize, historyPage * pageSize);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const onContentChangeRef = useRef(onContentChange);
+  onContentChangeRef.current = onContentChange;
 
   useEffect(() => {
     setPreviewLanguage(tenderLanguage);
@@ -44,6 +55,24 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
   const handleLanguageChange = (newLanguage: 'hindi' | 'english') => {
     setPreviewLanguage(newLanguage);
     onLanguageChange?.(newLanguage);
+  };
+
+  const handleIframeLoad = () => {
+    if (!onContentChangeRef.current) return;
+    const doc = iframeRef.current?.contentDocument;
+    if (!doc?.body) return;
+
+    doc.body.contentEditable = 'true';
+    doc.body.spellcheck = false;
+    doc.querySelectorAll(NON_EDITABLE_LAYER_SELECTOR).forEach((el) => {
+      (el as HTMLElement).setAttribute('contenteditable', 'false');
+    });
+
+    const handleInput = () => {
+      if (!doc.documentElement) return;
+      onContentChangeRef.current?.(`<!DOCTYPE html>\n${doc.documentElement.outerHTML}`);
+    };
+    doc.addEventListener('input', handleInput);
   };
 
   return (
@@ -78,6 +107,7 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
         <p className="mt-1 text-xs text-slate-500">
           Note: Document content is regenerated in the selected language using MappingService. Falls back to English
           when no Hindi mapping exists.
+          {onContentChange && ' Click into the preview below to edit it directly — tables and layout stay intact.'}
         </p>
         {versions.length > 0 && (
           <div className="mt-3 rounded border border-slate-200 bg-white p-2">
@@ -122,7 +152,13 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
           </div>
         )}
       </div>
-      <iframe title={`document-preview-${docType}`} srcDoc={previewContent} className="h-[640px] w-full" />
+      <iframe
+        ref={iframeRef}
+        title={`document-preview-${docType}`}
+        srcDoc={previewContent}
+        className="h-[640px] w-full"
+        onLoad={handleIframeLoad}
+      />
     </div>
   );
 };

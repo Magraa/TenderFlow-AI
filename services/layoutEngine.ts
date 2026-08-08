@@ -108,13 +108,14 @@ export function calculateItemAmounts(item: TenderItem): { subtotal: number; gstA
 }
 
 function getLetterheadBackgroundStyle(firm: Firm): string {
-  if (firm.fitLetterheadMode === 'stretch') {
-    return 'background-size: 100% 100%;';
-  }
   if (firm.fitLetterheadMode === 'cover') {
     return 'background-size: cover;';
   }
-  return 'background-size: contain;';
+  // Matches the Bills module's letterhead rendering (app/bills/[id]/page.tsx), which
+  // stretches to 100% x 100% for every mode except 'cover'. Previously this defaulted
+  // to 'contain', which only fills the top header band and leaves the rest of the page
+  // — including any full-page watermark art in the letterhead image — blank/white.
+  return 'background-size: 100% 100%;';
 }
 
 export function generateFirmLayoutCSS(firm: Firm, options: LayoutOptions = {}): string {

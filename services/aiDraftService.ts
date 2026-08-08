@@ -5,6 +5,7 @@ import { governmentTemplates } from '../templates/hindi/governmentTemplates';
 import { dataService } from './dataService';
 import { generateAIDraft, getProviderDisplayName } from './aiClient';
 import { toHindiUnit } from '../lib/unitUtils';
+import { TEMPLATE_FONTS_GOOGLE_IMPORT_URL, getFontStyleAdjustments } from '../lib/templateFonts';
 
 const GLOBAL_SYSTEM_PROMPT =
   'You write procurement documents in structured HTML with precise headings and concise government formatting.';
@@ -33,6 +34,11 @@ const STYLE_PROFILE_HINTS: Record<Firm['firmStyleProfile'], string> = {
   table_heavy: 'Prefer structured tables for most sections.',
 };
 
+export interface PriceMarkupRange {
+  minPercent: number;
+  maxPercent: number;
+}
+
 export interface AdvancedDraftRequest {
   tender: Tender;
   mainFirm: Firm;
@@ -40,7 +46,13 @@ export interface AdvancedDraftRequest {
   docType: TenderDocType;
   language?: Language;
   items: TenderItem[];
-  priceMultiplier?: number;
+  /**
+   * Inflates each item's rate by a random-but-deterministic percentage within this
+   * range (re-generating the same document yields the same numbers), then rounds to
+   * a realistic-looking quoted price. Used for alternate quotations that must read
+   * as independent, higher competing bids rather than the main firm's actual rate.
+   */
+  priceMarkupRange?: PriceMarkupRange;
   showLetterheadBackground?: boolean;
   includeSignature?: boolean;
   includeStamp?: boolean;
@@ -102,9 +114,46 @@ function buildPromptStack(firm: Firm, docType: TenderDocType): string {
   return parts.join('\n');
 }
 
-function adjustItems(items: TenderItem[], multiplier = 1): TenderItem[] {
+// Deterministic 0..1 pseudo-random value from a string seed, so regenerating the
+// same document always reproduces the same "random" markup instead of reshuffling
+// prices on every click. Includes an avalanche finalizer (Murmur-style) — a plain
+// rolling hash leaves nearby seeds (e.g. item ids ending "...1" vs "...2") producing
+// nearly identical output, which made every item get almost the same percentage.
+function seededRandom01(seed: string): number {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) {
+    hash = (Math.imul(31, hash) + seed.charCodeAt(i)) | 0;
+  }
+  hash ^= hash >>> 16;
+  hash = Math.imul(hash, 0x45d9f3b);
+  hash ^= hash >>> 16;
+  hash = Math.imul(hash, 0x45d9f3b);
+  hash ^= hash >>> 16;
+  return (hash >>> 0) / 4294967296;
+}
+
+// Rounds to a "nice" figure a genuine quote would use (ending in 0/5/50/100
+// depending on magnitude) instead of an exact-multiplier decimal like 1148.93.
+function roundToRealisticPrice(value: number): number {
+  if (value <= 0) return 0;
+  const step = value < 100 ? 5 : value < 1000 ? 10 : value < 10000 ? 50 : 100;
+  return Math.round(value / step) * step;
+}
+
+function adjustItems(items: TenderItem[], markup?: PriceMarkupRange, seedPrefix = ''): TenderItem[] {
   return items.map((item) => {
-    const rate = Math.round(item.rate * multiplier * 100) / 100;
+    let rate = item.rate;
+    if (markup) {
+      const percent =
+        markup.minPercent + seededRandom01(`${seedPrefix}:${item.id}`) * (markup.maxPercent - markup.minPercent);
+      rate = roundToRealisticPrice(item.rate * (1 + percent / 100));
+      // Rounding can occasionally land back at (or under) the original rate for
+      // small values — guarantee the alt quote always reads strictly higher.
+      if (rate <= item.rate) {
+        rate = roundToRealisticPrice(item.rate * (1 + markup.minPercent / 100));
+        if (rate <= item.rate) rate = item.rate + Math.max(1, Math.round(item.rate * 0.01));
+      }
+    }
     return {
       ...item,
       rate,
@@ -239,6 +288,7 @@ async function buildContentPages(
           openingDate: request.tender.openingDate || '',
           items: adjustedItems,
           language,
+          estimatedAmount: request.tender.estimatedAmount,
         });
         return { pages: [html], fallbackUsed: false };
       }
@@ -455,13 +505,14 @@ async function buildContentPages(
             const html = `
               <div class="custom-template-wrapper" style="width: 100%;">
                 <style>
-                  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;500;700&family=Inter:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700&display=swap');
-                  
+                  @import url('${TEMPLATE_FONTS_GOOGLE_IMPORT_URL}');
+
                   .custom-template-wrapper,
                   .custom-template-wrapper *,
                   .quotation-body,
                   .quotation-body * {
                     font-family: '${activeFont}', sans-serif !important;
+                    ${getFontStyleAdjustments(activeFont)}
                   }
                 </style>
                 ${compiledContent}
@@ -554,7 +605,7 @@ async function buildContentPages(
 export async function generateDraft(request: AdvancedDraftRequest): Promise<DraftResponse> {
   const firm = request.targetFirm || request.mainFirm;
   const language = request.language || firm.defaultLanguage;
-  const adjustedItems = adjustItems(request.items, request.priceMultiplier ?? 1);
+  const adjustedItems = adjustItems(request.items, request.priceMarkupRange, request.docType);
   const totals = calculateTotals(adjustedItems);
   const title = getTitleByDocType(request.docType, language);
   const promptStack = buildPromptStack(firm, request.docType);

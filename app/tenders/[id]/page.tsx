@@ -25,11 +25,20 @@ const DOC_TYPES: TenderDocType[] = [
   'firm_bill',
 ];
 
+// Alt quotations are competing bids that must read as genuinely higher-priced —
+// each item gets a deterministic, realistically-rounded markup within this range
+// (same document regenerated = same numbers; different items get different % within
+// the range so it doesn't look like a flat multiplier was applied).
+const PRICE_MARKUP_BY_DOC_TYPE: Partial<Record<TenderDocType, { minPercent: number; maxPercent: number }>> = {
+  quotation_alt_1: { minPercent: 15, maxPercent: 20 },
+  quotation_alt_2: { minPercent: 25, maxPercent: 30 },
+};
+
 const DOC_CONFIGS: Record<TenderDocType, { label: string; description: string }> = {
   vigyapti: { label: 'Vigyapti', description: 'Global tender notice (no firm letterhead by default).' },
   quotation_main: { label: 'Quotation Main', description: 'Main firm quotation in tender language.' },
-  quotation_alt_1: { label: 'Quotation Alt A', description: 'Alternate firm A quotation in firm language.' },
-  quotation_alt_2: { label: 'Quotation Alt B', description: 'Alternate firm B quotation in firm language.' },
+  quotation_alt_1: { label: 'Quotation Alt A', description: 'Alternate firm A quotation, priced 15-20% above main.' },
+  quotation_alt_2: { label: 'Quotation Alt B', description: 'Alternate firm B quotation, priced 25-30% above main.' },
   supply_aadesh: { label: 'Supply Aadesh', description: 'Government supply order (no letterhead).' },
   firm_bill: { label: 'Main Firm Bill', description: 'Bill format for main firm only.' },
 };
@@ -61,6 +70,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
   const [activeTab, setActiveTab] = useState<TenderDocType>('vigyapti');
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -207,6 +217,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
         showPrintBleedMargin: current?.showSafeMarginGuide,
         forceTemplateFallback,
         customTemplateId: selectedTemplateId || undefined,
+        priceMarkupRange: PRICE_MARKUP_BY_DOC_TYPE[docType],
       });
 
       await refreshDocuments();
@@ -472,14 +483,20 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
   const downloadPDF = async () => {
     const current = getDocument(activeTab);
     if (!current || !tender) return;
+    setDownloadingPdf(true);
+    setError('');
     try {
       const syncedContent = getSyncedDocumentHTML(current, activeTab);
-      await pdfService.downloadPDF(
+      const result = await pdfService.downloadPDF(
         syncedContent,
         `${tender.tenderNumber}-${activeTab}-${Date.now()}.pdf`
       );
+      setSuccess(result.savedToFolder ? `PDF saved to "${result.folderName}".` : 'PDF downloaded.');
+      setTimeout(() => setSuccess(''), 2500);
     } catch {
-      setError('Failed to download PDF.');
+      setError('Failed to generate PDF.');
+    } finally {
+      setDownloadingPdf(false);
     }
   };
 
@@ -723,7 +740,12 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
 
                     {(() => {
                       const isQuotationType = docType === 'quotation_main' || docType === 'quotation_alt_1' || docType === 'quotation_alt_2';
-                      const availableTemplates = isQuotationType ? customTemplates : [];
+                      // Only offer templates authored for this exact quotation doc type —
+                      // previously this listed every custom template (including Bill/Invoice
+                      // templates), which had no business appearing in a quotation dropdown.
+                      const availableTemplates = isQuotationType
+                        ? customTemplates.filter((t) => t.docType === docType)
+                        : [];
                       
                       return (
                         <div className="flex flex-wrap items-center gap-3">
@@ -751,7 +773,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
 
                           {current && (
                             <>
-                              <Button type="button" variant="outline" onClick={downloadPDF}>
+                              <Button type="button" variant="outline" onClick={downloadPDF} loading={downloadingPdf} disabled={downloadingPdf}>
                                 Download PDF
                               </Button>
                               <Button type="button" variant="outline" onClick={printDocument}>
@@ -870,32 +892,25 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
 
                     {current ? (
                       <div className="space-y-4">
+                        <details className="rounded-md border border-slate-200">
+                          <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium text-slate-600">
+                            Edit Content (legacy TipTap editor — collapsed; tables don&apos;t render correctly here, edit in the Preview below instead)
+                          </summary>
+                          <div className="border-t border-slate-200 p-3">
+                            <RichTextEditor initialContent={current.contentHTML} onChange={handleEditorChange} />
+                          </div>
+                        </details>
                         <div>
-                          <p className="mb-2 text-sm font-medium">Edit Content (TipTap)</p>
-                          <RichTextEditor initialContent={current.contentHTML} onChange={handleEditorChange} />
-                          <div className="mt-2 flex items-center gap-2">
-                            {manualSaveMode && (
-                              <Button
-                                type="button"
-                                size="sm"
-                                onClick={handleManualSave}
-                                loading={saving}
-                                disabled={saving || !pendingContent || pendingContent === current.contentHTML}
-                              >
-                                Save Version
-                              </Button>
-                            )}
+                          <div className="mb-2 flex items-center justify-between">
+                            <p className="text-sm font-medium">Preview (click in to edit directly)</p>
                             {saving && <p className="text-xs text-slate-500">Saving version...</p>}
                             {manualSaveMode && pendingContent && pendingContent !== current.contentHTML && (
                               <p className="text-xs text-amber-600">Unsaved document changes</p>
                             )}
                           </div>
-                        </div>
-                        <div>
-                          <p className="mb-2 text-sm font-medium">Preview</p>
-                          <DocumentViewer 
+                          <DocumentViewer
                             content={getSyncedDocumentHTML(current, docType)}
-                            docType={docType} 
+                            docType={docType}
                             tender={tender}
                             mainFirm={mainFirm || undefined}
                             targetFirm={getFirmForDocType(docType) || undefined}
@@ -903,6 +918,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
                             versioningSettings={versioningSettings}
                             versions={docHistory}
                             onManualSave={manualSaveMode ? handleManualSave : undefined}
+                            onContentChange={handleEditorChange}
                             onLanguageChange={(lang) => {
                               // Regenerate document when language changes
                               generateDocument(docType, false, lang);

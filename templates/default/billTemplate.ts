@@ -1,5 +1,6 @@
 import { Bill, CustomTemplate, Firm } from '@/types';
 import { numberToWords } from '@/lib/numberToWords';
+import { TEMPLATE_FONTS_GOOGLE_IMPORT_URL, getFontStyleAdjustments } from '@/lib/templateFonts';
 
 /**
  * Reference Bill Template — matches the shared image exactly:
@@ -222,7 +223,7 @@ export function compileBillHTML(
 
   const formattedDate = bill.invoiceDate?.trim() ? bill.invoiceDate : '_____________';
 
-  return rawTemplate
+  const compiledHTML = rawTemplate
     .replace(/\{\{invoiceNumber\}\}/g, bill.invoiceNumber || '')
     .replace(/\{\{invoiceDate\}\}/g, formattedDate)
     .replace(/\{\{recipientHeaderHTML\}\}/g, recipientHeaderHTML)
@@ -247,4 +248,22 @@ export function compileBillHTML(
     .replace(/\{\{amountInWords\}\}/g, words)
     .replace(/\{\{signatureHTML\}\}/g, signatureHTML)
     .replace(/\{\{signatureBlockStyle\}\}/g, signatureBlockStyle);
+
+  // The default sample template's own inline font (Arial) is intentional and left
+  // alone. Custom bill templates never actually applied their selected Font Family —
+  // this wraps the output so that choice (including handwriting fonts) takes effect.
+  if (!customTemplate?.fontFamily) return compiledHTML;
+
+  return `
+    <div class="bill-template-font-wrapper" style="width:100%;">
+      <style>
+        @import url('${TEMPLATE_FONTS_GOOGLE_IMPORT_URL}');
+        .bill-template-font-wrapper, .bill-template-font-wrapper * {
+          font-family: '${customTemplate.fontFamily}', sans-serif !important;
+          ${getFontStyleAdjustments(customTemplate.fontFamily)}
+        }
+      </style>
+      ${compiledHTML}
+    </div>
+  `;
 }

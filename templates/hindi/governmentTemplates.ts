@@ -19,6 +19,8 @@ interface VigyaptiContext {
   openingDate: string;
   items: TenderItem[];
   language: 'hindi' | 'english';
+  /** Single overall estimated amount entered when creating the tender (not per-item). */
+  estimatedAmount?: number;
 }
 
 interface SupplyAadeshContext {
@@ -49,11 +51,6 @@ function normalizeDistrict(value: string): string {
   return value.trim() || 'दतिया';
 }
 
-function formatTenderAmount(item: TenderItem): string {
-  const amount = item.estimatedAmount || item.totalAmount || item.quantity * item.rate;
-  return Math.round(amount).toLocaleString('en-IN');
-}
-
 function isMunicipalCorporation(departmentName: string): boolean {
   const normalized = departmentName.trim().toLowerCase();
   return (
@@ -70,12 +67,19 @@ async function generateMunicipalCorporationVigyapti(context: VigyaptiContext): P
   const submissionDate = context.submissionDate || '................';
   const openingDate = context.openingDate || 'उसी दिन';
 
+  // Vigyapti shows one combined estimated amount for the whole tender (entered at
+  // tender creation), not a per-item breakdown — so the amount column is a single
+  // cell merged (rowspan) across all item rows, vertically centered.
+  const totalEstimatedAmount =
+    context.estimatedAmount ?? context.items.reduce((sum, item) => sum + (item.estimatedAmount || item.quantity * item.rate), 0);
+  const amountCellHTML = `<td class="mc-vigyapti-amount" rowspan="${Math.max(1, context.items.length)}">${Math.round(totalEstimatedAmount).toLocaleString('en-IN')}</td>`;
+
   const itemsRowsPromises = context.items.length > 0
     ? context.items.map(async (item, index) => {
-        const itemName = context.language === 'hindi' 
+        const itemName = context.language === 'hindi'
           ? await getHindiItemName(item.productName)
           : item.productName;
-        const descriptionHTML = item.description 
+        const descriptionHTML = item.description
           ? `<div style="font-size: 13px; font-weight: normal; margin-top: 4px; color: #444;">विवरण: ${escapeHTML(item.description)}</div>`
           : '';
         return `
@@ -85,7 +89,7 @@ async function generateMunicipalCorporationVigyapti(context: VigyaptiContext): P
             <strong>${escapeHTML(itemName)}</strong>
             ${descriptionHTML}
           </td>
-          <td class="mc-vigyapti-amount">${formatTenderAmount(item)}</td>
+          ${index === 0 ? amountCellHTML : ''}
         </tr>
       `;
       })
@@ -94,7 +98,7 @@ async function generateMunicipalCorporationVigyapti(context: VigyaptiContext): P
         <tr>
           <td class="mc-vigyapti-center mc-vigyapti-serial">1.</td>
           <td class="mc-vigyapti-item"><strong>सामग्री</strong></td>
-          <td class="mc-vigyapti-amount">0</td>
+          ${amountCellHTML}
         </tr>
       `
       ];

@@ -12,6 +12,7 @@ import {
 } from '@/services/versioningSettings';
 import { toHindiUnit } from '@/lib/unitUtils';
 import { getSampleBillTemplate } from '@/templates/default/billTemplate';
+import { TEMPLATE_FONTS_GOOGLE_IMPORT_URL, getFontStyleAdjustments } from '@/lib/templateFonts';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,6 +21,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AddPlaceDialog } from '@/components/forms/Location/AddPlaceDialog';
+import { PdfDownloadFolderCard } from '@/components/settings/pdfDownloadFolderCard';
 import { Sparkles, FileText, Languages, Package, ChevronDown, ChevronUp, Search, X } from 'lucide-react';
 
 import { Textarea } from '@/components/ui/textarea';
@@ -750,13 +752,14 @@ export default function SettingsPage() {
     return `
       <div class="custom-template-preview-wrapper" style="width: 100%;">
         <style>
-          @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;500;700&family=Inter:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700&display=swap');
-          
+          @import url('${TEMPLATE_FONTS_GOOGLE_IMPORT_URL}');
+
           .custom-template-preview-wrapper,
           .custom-template-preview-wrapper *,
           .quotation-body,
           .quotation-body * {
             font-family: '${activeFont}', sans-serif !important;
+            ${getFontStyleAdjustments(activeFont)}
           }
         </style>
         ${compiled}
@@ -867,13 +870,14 @@ export default function SettingsPage() {
     return `
       <div class="custom-template-card-preview-wrapper" style="width: 100%;">
         <style>
-          @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;500;700&family=Inter:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700&display=swap');
-          
+          @import url('${TEMPLATE_FONTS_GOOGLE_IMPORT_URL}');
+
           .custom-template-card-preview-wrapper,
           .custom-template-card-preview-wrapper *,
           .quotation-body,
           .quotation-body * {
             font-family: '${activeFont}', sans-serif !important;
+            ${getFontStyleAdjustments(activeFont)}
           }
         </style>
         ${compiled}
@@ -1335,6 +1339,8 @@ export default function SettingsPage() {
               </div>
             </CardContent>
           </Card>
+
+          <PdfDownloadFolderCard />
         </div>
 
         <Card>
@@ -2797,6 +2803,10 @@ export default function SettingsPage() {
                       <option value="Arial">Arial</option>
                       <option value="Georgia">Georgia</option>
                       <option value="Times New Roman">Times New Roman</option>
+                    </optgroup>
+                    <optgroup label="Handwriting Style">
+                      <option value="Kalam">Kalam (Hindi + English handwriting)</option>
+                      <option value="Caveat">Caveat (English handwriting)</option>
                     </optgroup>
                   </select>
                 </div>

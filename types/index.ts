@@ -296,6 +296,7 @@ export interface Settings extends BaseEntity {
   tenderNumberPrefix: string;
   enableLocationAIAutofill: boolean;
   versioningSettings: VersioningSettings;
+  passwordAuth?: PasswordAuthSettings;
 }
 
 export interface VersioningSettings {
@@ -306,6 +307,14 @@ export interface VersioningSettings {
   changeNotesRequired: boolean;
   versionRetentionDays: number;
   enableVersionComparison: boolean;
+}
+
+export interface PasswordAuthSettings {
+  enabled: boolean;
+  passwordHash: string;
+  salt: string;
+  iterations: number;
+  updatedAt: string;
 }
 
 export interface PriceVariation {

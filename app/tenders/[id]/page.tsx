@@ -3,11 +3,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { MessageCircle, Wallet, Percent, TrendingUp, Flag, ArrowLeft } from 'lucide-react';
 import { Bill, BillItem, CustomTemplate, DocumentVersion, Firm, Settings, Tender, TenderDocType, TenderDocument } from '@/types';
 import { dataService } from '@/services/dataService';
 import { documentService } from '@/services/documentService';
 import { layoutEngine } from '@/services/layoutEngine';
 import { pdfService } from '@/services/pdfService';
+import { sharePDFViaWhatsApp } from '@/services/shareService';
 import { numberToWords } from '@/lib/numberToWords';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -71,6 +73,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [sharingPdf, setSharingPdf] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -506,6 +509,23 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
     pdfService.printHTML(getSyncedDocumentHTML(current, activeTab));
   };
 
+  const shareDocumentWhatsApp = async () => {
+    const current = getDocument(activeTab);
+    if (!current || !tender) return;
+    setSharingPdf(true);
+    setError('');
+    try {
+      const syncedContent = getSyncedDocumentHTML(current, activeTab);
+      const blob = await pdfService.generatePDFBlob(syncedContent);
+      const filename = `${tender.tenderNumber}-${activeTab}.pdf`;
+      await sharePDFViaWhatsApp(blob, filename, `${DOC_CONFIGS[activeTab].label} — ${tender.tenderNumber}`);
+    } catch {
+      setError('Failed to prepare PDF for sharing.');
+    } finally {
+      setSharingPdf(false);
+    }
+  };
+
   const handleStatusChange = async (nextStatus: 'draft' | 'final') => {
     if (!tender || tender.status === nextStatus) return;
     const updated = await dataService.tenders.update(tender.id, { status: nextStatus });
@@ -541,14 +561,24 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
   return (
     <div className="min-h-screen bg-slate-50">
       <div className="border-b bg-white">
-        <div className="mx-auto flex max-w-screen-xl items-start justify-between px-4 py-6 sm:px-6 lg:px-8">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-slate-900">{tender.title}</h1>
-            <p className="mt-1 text-sm text-slate-500">
-              #{tender.tenderNumber} • {tender.items.length} items • {tender.language} • {tender.status}
-            </p>
+        <div className="mx-auto flex max-w-screen-xl flex-col gap-3 px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:py-6 sm:px-6 lg:px-8">
+          <div className="flex items-start gap-2 sm:block">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => router.push('/dashboard')}
+              className="shrink-0 -ml-2 gap-1.5 text-slate-600 sm:hidden"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+            <div className="min-w-0">
+              <h1 className="truncate text-xl font-bold tracking-tight text-slate-900 sm:text-3xl">{tender.title}</h1>
+              <p className="mt-1 text-xs text-slate-500 sm:text-sm">
+                #{tender.tenderNumber} • {tender.items.length} items • {tender.language} • {tender.status}
+              </p>
+            </div>
           </div>
-          <Button variant="outline" onClick={() => router.push('/dashboard')}>
+          <Button variant="outline" onClick={() => router.push('/dashboard')} className="hidden shrink-0 sm:inline-flex">
             Back to Dashboard
           </Button>
         </div>
@@ -568,34 +598,55 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
           </Alert>
         )}
 
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <Card>
-            <CardContent className="pt-6">
-              <p className="text-xs text-slate-500">Subtotal</p>
-              <p className="text-2xl font-bold">Rs. {totals.subtotal.toLocaleString('en-IN')}</p>
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+          <Card className="overflow-hidden border-slate-200">
+            <CardContent className="flex items-start justify-between gap-2 p-4 sm:p-5">
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 sm:text-xs">Subtotal</p>
+                <p className="mt-1 truncate text-lg font-bold text-slate-900 sm:text-2xl">Rs. {totals.subtotal.toLocaleString('en-IN')}</p>
+              </div>
+              <div className="shrink-0 rounded-lg bg-slate-100 p-2 text-slate-500">
+                <Wallet className="h-4 w-4 sm:h-5 sm:w-5" />
+              </div>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <p className="text-xs text-slate-500">GST Total</p>
-              <p className="text-2xl font-bold">Rs. {totals.gstTotal.toLocaleString('en-IN')}</p>
+          <Card className="overflow-hidden border-slate-200">
+            <CardContent className="flex items-start justify-between gap-2 p-4 sm:p-5">
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 sm:text-xs">GST Total</p>
+                <p className="mt-1 truncate text-lg font-bold text-slate-900 sm:text-2xl">Rs. {totals.gstTotal.toLocaleString('en-IN')}</p>
+              </div>
+              <div className="shrink-0 rounded-lg bg-amber-50 p-2 text-amber-600">
+                <Percent className="h-4 w-4 sm:h-5 sm:w-5" />
+              </div>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <p className="text-xs text-slate-500">Grand Total</p>
-              <p className="text-2xl font-bold">Rs. {totals.grandTotal.toLocaleString('en-IN')}</p>
+          <Card className="overflow-hidden border-emerald-200 bg-emerald-50/40">
+            <CardContent className="flex items-start justify-between gap-2 p-4 sm:p-5">
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700/70 sm:text-xs">Grand Total</p>
+                <p className="mt-1 truncate text-lg font-bold text-emerald-800 sm:text-2xl">Rs. {totals.grandTotal.toLocaleString('en-IN')}</p>
+              </div>
+              <div className="shrink-0 rounded-lg bg-emerald-100 p-2 text-emerald-700">
+                <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5" />
+              </div>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <p className="text-xs text-slate-500">Status</p>
+          <Card className="overflow-hidden border-slate-200">
+            <CardContent className="p-4 sm:p-5">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 sm:text-xs">Status</p>
+                <div className="shrink-0 rounded-lg bg-blue-50 p-2 text-blue-600">
+                  <Flag className="h-4 w-4 sm:h-5 sm:w-5" />
+                </div>
+              </div>
               <div className="mt-2 flex gap-2">
                 <Button
                   type="button"
                   size="sm"
                   variant={tender.status === 'draft' ? 'default' : 'outline'}
                   onClick={() => handleStatusChange('draft')}
+                  className="flex-1 sm:flex-none"
                 >
                   Draft
                 </Button>
@@ -604,6 +655,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
                   size="sm"
                   variant={tender.status === 'final' ? 'default' : 'outline'}
                   onClick={() => handleStatusChange('final')}
+                  className="flex-1 sm:flex-none"
                 >
                   Final
                 </Button>
@@ -621,9 +673,19 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
           </CardHeader>
           <CardContent>
             <Tabs defaultValue="vigyapti">
-              <TabsList className="grid w-full grid-cols-2 gap-2 lg:grid-cols-6">
+              {/* `!`-prefixed overrides guarantee they win over the shared Tabs
+                  component's baked-in `h-10`/`whitespace-nowrap` regardless of
+                  Tailwind's internal utility ordering — needed so labels like
+                  "Quotation Alt A" can wrap onto two lines on narrow phones
+                  instead of overflowing their grid cell. */}
+              <TabsList className="grid !h-auto w-full grid-cols-2 gap-1.5 p-1 sm:grid-cols-3 sm:gap-2 lg:grid-cols-6">
                 {DOC_TYPES.map((docType) => (
-                  <TabsTrigger key={docType} value={docType} onClick={() => setActiveTab(docType)}>
+                  <TabsTrigger
+                    key={docType}
+                    value={docType}
+                    onClick={() => setActiveTab(docType)}
+                    className="!whitespace-normal !py-2 !text-[11px] !leading-tight text-center sm:!text-xs lg:!text-sm"
+                  >
                     {DOC_CONFIGS[docType].label}
                   </TabsTrigger>
                 ))}
@@ -639,19 +701,19 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
                         firm&apos;s configured Bill template (Manage Firms), so it also appears in the Bills dashboard.
                       </p>
 
-                      <div className="flex flex-wrap items-center gap-3">
-                        <Button onClick={generateOrSyncFirmBill} loading={generating} disabled={generating}>
+                      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+                        <Button onClick={generateOrSyncFirmBill} loading={generating} disabled={generating} className="w-full sm:w-auto">
                           {firmBill ? 'Sync From Tender Items' : 'Generate Document'}
                         </Button>
                         {firmBill && (
-                          <Link href={`/bills/${firmBill.id}`}>
-                            <Button type="button" variant="outline">Open in Bills →</Button>
-                          </Link>
-                        )}
-                        {firmBill && (
-                          <Link href={`/bills/${firmBill.id}?print=true`} target="_blank">
-                            <Button type="button" variant="outline">Print / Export PDF</Button>
-                          </Link>
+                          <div className="grid grid-cols-2 gap-2 sm:flex sm:gap-2">
+                            <Link href={`/bills/${firmBill.id}`} className="contents">
+                              <Button type="button" variant="outline" className="justify-center">Open in Bills →</Button>
+                            </Link>
+                            <Link href={`/bills/${firmBill.id}?print=true`} target="_blank" className="contents">
+                              <Button type="button" variant="outline" className="justify-center">Print / Export PDF</Button>
+                            </Link>
+                          </div>
                         )}
                       </div>
 
@@ -748,16 +810,16 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
                         : [];
                       
                       return (
-                        <div className="flex flex-wrap items-center gap-3">
-                          <Button onClick={() => generateDocument(docType)} loading={generating} disabled={generating}>
+                        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+                          <Button onClick={() => generateDocument(docType)} loading={generating} disabled={generating} className="w-full sm:w-auto">
                             Generate Document
                           </Button>
 
                           {isQuotationType && availableTemplates.length > 0 && (
-                            <div className="flex items-center gap-2 border border-slate-200 rounded-lg px-2.5 py-1 bg-white shadow-sm h-10">
-                              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Template:</span>
+                            <div className="flex items-center gap-2 border border-slate-200 rounded-lg px-2.5 py-1 bg-white shadow-sm h-10 w-full sm:w-auto">
+                              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider shrink-0">Template:</span>
                               <select
-                                className="bg-transparent focus-visible:outline-none text-xs text-slate-700 font-medium"
+                                className="bg-transparent focus-visible:outline-none text-xs text-slate-700 font-medium w-full sm:w-auto"
                                 value={selectedTemplateByDocType[docType] || ''}
                                 onChange={(e) => setSelectedTemplateByDocType(prev => ({ ...prev, [docType]: e.target.value }))}
                               >
@@ -772,14 +834,26 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
                           )}
 
                           {current && (
-                            <>
-                              <Button type="button" variant="outline" onClick={downloadPDF} loading={downloadingPdf} disabled={downloadingPdf}>
-                                Download PDF
+                            <div className="grid grid-cols-3 gap-2 sm:flex sm:gap-2">
+                              <Button type="button" variant="outline" onClick={downloadPDF} loading={downloadingPdf} disabled={downloadingPdf} className="justify-center">
+                                <span className="sm:hidden">PDF</span>
+                                <span className="hidden sm:inline">Download PDF</span>
                               </Button>
-                              <Button type="button" variant="outline" onClick={printDocument}>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={shareDocumentWhatsApp}
+                                loading={sharingPdf}
+                                disabled={sharingPdf}
+                                className="justify-center gap-1.5 hover:bg-emerald-50"
+                              >
+                                <MessageCircle className="h-4 w-4 text-emerald-600 shrink-0" />
+                                <span className="hidden sm:inline">WhatsApp</span>
+                              </Button>
+                              <Button type="button" variant="outline" onClick={printDocument} className="justify-center">
                                 Print
                               </Button>
-                            </>
+                            </div>
                           )}
                         </div>
                       );

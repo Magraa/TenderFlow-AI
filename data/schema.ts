@@ -147,6 +147,7 @@ export const defaultSettings: Settings = {
   tenderNumberPrefix: 'TEND',
   enableLocationAIAutofill: false,
   versioningSettings: defaultVersioningSettings,
+  passwordAuth: undefined,
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 };

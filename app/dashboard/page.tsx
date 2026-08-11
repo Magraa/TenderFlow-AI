@@ -23,6 +23,12 @@ import {
   X,
   SlidersHorizontal,
   ArrowUpDown,
+  MapPin,
+  Wallet,
+  Percent,
+  Clock,
+  Languages,
+  Package,
 } from 'lucide-react';
 import { Bill, Firm, Tender } from '@/types';
 import { dataService } from '@/services/dataService';
@@ -36,6 +42,25 @@ function getTenderGrandTotal(tender: Tender): number {
   const subtotal = tender.items.reduce((sum, item) => sum + item.quantity * item.rate, 0);
   const gst = tender.items.reduce((sum, item) => sum + (item.quantity * item.rate * item.gstPercent) / 100, 0);
   return subtotal + gst;
+}
+
+/** Parses a tender's submission date and classifies how urgent it is, for the dashboard's deadline chip. */
+function getDeadlineUrgency(dateStr?: string): { label: string; classes: string } | null {
+  if (!dateStr || !dateStr.trim()) return null;
+  const parsed = new Date(dateStr);
+  if (isNaN(parsed.getTime())) return null;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(parsed);
+  target.setHours(0, 0, 0, 0);
+  const daysLeft = Math.round((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+  const formatted = format(parsed, 'dd/MM/yyyy');
+  if (daysLeft < 0) return { label: `Overdue — was ${formatted}`, classes: 'bg-red-50 text-red-700 border-red-200' };
+  if (daysLeft === 0) return { label: `Due today (${formatted})`, classes: 'bg-red-50 text-red-700 border-red-200' };
+  if (daysLeft <= 3) return { label: `Due in ${daysLeft}d (${formatted})`, classes: 'bg-amber-50 text-amber-800 border-amber-200' };
+  return { label: `Due ${formatted}`, classes: 'bg-slate-50 text-slate-600 border-slate-200' };
 }
 
 /**
@@ -702,14 +727,20 @@ export default function DashboardPage() {
                     // Main Item Name of first item
                     const mainItem = tender.items[0];
                     const mainItemName = mainItem?.productName || 'No items specified';
+                    const deadline = getDeadlineUrgency(tender.submissionDate);
 
                     return (
-                      <Card key={tender.id} className="group overflow-hidden transition-all hover:border-slate-300">
+                      <Card
+                        key={tender.id}
+                        className={`group overflow-hidden border-l-4 transition-all hover:border-slate-300 hover:shadow-md ${
+                          tender.status === 'final' ? 'border-l-emerald-400' : 'border-l-amber-400'
+                        }`}
+                      >
                         <CardHeader className="bg-slate-50/60 pb-4">
                           <div className="flex flex-wrap items-start justify-between gap-3">
-                            <div>
-                              <CardTitle className="text-xl font-bold text-slate-800">{tender.title}</CardTitle>
-                              <CardDescription className="flex flex-wrap items-center gap-2.5 mt-1.5 font-medium text-xs">
+                            <div className="min-w-0">
+                              <CardTitle className="text-lg font-bold text-slate-800 sm:text-xl">{tender.title}</CardTitle>
+                              <CardDescription className="flex flex-wrap items-center gap-2 mt-1.5 font-medium text-xs sm:gap-2.5">
                                 <span className="flex items-center gap-1 text-slate-700 bg-white px-2 py-0.5 rounded border border-slate-200 font-mono">
                                   <Hash className="h-3 w-3 text-slate-400" />
                                   {tender.tenderNumber}
@@ -720,12 +751,18 @@ export default function DashboardPage() {
                                     {firm.name}
                                   </span>
                                 )}
-                                <span className="text-slate-300">•</span>
+                                <span className="hidden text-slate-300 sm:inline">•</span>
                                 <span className="text-slate-600">{tender.items.length} items</span>
+                                {deadline && (
+                                  <span className={`flex items-center gap-1 rounded border px-2 py-0.5 font-semibold ${deadline.classes}`}>
+                                    <Clock className="h-3 w-3" />
+                                    {deadline.label}
+                                  </span>
+                                )}
                               </CardDescription>
                             </div>
                             <span
-                              className={`inline-flex rounded-full px-3 py-1 text-xs font-bold tracking-wide uppercase ${
+                              className={`inline-flex shrink-0 rounded-full px-3 py-1 text-xs font-bold tracking-wide uppercase ${
                                 tender.status === 'final'
                                   ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
                                   : 'bg-amber-100 text-amber-800 border border-amber-200'
@@ -752,42 +789,53 @@ export default function DashboardPage() {
                         </CardHeader>
 
                         <CardContent className="pt-5">
-                          <div className="mb-6 grid gap-4 text-sm sm:grid-cols-4">
-                            <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
-                              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Language</p>
-                              <p className="font-medium capitalize text-slate-900">{tender.language}</p>
+                          <div className="mb-6 grid grid-cols-2 gap-2.5 text-sm sm:gap-4 sm:grid-cols-4">
+                            <div className="flex items-start gap-2 bg-slate-50 p-3 rounded-lg border border-slate-100">
+                              <Languages className="h-4 w-4 shrink-0 mt-0.5 text-slate-400" />
+                              <div className="min-w-0">
+                                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Language</p>
+                                <p className="font-medium capitalize text-slate-900 truncate">{tender.language}</p>
+                              </div>
                             </div>
-                            <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
-                              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Location</p>
-                              <p className="font-medium text-slate-900 truncate">{tender.districtName || tender.placeName || 'N/A'}</p>
+                            <div className="flex items-start gap-2 bg-slate-50 p-3 rounded-lg border border-slate-100">
+                              <MapPin className="h-4 w-4 shrink-0 mt-0.5 text-slate-400" />
+                              <div className="min-w-0">
+                                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Location</p>
+                                <p className="font-medium text-slate-900 truncate">{tender.districtName || tender.placeName || 'N/A'}</p>
+                              </div>
                             </div>
-                            <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
-                              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Grand Total</p>
-                              <p className="font-bold text-slate-900">₹{getTenderGrandTotal(tender).toLocaleString('en-IN')}</p>
+                            <div className="flex items-start gap-2 bg-slate-50 p-3 rounded-lg border border-slate-100">
+                              <Wallet className="h-4 w-4 shrink-0 mt-0.5 text-slate-400" />
+                              <div className="min-w-0">
+                                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Grand Total</p>
+                                <p className="font-bold text-slate-900 truncate">₹{getTenderGrandTotal(tender).toLocaleString('en-IN')}</p>
+                              </div>
                             </div>
-                            <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
-                              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1">
-                                <Calendar className="h-3 w-3" /> Created
-                              </p>
-                              <p className="font-medium text-slate-900">{format(new Date(tender.createdAt), 'dd/MM/yyyy')}</p>
+                            <div className="flex items-start gap-2 bg-slate-50 p-3 rounded-lg border border-slate-100">
+                              <Calendar className="h-4 w-4 shrink-0 mt-0.5 text-slate-400" />
+                              <div className="min-w-0">
+                                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Created</p>
+                                <p className="font-medium text-slate-900 truncate">{format(new Date(tender.createdAt), 'dd/MM/yyyy')}</p>
+                              </div>
                             </div>
                           </div>
 
-                          <div className="flex gap-2.5 justify-end border-t border-slate-100 pt-4">
+                          <div className="grid grid-cols-3 gap-2 border-t border-slate-100 pt-4 sm:flex sm:justify-end sm:gap-2.5">
                             {/* View Documents Button */}
-                            <Link href={`/tenders/${tender.id}`}>
-                              <Button size="sm" className="flex items-center gap-2 shadow-xs">
+                            <Link href={`/tenders/${tender.id}`} className="contents">
+                              <Button size="sm" className="flex items-center justify-center gap-2 shadow-xs">
                                 <Eye className="h-4 w-4" />
-                                View Documents
+                                <span className="hidden sm:inline">View Documents</span>
+                                <span className="sm:hidden">View</span>
                               </Button>
                             </Link>
 
                             {/* Direct Print Button */}
-                            <Link href={`/tenders/${tender.id}`}>
+                            <Link href={`/tenders/${tender.id}`} className="contents">
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="flex items-center gap-1.5 bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                                className="flex items-center justify-center gap-1.5 bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
                                 title="Print Tender Documents"
                               >
                                 <Printer className="h-4 w-4 text-slate-600" />
@@ -800,9 +848,10 @@ export default function DashboardPage() {
                               size="sm"
                               variant="destructive"
                               onClick={() => handleDeleteTender(tender.id)}
-                              className="flex items-center gap-1.5 bg-red-50 text-red-600 border border-red-200 hover:bg-red-100"
+                              className="flex items-center justify-center gap-1.5 bg-red-50 text-red-600 border border-red-200 hover:bg-red-100"
                             >
                               <Trash2 className="h-4 w-4" />
+                              <span className="sm:hidden">Delete</span>
                             </Button>
                           </div>
                         </CardContent>
@@ -856,21 +905,24 @@ export default function DashboardPage() {
 
                       const isDateBlank = !bill.invoiceDate || !bill.invoiceDate.trim();
                       const dateDisplay = isDateBlank ? '_____________' : bill.invoiceDate;
+                      const gstAmount = (bill.sgstAmount || 0) + (bill.cgstAmount || 0) + (bill.igstAmount || 0);
 
                       return (
                         <Card
                           key={bill.id}
-                          className={`group transition-all ${
+                          className={`group border-l-4 transition-all ${
+                            bill.status === 'final' ? 'border-l-emerald-400' : 'border-l-amber-400'
+                          } ${
                             isStackChild
                               ? 'border-emerald-200/80 bg-white shadow-xs hover:border-emerald-400'
-                              : 'hover:border-emerald-300 shadow-sm'
+                              : 'hover:border-emerald-300 shadow-sm hover:shadow-md'
                           }`}
                         >
                           <CardHeader className="bg-emerald-50/40 pb-3.5 border-b border-slate-100">
                             <div className="flex flex-wrap items-start justify-between gap-3">
-                              <div>
-                                <CardTitle className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                                  <Receipt className="h-5 w-5 text-emerald-600" />
+                              <div className="min-w-0">
+                                <CardTitle className="text-lg font-bold text-slate-800 flex items-center gap-2 sm:text-xl">
+                                  <Receipt className="h-5 w-5 shrink-0 text-emerald-600" />
                                   Invoice No. {bill.invoiceNumber || 'Draft'}
                                 </CardTitle>
                                 <CardDescription className="flex flex-wrap items-center gap-2 mt-1.5 font-medium text-xs text-slate-600">
@@ -880,21 +932,30 @@ export default function DashboardPage() {
                                       {cardFirm.name}
                                     </span>
                                   )}
-                                  <span className="text-slate-300">•</span>
+                                  <span className="hidden text-slate-300 sm:inline">•</span>
                                   <span>
                                     Recipient:{' '}
                                     <strong className="text-slate-800">
                                       {bill.recipientDesignation || bill.recipientDepartment || 'N/A'}
                                     </strong>
                                   </span>
-                                  <span className="text-slate-300">•</span>
+                                  <span className="hidden text-slate-300 sm:inline">•</span>
                                   <span>
                                     Date: <strong className="text-slate-800">{dateDisplay}</strong>
                                   </span>
                                 </CardDescription>
                               </div>
 
-                              <div className="flex items-center gap-2">
+                              <div className="flex shrink-0 items-center gap-2">
+                                <span
+                                  className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold tracking-wide uppercase ${
+                                    bill.status === 'final'
+                                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                      : 'bg-amber-100 text-amber-800 border border-amber-200'
+                                  }`}
+                                >
+                                  {bill.status}
+                                </span>
                                 {isStacked && !isStackChild && (
                                   <button
                                     onClick={() => toggleStackExpand(stackKey)}
@@ -925,32 +986,42 @@ export default function DashboardPage() {
                           </CardHeader>
 
                           <CardContent className="pt-5">
-                            <div className="mb-6 grid gap-4 text-sm sm:grid-cols-4">
-                              <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
-                                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Items Count</p>
-                                <p className="font-medium text-slate-900">{bill.items.length} items</p>
+                            <div className="mb-6 grid grid-cols-2 gap-2.5 text-sm sm:gap-4 sm:grid-cols-4">
+                              <div className="flex items-start gap-2 bg-slate-50 p-3 rounded-lg border border-slate-100">
+                                <Wallet className="h-4 w-4 shrink-0 mt-0.5 text-slate-400" />
+                                <div className="min-w-0">
+                                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Subtotal</p>
+                                  <p className="font-medium text-slate-900 truncate">₹{bill.totalAmount.toLocaleString('en-IN')}</p>
+                                </div>
                               </div>
-                              <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
-                                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Subtotal</p>
-                                <p className="font-medium text-slate-900">₹{bill.totalAmount.toLocaleString('en-IN')}</p>
+                              <div className="flex items-start gap-2 bg-slate-50 p-3 rounded-lg border border-slate-100">
+                                <Percent className="h-4 w-4 shrink-0 mt-0.5 text-amber-500" />
+                                <div className="min-w-0">
+                                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">GST</p>
+                                  <p className="font-medium text-slate-900 truncate">₹{gstAmount.toLocaleString('en-IN')}</p>
+                                </div>
                               </div>
-                              <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
-                                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Grand Total</p>
-                                <p className="font-bold text-emerald-700">₹{bill.grandTotal.toLocaleString('en-IN')}</p>
+                              <div className="flex items-start gap-2 bg-emerald-50/60 p-3 rounded-lg border border-emerald-100">
+                                <Package className="h-4 w-4 shrink-0 mt-0.5 text-emerald-500" />
+                                <div className="min-w-0">
+                                  <p className="text-xs font-semibold text-emerald-700/70 uppercase tracking-wider mb-1">Grand Total</p>
+                                  <p className="font-bold text-emerald-700 truncate">₹{bill.grandTotal.toLocaleString('en-IN')}</p>
+                                </div>
                               </div>
-                              <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
-                                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1">
-                                  <Calendar className="h-3 w-3" /> Created
-                                </p>
-                                <p className="font-medium text-slate-900">{format(new Date(bill.createdAt), 'dd/MM/yyyy')}</p>
+                              <div className="flex items-start gap-2 bg-slate-50 p-3 rounded-lg border border-slate-100">
+                                <Calendar className="h-4 w-4 shrink-0 mt-0.5 text-slate-400" />
+                                <div className="min-w-0">
+                                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Created</p>
+                                  <p className="font-medium text-slate-900 truncate">{format(new Date(bill.createdAt), 'dd/MM/yyyy')}</p>
+                                </div>
                               </div>
                             </div>
 
                             {/* Actions Bar */}
-                            <div className="flex flex-wrap gap-2 justify-end border-t border-slate-100 pt-4">
+                            <div className="grid grid-cols-2 gap-2 border-t border-slate-100 pt-4 sm:flex sm:flex-wrap sm:justify-end">
                               {/* View, Edit & Print Button */}
-                              <Link href={`/bills/${bill.id}`}>
-                                <Button size="sm" className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 shadow-2xs text-xs font-semibold">
+                              <Link href={`/bills/${bill.id}`} className="col-span-2 contents sm:col-span-1">
+                                <Button size="sm" className="col-span-2 flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 shadow-2xs text-xs font-semibold sm:col-span-1">
                                   <Eye className="h-3.5 w-3.5" />
                                   View, Edit & Print
                                 </Button>
@@ -961,7 +1032,7 @@ export default function DashboardPage() {
                                 size="sm"
                                 variant="outline"
                                 onClick={() => handleDuplicateBill(bill)}
-                                className="flex items-center gap-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200 text-xs"
+                                className="flex items-center justify-center gap-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200 text-xs"
                                 title="Duplicate exact copy of this bill"
                               >
                                 <Copy className="h-3.5 w-3.5 text-blue-600" />
@@ -973,7 +1044,7 @@ export default function DashboardPage() {
                                 size="sm"
                                 variant="outline"
                                 onClick={() => handleIncrementDuplicateBill(bill)}
-                                className="flex items-center gap-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-300 font-semibold text-xs"
+                                className="flex items-center justify-center gap-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-300 font-semibold text-xs"
                                 title="Duplicate copy with Invoice No. +1"
                               >
                                 <Copy className="h-3.5 w-3.5 text-amber-700" />
@@ -985,10 +1056,11 @@ export default function DashboardPage() {
                                 size="sm"
                                 variant="destructive"
                                 onClick={() => handleDeleteBill(bill.id)}
-                                className="flex items-center gap-1.5 bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 text-xs"
+                                className="col-span-2 flex items-center justify-center gap-1.5 bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 text-xs sm:col-span-1"
                                 title="Delete Bill"
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
+                                <span className="sm:hidden">Delete</span>
                               </Button>
                             </div>
                           </CardContent>

@@ -1,21 +1,26 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Printer, Trash2, Receipt, Edit, Plus, CheckCircle, AlertTriangle, Sparkles, X } from 'lucide-react';
+import { ArrowLeft, Printer, Trash2, Receipt, Edit, Plus, CheckCircle, AlertTriangle, Sparkles, X, MessageCircle } from 'lucide-react';
 import { Bill, CustomTemplate, Firm, HindiMapping } from '@/types';
 import { dataService } from '@/services/dataService';
 import { compileBillHTML } from '@/templates/default/billTemplate';
 import { numberToWords } from '@/lib/numberToWords';
 import { saveBillItemMappings, getOrCreateItemMappingPack } from '@/services/mappingService';
 import { resolveFirmLayoutMetrics } from '@/services/layoutEngine';
+import { pdfService } from '@/services/pdfService';
+import { sharePDFViaWhatsApp } from '@/services/shareService';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+
+const A4_WIDTH_PX = 794; // 210mm at 96dpi
+const A4_HEIGHT_PX = 1123; // 297mm at 96dpi
 
 interface ItemRow {
   id: string;
@@ -44,6 +49,26 @@ export default function BillViewerPage() {
   const [showLetterheadBackground, setShowLetterheadBackground] = useState(true);
   const [includeSignature, setIncludeSignature] = useState(true);
   const [includeStamp, setIncludeStamp] = useState(true);
+
+  // Responsive preview: the printable area is a fixed 210mm x 297mm box (must stay
+  // exact for print/PDF fidelity), so on narrow screens we scale it down visually
+  // with a CSS transform rather than reflowing it, and reserve exactly the scaled
+  // height so the page layout below doesn't leave a gap.
+  const previewWrapperRef = useRef<HTMLDivElement>(null);
+  const [previewScale, setPreviewScale] = useState(1);
+  const [sharingPdf, setSharingPdf] = useState(false);
+
+  useEffect(() => {
+    const updateScale = () => {
+      const wrapper = previewWrapperRef.current;
+      if (!wrapper) return;
+      const available = wrapper.clientWidth;
+      setPreviewScale(available > 0 ? Math.min(1, available / A4_WIDTH_PX) : 1);
+    };
+    updateScale();
+    window.addEventListener('resize', updateScale);
+    return () => window.removeEventListener('resize', updateScale);
+  }, []);
 
   // Edit Modal State
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -317,6 +342,22 @@ export default function BillViewerPage() {
     window.print();
   };
 
+  const handleShareWhatsApp = async () => {
+    const element = document.getElementById('printable-bill-area');
+    if (!element || !bill) return;
+    setSharingPdf(true);
+    try {
+      const blob = await pdfService.generatePDFBlobFromElement(element);
+      const filename = `Invoice-${bill.invoiceNumber || 'Draft'}.pdf`;
+      await sharePDFViaWhatsApp(blob, filename, `Invoice No. ${bill.invoiceNumber || 'Draft'} — ${firm?.name || ''}`);
+    } catch (error) {
+      console.error('WhatsApp share failed:', error);
+      alert('Failed to prepare the PDF for sharing.');
+    } finally {
+      setSharingPdf(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50">
@@ -362,40 +403,54 @@ export default function BillViewerPage() {
   return (
     <div className="min-h-screen bg-slate-100 pb-16 print:bg-white print:p-0">
       {/* Top Action Bar (hidden when printing) */}
-      <div className="border-b bg-white shadow-xs sticky top-0 z-30 print:hidden">
-        <div className="mx-auto flex max-w-screen-xl flex-wrap items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-3">
-            <Link href="/dashboard">
-              <Button variant="ghost" size="sm" className="gap-1.5 text-slate-600">
-                <ArrowLeft className="h-4 w-4" />
-                Dashboard
-              </Button>
-            </Link>
-            <div className="h-4 w-[1px] bg-slate-200"></div>
-            <div>
-              <h1 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                <Receipt className="h-5 w-5 text-emerald-600" />
-                Invoice No. {bill.invoiceNumber || 'Draft'}
-              </h1>
-              <p className="text-xs text-slate-500 font-medium">
-                Firm: <span className="text-slate-800 font-semibold">{firm?.name || 'N/A'}</span> | Date: {bill.invoiceDate}
-              </p>
+      <div className="border-b bg-white/95 backdrop-blur-sm shadow-xs sticky top-0 z-30 print:hidden">
+        <div className="mx-auto flex max-w-screen-xl flex-col gap-3 px-3 py-3 sm:px-6 sm:py-3.5 lg:px-8">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+              <Link href="/dashboard">
+                <Button variant="ghost" size="sm" className="shrink-0 gap-1.5 px-2 text-slate-600 sm:px-3">
+                  <ArrowLeft className="h-4 w-4" />
+                  <span className="hidden sm:inline">Dashboard</span>
+                </Button>
+              </Link>
+              <div className="hidden h-5 w-px bg-slate-200 sm:block" />
+              <div className="min-w-0">
+                <h1 className="flex items-center gap-1.5 truncate text-base font-bold text-slate-900 sm:gap-2 sm:text-lg">
+                  <Receipt className="h-4 w-4 shrink-0 text-emerald-600 sm:h-5 sm:w-5" />
+                  <span className="truncate">Invoice No. {bill.invoiceNumber || 'Draft'}</span>
+                </h1>
+                <p className="truncate text-[11px] font-medium text-slate-500 sm:text-xs">
+                  <span className="font-semibold text-slate-800">{firm?.name || 'N/A'}</span>
+                  {bill.invoiceDate && <> · {bill.invoiceDate}</>}
+                </p>
+              </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={handleOpenEditDialog} className="gap-2 shadow-xs bg-white hover:bg-slate-50">
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-end sm:gap-2">
+            <Button variant="outline" onClick={handleOpenEditDialog} className="justify-center gap-2 bg-white shadow-xs hover:bg-slate-50">
               <Edit className="h-4 w-4 text-blue-600" />
               Edit Bill
             </Button>
-            <Button variant="outline" onClick={handlePrint} className="gap-2 shadow-xs bg-white hover:bg-slate-50">
+            <Button
+              variant="outline"
+              onClick={handleShareWhatsApp}
+              loading={sharingPdf}
+              disabled={sharingPdf}
+              className="justify-center gap-2 bg-white shadow-xs hover:bg-emerald-50"
+            >
+              <MessageCircle className="h-4 w-4 text-emerald-600" />
+              WhatsApp
+            </Button>
+            <Button variant="outline" onClick={handlePrint} className="justify-center gap-2 bg-white shadow-xs hover:bg-slate-50">
               <Printer className="h-4 w-4 text-slate-600" />
-              Print / Export PDF
+              <span className="sm:hidden">Print / PDF</span>
+              <span className="hidden sm:inline">Print / Export PDF</span>
             </Button>
             <Button
               variant="destructive"
               onClick={handleDelete}
-              className="gap-2 bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 shadow-xs"
+              className="justify-center gap-2 border border-red-200 bg-red-50 text-red-600 shadow-xs hover:bg-red-100"
             >
               <Trash2 className="h-4 w-4" />
               Delete
@@ -405,43 +460,39 @@ export default function BillViewerPage() {
       </div>
 
       {/* Control Bar (hidden when printing) */}
-      <div className="mx-auto max-w-screen-xl px-4 py-4 sm:px-6 lg:px-8 print:hidden">
-        <Card className="shadow-xs bg-white border border-slate-200">
-          <CardContent className="py-3 px-4 flex flex-wrap items-center justify-between gap-4 text-xs font-semibold text-slate-700">
-            <div className="flex flex-wrap items-center gap-6">
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={showLetterheadBackground}
-                  onChange={(e) => handleToggleOption('showLetterheadBackground', e.target.checked)}
-                  className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4"
-                />
-                Show Letterhead Background
-              </label>
-
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={includeSignature}
-                  onChange={(e) => handleToggleOption('includeSignature', e.target.checked)}
-                  className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4"
-                />
-                Include Signature
-              </label>
-
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={includeStamp}
-                  onChange={(e) => handleToggleOption('includeStamp', e.target.checked)}
-                  className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4"
-                />
-                Include Firm Stamp
-              </label>
+      <div className="mx-auto max-w-screen-xl px-3 py-4 sm:px-6 lg:px-8 print:hidden">
+        <Card className="border border-slate-200 bg-white shadow-xs">
+          <CardContent className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+            <div className="flex flex-wrap items-center gap-2">
+              {(
+                [
+                  { key: 'showLetterheadBackground', label: 'Letterhead', full: 'Show Letterhead Background', value: showLetterheadBackground },
+                  { key: 'includeSignature', label: 'Signature', full: 'Include Signature', value: includeSignature },
+                  { key: 'includeStamp', label: 'Firm Stamp', full: 'Include Firm Stamp', value: includeStamp },
+                ] as const
+              ).map((toggle) => (
+                <label
+                  key={toggle.key}
+                  className={`flex cursor-pointer select-none items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                    toggle.value
+                      ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                      : 'border-slate-200 bg-slate-50 text-slate-500'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={toggle.value}
+                    onChange={(e) => handleToggleOption(toggle.key, e.target.checked)}
+                    className="h-3.5 w-3.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <span className="sm:hidden">{toggle.label}</span>
+                  <span className="hidden sm:inline">{toggle.full}</span>
+                </label>
+              ))}
             </div>
 
             {customTemplate && (
-              <span className="text-xs text-blue-600 bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-md font-medium">
+              <span className="w-fit rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-600">
                 Template: {customTemplate.name}
               </span>
             )}
@@ -449,8 +500,14 @@ export default function BillViewerPage() {
         </Card>
       </div>
 
-      {/* Printable A4 Container */}
-      <div className="mx-auto flex justify-center px-4 py-4 print:p-0 print:m-0">
+      {/* Printable A4 Container — scaled down to fit narrow screens via CSS transform;
+          the box itself always stays a true 210mm x 297mm for print/PDF fidelity. */}
+      <div className="mx-auto flex justify-center px-2 py-4 print:p-0 print:m-0">
+        <div
+          ref={previewWrapperRef}
+          className="flex w-full justify-center print:block print:h-auto print:w-auto"
+          style={{ height: `${A4_HEIGHT_PX * previewScale}px` }}
+        >
         <div
           id="printable-bill-area"
           className="relative bg-white shadow-xl rounded-none print:shadow-none print:m-0 overflow-hidden"
@@ -460,6 +517,8 @@ export default function BillViewerPage() {
             minHeight: '297mm',
             boxSizing: 'border-box',
             position: 'relative',
+            transform: `scale(${previewScale})`,
+            transformOrigin: 'top center',
             padding: showLetterheadBackground && firm?.headerImagePath
               ? `${contentStartY}px ${pageMargin}px ${footerReserve}px ${pageMargin}px`
               : '40px',
@@ -510,6 +569,7 @@ export default function BillViewerPage() {
             className="relative z-10 w-full text-slate-900"
             dangerouslySetInnerHTML={{ __html: compiledHTML }}
           />
+        </div>
         </div>
       </div>
 
@@ -845,6 +905,7 @@ export default function BillViewerPage() {
             width: 100% !important;
             min-height: 100vh !important;
             margin: 0 !important;
+            transform: none !important;
           }
         }
       `}</style>

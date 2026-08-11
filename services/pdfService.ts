@@ -96,6 +96,17 @@ export const pdfService = {
   },
 
   /**
+   * Captures an already-rendered, on-screen A4 element (e.g. the Bill viewer's
+   * `#printable-bill-area`) directly, instead of re-serializing it to an HTML string
+   * and reloading it in a hidden iframe. Faster and avoids any re-render/font-loading
+   * mismatch, since it's the exact DOM already visible to the user.
+   */
+  async generatePDFBlobFromElement(element: HTMLElement): Promise<Blob> {
+    const canvas = await html2canvas(element, { scale: RENDER_SCALE, useCORS: true, backgroundColor: '#ffffff' });
+    return buildPDFFromPageCanvases([canvas]).output('blob');
+  },
+
+  /**
    * Generates a PDF and saves it — either directly into the user's configured PDF
    * download folder (Settings, Chrome/Edge only), or via a normal browser download.
    */

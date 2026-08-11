@@ -10,6 +10,13 @@ import {
   normalizeVersioningSettings,
   validateVersioningSetting,
 } from '@/services/versioningSettings';
+import {
+  createPasswordAuthSettings,
+  hasSitePassword,
+  SITE_PASSWORD_SESSION_KEY,
+  validateNewPassword,
+  verifySitePassword,
+} from '@/services/passwordAuthService';
 import { toHindiUnit } from '@/lib/unitUtils';
 import { getSampleBillTemplate } from '@/templates/default/billTemplate';
 import { TEMPLATE_FONTS_GOOGLE_IMPORT_URL, getFontStyleAdjustments } from '@/lib/templateFonts';
@@ -22,7 +29,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AddPlaceDialog } from '@/components/forms/Location/AddPlaceDialog';
 import { PdfDownloadFolderCard } from '@/components/settings/pdfDownloadFolderCard';
-import { Sparkles, FileText, Languages, Package, ChevronDown, ChevronUp, Search, X } from 'lucide-react';
+import { Sparkles, FileText, Languages, Package, ChevronDown, ChevronUp, Search, X, Lock } from 'lucide-react';
 
 import { Textarea } from '@/components/ui/textarea';
 
@@ -34,6 +41,13 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState('');
+  const [passwordForm, setPasswordForm] = useState({
+    oldPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
   const [versioningErrors, setVersioningErrors] = useState<Record<string, string>>({});
 
   // Mapping state
@@ -332,6 +346,46 @@ export default function SettingsPage() {
     setSaving(false);
     setSuccess('Settings saved.');
     setTimeout(() => setSuccess(''), 2500);
+  };
+
+  const handlePasswordChange = async () => {
+    if (!settings) return;
+
+    setPasswordSaving(true);
+    setPasswordError('');
+    try {
+      if (hasSitePassword(settings)) {
+        if (!settings.passwordAuth) {
+          setPasswordError('Password settings are missing. Refresh and try again.');
+          return;
+        }
+        const oldPasswordValid = await verifySitePassword(passwordForm.oldPassword, settings.passwordAuth);
+        if (!oldPasswordValid) {
+          setPasswordError('Old password is incorrect.');
+          return;
+        }
+      }
+
+      const validationError = validateNewPassword(passwordForm.newPassword);
+      if (validationError) {
+        setPasswordError(validationError);
+        return;
+      }
+      if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+        setPasswordError('New passwords do not match.');
+        return;
+      }
+
+      const passwordAuth = await createPasswordAuthSettings(passwordForm.newPassword);
+      const updated = await dataService.settings.update({ passwordAuth });
+      sessionStorage.setItem(SITE_PASSWORD_SESSION_KEY, passwordAuth.passwordHash);
+      setSettings(updated);
+      setPasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' });
+      setSuccess('Website password updated.');
+      setTimeout(() => setSuccess(''), 2500);
+    } finally {
+      setPasswordSaving(false);
+    }
   };
 
   const updateVersioningSettings = async (patch: Partial<VersioningSettings>) => {
@@ -1337,6 +1391,65 @@ export default function SettingsPage() {
                   ))
                 )}
               </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Lock className="h-5 w-5 text-slate-600" />
+                Website Password
+              </CardTitle>
+              <CardDescription>Change the private access password for this website.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {hasSitePassword(settings) && (
+                <div className="space-y-2">
+                  <Label htmlFor="oldSitePassword">Old Password</Label>
+                  <Input
+                    id="oldSitePassword"
+                    type="password"
+                    autoComplete="current-password"
+                    value={passwordForm.oldPassword}
+                    onChange={(event) =>
+                      setPasswordForm((current) => ({ ...current, oldPassword: event.target.value }))
+                    }
+                  />
+                </div>
+              )}
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="newSitePassword">New Password</Label>
+                  <Input
+                    id="newSitePassword"
+                    type="password"
+                    autoComplete="new-password"
+                    value={passwordForm.newPassword}
+                    onChange={(event) =>
+                      setPasswordForm((current) => ({ ...current, newPassword: event.target.value }))
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="confirmSitePassword">Confirm Password</Label>
+                  <Input
+                    id="confirmSitePassword"
+                    type="password"
+                    autoComplete="new-password"
+                    value={passwordForm.confirmPassword}
+                    onChange={(event) =>
+                      setPasswordForm((current) => ({ ...current, confirmPassword: event.target.value }))
+                    }
+                  />
+                </div>
+              </div>
+
+              {passwordError && <p className="text-sm font-medium text-red-600">{passwordError}</p>}
+
+              <Button onClick={handlePasswordChange} loading={passwordSaving} disabled={passwordSaving}>
+                Update Password
+              </Button>
             </CardContent>
           </Card>
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Printer, Trash2, Receipt, Edit, Plus, CheckCircle, AlertTriangle, Sparkles, X, MessageCircle, MoreVertical } from 'lucide-react';
@@ -18,9 +18,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-
-const A4_WIDTH_PX = 794; // 210mm at 96dpi
-const A4_HEIGHT_PX = 1123; // 297mm at 96dpi
 
 interface ItemRow {
   id: string;
@@ -50,27 +47,9 @@ export default function BillViewerPage() {
   const [includeSignature, setIncludeSignature] = useState(true);
   const [includeStamp, setIncludeStamp] = useState(true);
 
-  // Responsive preview: the printable area is a fixed 210mm x 297mm box (must stay
-  // exact for print/PDF fidelity), so on narrow screens we scale it down visually
-  // with a CSS transform rather than reflowing it, and reserve exactly the scaled
-  // height so the page layout below doesn't leave a gap.
-  const previewWrapperRef = useRef<HTMLDivElement>(null);
-  const [previewScale, setPreviewScale] = useState(1);
   const [sharingPdf, setSharingPdf] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [autoEditOpened, setAutoEditOpened] = useState(false);
-
-  useEffect(() => {
-    const updateScale = () => {
-      const wrapper = previewWrapperRef.current;
-      if (!wrapper) return;
-      const available = wrapper.clientWidth;
-      setPreviewScale(available > 0 ? Math.min(1, available / A4_WIDTH_PX) : 1);
-    };
-    updateScale();
-    window.addEventListener('resize', updateScale);
-    return () => window.removeEventListener('resize', updateScale);
-  }, []);
 
   // Edit Modal State
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -530,14 +509,11 @@ export default function BillViewerPage() {
         </Card>
       </div>
 
-      {/* Printable A4 Container — scaled down to fit narrow screens via CSS transform;
-          the box itself always stays a true 210mm x 297mm for print/PDF fidelity. */}
-      <div className="mx-auto flex justify-center px-2 py-4 print:p-0 print:m-0">
-        <div
-          ref={previewWrapperRef}
-          className="flex w-full justify-center print:block print:h-auto print:w-auto"
-          style={{ height: `${A4_HEIGHT_PX * previewScale}px` }}
-        >
+      {/* Printable A4 Container — renders at true 210mm x 297mm size always (matches
+          print/PDF output exactly). On phones, this is wider than the screen, so the
+          wrapper scrolls horizontally instead of shrinking the page down to fit —
+          shrinking made the invoice too small to actually read. */}
+      <div className="mx-auto overflow-x-auto px-2 py-4 print:overflow-visible print:p-0 print:m-0" style={{ WebkitOverflowScrolling: 'touch' }}>
         <div
           id="printable-bill-area"
           className="relative bg-white shadow-xl rounded-none print:shadow-none print:m-0 overflow-hidden"
@@ -547,8 +523,7 @@ export default function BillViewerPage() {
             minHeight: '297mm',
             boxSizing: 'border-box',
             position: 'relative',
-            transform: `scale(${previewScale})`,
-            transformOrigin: 'top center',
+            margin: '0 auto',
             padding: showLetterheadBackground && firm?.headerImagePath
               ? `${contentStartY}px ${pageMargin}px ${footerReserve}px ${pageMargin}px`
               : '40px',
@@ -599,7 +574,6 @@ export default function BillViewerPage() {
             className="relative z-10 w-full text-slate-900"
             dangerouslySetInnerHTML={{ __html: compiledHTML }}
           />
-        </div>
         </div>
       </div>
 
@@ -1097,7 +1071,6 @@ export default function BillViewerPage() {
             width: 100% !important;
             min-height: 100vh !important;
             margin: 0 !important;
-            transform: none !important;
           }
         }
       `}</style>

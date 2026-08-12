@@ -15,6 +15,7 @@ import {
 } from '@/services/passwordAuthService'
 import { Settings } from '@/types'
 import type { SyncedCollectionName } from '@/services/localDb/indexedDb'
+import { SyncStatusPill } from '@/components/SyncStatusPill'
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<Settings | null>(null)
@@ -185,5 +186,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
     )
   }
 
-  return <>{children}</>
+  return (
+    <>
+      {children}
+      <SyncStatusPill />
+    </>
+  )
 }

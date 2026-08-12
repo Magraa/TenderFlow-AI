@@ -50,6 +50,34 @@ let firestoreDb: FirestoreDB | null = null;
 let flushing = false;
 let onlineListenerRegistered = false;
 
+const statusListeners = new Set<() => void>();
+
+// Lets UI (e.g. a sync-status pill) react to outbox changes without polling IndexedDB.
+export function onSyncStatusChange(listener: () => void): () => void {
+  statusListeners.add(listener);
+  return () => statusListeners.delete(listener);
+}
+
+function notifyStatusListeners(): void {
+  statusListeners.forEach((listener) => listener());
+}
+
+export interface SyncStatusSnapshot {
+  online: boolean;
+  totalPending: number;
+  pendingByCollection: Partial<Record<SyncedCollectionName, number>>;
+}
+
+export async function getSyncStatus(): Promise<SyncStatusSnapshot> {
+  const db = await getSyncDb();
+  const entries = await db.getAll('outbox');
+  const pendingByCollection: Partial<Record<SyncedCollectionName, number>> = {};
+  for (const entry of entries) {
+    pendingByCollection[entry.collection] = (pendingByCollection[entry.collection] || 0) + 1;
+  }
+  return { online: isOnline(), totalPending: entries.length, pendingByCollection };
+}
+
 function getFirestoreDb(): FirestoreDB {
   if (!firestoreDb) firestoreDb = new FirestoreDB();
   return firestoreDb;
@@ -126,6 +154,7 @@ export async function enqueueOutbox(
     payload,
     createdAt: new Date().toISOString(),
   });
+  notifyStatusListeners();
   void flushOutbox();
 }
 
@@ -162,6 +191,7 @@ export async function flushOutbox(): Promise<void> {
         if (entry.id !== undefined) {
           await db.delete('outbox', entry.id);
         }
+        notifyStatusListeners();
       } catch (error) {
         console.error('Failed to flush outbox entry', entry, error);
         break;

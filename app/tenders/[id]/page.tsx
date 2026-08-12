@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { MessageCircle, Wallet, Percent, TrendingUp, Flag, ArrowLeft } from 'lucide-react';
 import { Bill, BillItem, CustomTemplate, DocumentVersion, Firm, Settings, Tender, TenderDocType, TenderDocument } from '@/types';
@@ -55,9 +55,10 @@ function calcTotals(tender: Tender) {
   };
 }
 
-export default function TenderDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default function TenderDetailPage() {
   const router = useRouter();
-  const [id, setId] = useState('');
+  const params = useParams<{ id: string }>();
+  const id = params?.id || '';
   const [tender, setTender] = useState<Tender | null>(null);
   const [mainFirm, setMainFirm] = useState<Firm | null>(null);
   const [altFirmA, setAltFirmA] = useState<Firm | null>(null);
@@ -81,10 +82,6 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
   const autoSaveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   useEffect(() => {
-    params.then((resolved) => setId(resolved.id));
-  }, [params]);
-
-  useEffect(() => {
     return () => {
       Object.values(autoSaveTimers.current).forEach((timer) => clearTimeout(timer));
     };
@@ -95,37 +92,46 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
     let cancelled = false;
 
     (async () => {
-      const currentTender = await dataService.tenders.get(id);
-      if (!currentTender) {
+      try {
+        setLoading(true);
+        setError('');
+
+        const currentTender = await dataService.tenders.get(id);
+        if (!currentTender) {
+          if (cancelled) return;
+          setError('Tender not found.');
+          return;
+        }
+
+        const altAId = currentTender.alternateFirms?.[0] || '';
+        const altBId = currentTender.alternateFirms?.[1] || '';
+
+        const [currentMainFirm, altA, altB, docs, loadedSettings, templates, allBills] = await Promise.all([
+          dataService.firms.get(currentTender.mainFirmId),
+          altAId ? dataService.firms.get(altAId) : Promise.resolve(null),
+          altBId ? dataService.firms.get(altBId) : Promise.resolve(null),
+          dataService.documents.listByTender(id),
+          dataService.settings.get(),
+          dataService.customTemplates.list(),
+          dataService.bills.list(),
+        ]);
+
         if (cancelled) return;
-        setError('Tender not found.');
-        setLoading(false);
-        return;
+        setTender(currentTender);
+        setMainFirm(currentMainFirm || null);
+        setAltFirmA(altA || null);
+        setAltFirmB(altB || null);
+        setDocuments(docs);
+        setSettings(loadedSettings);
+        setCustomTemplates(templates || []);
+        setFirmBill(allBills.find((b) => b.tenderId === currentTender.id) || null);
+      } catch (err) {
+        if (cancelled) return;
+        console.error('Failed to load tender page:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load tender data.');
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-
-      const altAId = currentTender.alternateFirms?.[0] || '';
-      const altBId = currentTender.alternateFirms?.[1] || '';
-
-      const [currentMainFirm, altA, altB, docs, loadedSettings, templates, allBills] = await Promise.all([
-        dataService.firms.get(currentTender.mainFirmId),
-        altAId ? dataService.firms.get(altAId) : Promise.resolve(null),
-        altBId ? dataService.firms.get(altBId) : Promise.resolve(null),
-        dataService.documents.listByTender(id),
-        dataService.settings.get(),
-        dataService.customTemplates.list(),
-        dataService.bills.list(),
-      ]);
-
-      if (cancelled) return;
-      setTender(currentTender);
-      setMainFirm(currentMainFirm || null);
-      setAltFirmA(altA || null);
-      setAltFirmB(altB || null);
-      setDocuments(docs);
-      setSettings(loadedSettings);
-      setCustomTemplates(templates || []);
-      setFirmBill(allBills.find((b) => b.tenderId === currentTender.id) || null);
-      setLoading(false);
     })();
 
     return () => {

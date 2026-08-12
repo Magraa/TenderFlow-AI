@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Printer, Trash2, Receipt, Edit, Plus, CheckCircle, AlertTriangle, Sparkles, X, MessageCircle } from 'lucide-react';
+import { ArrowLeft, Printer, Trash2, Receipt, Edit, Plus, CheckCircle, AlertTriangle, Sparkles, X, MessageCircle, MoreVertical } from 'lucide-react';
 import { Bill, CustomTemplate, Firm, HindiMapping } from '@/types';
 import { dataService } from '@/services/dataService';
 import { compileBillHTML } from '@/templates/default/billTemplate';
@@ -57,6 +57,8 @@ export default function BillViewerPage() {
   const previewWrapperRef = useRef<HTMLDivElement>(null);
   const [previewScale, setPreviewScale] = useState(1);
   const [sharingPdf, setSharingPdf] = useState(false);
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const [autoEditOpened, setAutoEditOpened] = useState(false);
 
   useEffect(() => {
     const updateScale = () => {
@@ -156,7 +158,7 @@ export default function BillViewerPage() {
       [bill.recipientDesignation, bill.recipientDepartment, bill.recipientDistrict].filter(Boolean).join('\n')
     );
     setEditFirmId(bill.firmId || '');
-    setEditCustomTemplateId(bill.customTemplateId || '');
+    setEditCustomTemplateId(bill.customTemplateId || firm?.customBillTemplateId || customTemplate?.id || '');
     setEditSgstPercent(bill.sgstPercent ?? 9.0);
     setEditCgstPercent(bill.cgstPercent ?? 9.0);
     setEditIgstPercent(bill.igstPercent ?? 0.0);
@@ -172,6 +174,14 @@ export default function BillViewerPage() {
     );
     setEditDialogOpen(true);
   };
+
+  useEffect(() => {
+    if (!bill || autoEditOpened) return;
+    const shouldOpenEdit = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('edit') === '1';
+    if (!shouldOpenEdit) return;
+    handleOpenEditDialog();
+    setAutoEditOpened(true);
+  }, [bill, autoEditOpened]);
 
   // Duplicate check for edit modal
   const isEditDuplicateInvoice = Boolean(
@@ -399,13 +409,19 @@ export default function BillViewerPage() {
     customTemplate || undefined,
     showLetterheadBackground ? { contentStartY, footerReserve, pageMargin } : undefined,
   );
+  const editSubtotal = editItems.reduce((sum, item) => sum + item.quantity * item.rate, 0);
+  const editGstTotal =
+    (editSgstPercent ? (editSubtotal * editSgstPercent) / 100 : 0) +
+    (editCgstPercent ? (editSubtotal * editCgstPercent) / 100 : 0) +
+    (editIgstPercent ? (editSubtotal * editIgstPercent) / 100 : 0);
+  const editGrandTotal = editSubtotal + editGstTotal;
 
   return (
     <div className="min-h-screen bg-slate-100 pb-16 print:bg-white print:p-0">
       {/* Top Action Bar (hidden when printing) */}
       <div className="border-b bg-white/95 backdrop-blur-sm shadow-xs sticky top-0 z-30 print:hidden">
-        <div className="mx-auto flex max-w-screen-xl flex-col gap-3 px-3 py-3 sm:px-6 sm:py-3.5 lg:px-8">
-          <div className="flex items-center justify-between gap-3">
+        <div className="mx-auto flex max-w-screen-xl flex-col gap-2 px-3 py-3 sm:px-6 sm:py-3.5 lg:px-8">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex min-w-0 items-center gap-2 sm:gap-3">
               <Link href="/dashboard">
                 <Button variant="ghost" size="sm" className="shrink-0 gap-1.5 px-2 text-slate-600 sm:px-3">
@@ -425,8 +441,6 @@ export default function BillViewerPage() {
                 </p>
               </div>
             </div>
-          </div>
-
           <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-end sm:gap-2">
             <Button variant="outline" onClick={handleOpenEditDialog} className="justify-center gap-2 bg-white shadow-xs hover:bg-slate-50">
               <Edit className="h-4 w-4 text-blue-600" />
@@ -455,15 +469,31 @@ export default function BillViewerPage() {
               <Trash2 className="h-4 w-4" />
               Delete
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setOptionsOpen((current) => !current)}
+              className="justify-center gap-2 bg-white px-2.5 shadow-xs hover:bg-slate-50"
+              title="Preview options"
+              aria-expanded={optionsOpen}
+            >
+              <MoreVertical className="h-4 w-4 text-slate-600" />
+              <span className="sr-only">Preview Options</span>
+            </Button>
+          </div>
           </div>
         </div>
       </div>
 
       {/* Control Bar (hidden when printing) */}
-      <div className="mx-auto max-w-screen-xl px-3 py-4 sm:px-6 lg:px-8 print:hidden">
-        <Card className="border border-slate-200 bg-white shadow-xs">
-          <CardContent className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-            <div className="flex flex-wrap items-center gap-2">
+      <div
+        className={`mx-auto max-w-screen-xl overflow-hidden px-3 transition-all duration-300 ease-out sm:px-6 lg:px-8 print:hidden ${
+          optionsOpen ? 'max-h-40 py-4 opacity-100' : 'max-h-0 py-0 opacity-0'
+        }`}
+      >
+        <Card className="border border-slate-200 bg-white/95 shadow-sm">
+          <CardContent className="flex min-h-16 flex-col justify-center gap-3 px-4 py-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+            <div className="flex flex-wrap items-center gap-2 py-1">
               {(
                 [
                   { key: 'showLetterheadBackground', label: 'Letterhead', full: 'Show Letterhead Background', value: showLetterheadBackground },
@@ -473,10 +503,10 @@ export default function BillViewerPage() {
               ).map((toggle) => (
                 <label
                   key={toggle.key}
-                  className={`flex cursor-pointer select-none items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                  className={`flex min-h-9 cursor-pointer select-none items-center gap-2 rounded-full border px-3.5 py-2 text-xs font-semibold transition-colors ${
                     toggle.value
-                      ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                      : 'border-slate-200 bg-slate-50 text-slate-500'
+                      ? 'border-emerald-200 bg-emerald-50 text-emerald-800 shadow-xs'
+                      : 'border-slate-200 bg-slate-50 text-slate-500 hover:bg-white'
                   }`}
                 >
                   <input
@@ -492,7 +522,7 @@ export default function BillViewerPage() {
             </div>
 
             {customTemplate && (
-              <span className="w-fit rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-600">
+              <span className="w-fit rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-600">
                 Template: {customTemplate.name}
               </span>
             )}
@@ -575,18 +605,23 @@ export default function BillViewerPage() {
 
       {/* EDIT BILL DIALOG MODAL */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-lg font-bold">
-              <Edit className="h-5 w-5 text-blue-600" />
-              Edit Invoice No. {bill.invoiceNumber}
+        <DialogContent className="w-[calc(100vw-1rem)] max-w-none sm:w-[calc(100vw-2rem)] xl:w-[1180px] max-h-[94dvh] overflow-y-auto p-0">
+          <DialogHeader className="sticky top-0 z-20 border-b border-slate-200 bg-white px-5 py-4">
+            <DialogTitle className="flex flex-wrap items-center justify-between gap-3 text-lg font-bold">
+              <span className="flex items-center gap-2">
+                <Edit className="h-5 w-5 text-blue-600" />
+                Edit Invoice No. {bill.invoiceNumber}
+              </span>
+              <span className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1 text-sm font-extrabold text-emerald-800">
+                ₹{editGrandTotal.toLocaleString('en-IN')}
+              </span>
             </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-6 py-2">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-5 bg-slate-50/70 px-4 py-4 sm:px-5 sm:py-5">
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+              <div className="space-y-4 rounded-lg border border-slate-200 bg-white p-4 shadow-xs">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div className="space-y-1">
                     <Label className="text-xs font-semibold">Invoice No</Label>
                     <Input value={editInvoiceNumber} onChange={(e) => setEditInvoiceNumber(e.target.value)} />
@@ -620,51 +655,68 @@ export default function BillViewerPage() {
                     <span>Warning ⚠️: Invoice No. <strong>{editInvoiceNumber}</strong> already exists for this firm!</span>
                   </div>
                 )}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">Recipient Header / Address (Paragraph-wise)</Label>
+                  <Textarea
+                    rows={3}
+                    value={editRecipientAddress}
+                    onChange={(e) => setEditRecipientAddress(e.target.value)}
+                    placeholder={`Chief Municipal Officer\nCity Council Mihona\nDistt. Bhind`}
+                    className="min-h-20 font-mono text-xs"
+                  />
+                </div>
               </div>
 
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">Select Firm</Label>
-                <select
-                  value={editFirmId}
-                  onChange={(e) => setEditFirmId(e.target.value)}
-                  className="w-full h-9 rounded-md border border-slate-300 bg-white px-3 text-xs"
-                >
-                  {allFirms.map((f) => (
-                    <option key={f.id} value={f.id}>{f.name}</option>
-                  ))}
-                </select>
+              <div className="space-y-4 rounded-lg border border-slate-200 bg-white p-4 shadow-xs">
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold">Select Firm</Label>
+                  <select
+                    value={editFirmId}
+                    onChange={(e) => {
+                      const nextFirmId = e.target.value;
+                      const nextFirm = allFirms.find((f) => f.id === nextFirmId);
+                      setEditFirmId(nextFirmId);
+                      setEditCustomTemplateId(nextFirm?.customBillTemplateId || '');
+                    }}
+                    className="w-full h-9 rounded-md border border-slate-300 bg-white px-3 text-xs"
+                  >
+                    {allFirms.map((f) => (
+                      <option key={f.id} value={f.id}>{f.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold">Custom Template</Label>
+                  <select
+                    value={editCustomTemplateId}
+                    onChange={(e) => setEditCustomTemplateId(e.target.value)}
+                    className="w-full h-9 rounded-md border border-slate-300 bg-white px-3 text-xs"
+                  >
+                    <option value="">-- Standard Reference Bill Template --</option>
+                    {allBillTemplates.map((t) => (
+                      <option key={t.id} value={t.id}>{t.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="hidden">
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Subtotal</span>
+                    <span className="font-semibold text-slate-900">₹{editSubtotal.toLocaleString('en-IN')}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Tax</span>
+                    <span className="font-semibold text-slate-900">₹{editGstTotal.toLocaleString('en-IN')}</span>
+                  </div>
+                  <div className="flex justify-between border-t border-slate-200 pt-2">
+                    <span className="font-bold text-slate-800">Grand Total</span>
+                    <span className="font-extrabold text-emerald-700">₹{editGrandTotal.toLocaleString('en-IN')}</span>
+                  </div>
+                </div>
               </div>
-            </div>
-
-            {/* Recipient Details Textarea */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Recipient Header / Address (Paragraph-wise)</Label>
-              <Textarea
-                rows={3}
-                value={editRecipientAddress}
-                onChange={(e) => setEditRecipientAddress(e.target.value)}
-                placeholder={`Chief Municipal Officer\nCity Council Mihona\nDistt. Bhind`}
-                className="font-mono text-xs"
-              />
-            </div>
-
-            {/* Template Selector */}
-            <div className="space-y-1">
-              <Label className="text-xs font-semibold">Custom Template</Label>
-              <select
-                value={editCustomTemplateId}
-                onChange={(e) => setEditCustomTemplateId(e.target.value)}
-                className="w-full h-9 rounded-md border border-slate-300 bg-white px-3 text-xs"
-              >
-                <option value="">-- Standard Reference Bill Template --</option>
-                {allBillTemplates.map((t) => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
-                ))}
-              </select>
             </div>
 
             {/* Items Table in Edit Dialog */}
-            <div className="space-y-2 border-t pt-4">
+            <div className="space-y-3 rounded-lg border border-slate-200 bg-white p-4 shadow-xs">
               <div className="flex items-center justify-between">
                 <div>
                   <h4 className="text-sm font-bold text-slate-800">Bill Items List</h4>
@@ -672,8 +724,123 @@ export default function BillViewerPage() {
                 </div>
               </div>
 
-              <div className="overflow-x-auto border rounded-lg border-slate-200">
-                <table className="w-full text-xs text-left">
+              <div className="grid gap-3 md:hidden">
+                {editItems.map((item, idx) => (
+                  <div key={item.id} className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-500">Item {idx + 1}</span>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          title="Add row after"
+                          onClick={() => handleAddItemAfterToEdit(idx)}
+                          className="h-7 w-7 p-0 text-emerald-600 hover:bg-emerald-50"
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          title="Delete row"
+                          disabled={editItems.length <= 1}
+                          onClick={() => handleRemoveItemFromEdit(item.id)}
+                          className="h-7 w-7 p-0 text-red-500 hover:bg-red-50"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex gap-2">
+                        <Input
+                          value={item.productName}
+                          onFocus={() => setActiveSuggestionIndex(idx)}
+                          onChange={(e) => {
+                            handleEditItemChange(item.id, 'productName', e.target.value);
+                            setActiveSuggestionIndex(idx);
+                          }}
+                          placeholder="Item Name"
+                          className="h-9 min-w-0 text-xs font-medium"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          title="Generate & Replace with AI Pack"
+                          disabled={generatingRowId === item.id || !item.productName.trim()}
+                          onClick={() => handleInlineAIGenerateInEdit(idx)}
+                          className="h-9 shrink-0 gap-1 border-amber-300 bg-amber-50 px-2 text-[11px] font-semibold text-amber-900 hover:bg-amber-100"
+                        >
+                          {generatingRowId === item.id ? (
+                            <div className="h-3 w-3 animate-spin rounded-full border-2 border-amber-600 border-t-transparent" />
+                          ) : (
+                            <Sparkles className="h-3.5 w-3.5 text-amber-600 fill-amber-400" />
+                          )}
+                          AI
+                        </Button>
+                      </div>
+                      <Input
+                        value={item.description}
+                        onChange={(e) => handleEditItemChange(item.id, 'description', e.target.value)}
+                        placeholder="Specification / Description"
+                        className="h-8 text-xs bg-white"
+                      />
+                      <div className="grid grid-cols-3 gap-2">
+                        <div>
+                          <Label className="text-[10px] font-semibold text-slate-500">Qty</Label>
+                          <Input
+                            type="number"
+                            step="any"
+                            value={item.quantity}
+                            onChange={(e) => handleEditItemChange(item.id, 'quantity', parseFloat(e.target.value) || 0)}
+                            className="h-8 text-xs text-center"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-[10px] font-semibold text-slate-500">Unit</Label>
+                          <Input
+                            value={item.unit}
+                            onChange={(e) => handleEditItemChange(item.id, 'unit', e.target.value)}
+                            className="h-8 text-xs text-center"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-[10px] font-semibold text-slate-500">Rate</Label>
+                          <Input
+                            type="number"
+                            step="any"
+                            value={item.rate}
+                            onChange={(e) => handleEditItemChange(item.id, 'rate', parseFloat(e.target.value) || 0)}
+                            className="h-8 text-xs text-right"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex justify-between rounded-md bg-white px-2.5 py-2 text-xs">
+                        <span className="font-semibold text-slate-500">Amount</span>
+                        <span className="font-extrabold text-slate-900">
+                          ₹{(item.quantity * item.rate).toLocaleString('en-IN', { minimumFractionDigits: 1 })}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleAddItemToEdit}
+                  className="gap-2 text-emerald-700 font-semibold hover:bg-emerald-50 w-full py-2 justify-center border border-dashed border-emerald-300"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add Item Row
+                </Button>
+              </div>
+
+              <div className="hidden overflow-x-auto border rounded-lg border-slate-200 md:block">
+                <table className="min-w-[940px] w-full text-xs text-left">
                   <thead className="bg-slate-100 uppercase font-semibold">
                     <tr>
                       <th className="py-2 px-2 text-center w-8">#</th>
@@ -682,7 +849,7 @@ export default function BillViewerPage() {
                       <th className="py-2 px-2 text-center w-20">Unit</th>
                       <th className="py-2 px-2 text-right w-28">Rate (₹)</th>
                       <th className="py-2 px-2 text-right w-28">Amount (₹)</th>
-                      <th className="py-2 px-2 text-center w-16">Actions</th>
+                      <th className="py-2 px-2 text-center w-28">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -815,27 +982,29 @@ export default function BillViewerPage() {
                           ₹{(item.quantity * item.rate).toLocaleString('en-IN', { minimumFractionDigits: 1 })}
                         </td>
                         <td className="py-1.5 px-2 text-center align-top pt-2.5">
-                          <div className="flex items-center justify-center gap-1">
+                          <div className="flex flex-col items-stretch justify-center gap-1">
                             <Button
                               type="button"
-                              variant="ghost"
+                              variant="outline"
                               size="sm"
                               title="Add row after"
                               onClick={() => handleAddItemAfterToEdit(idx)}
-                              className="h-6 w-6 p-0 text-emerald-600 hover:bg-emerald-50"
+                              className="h-7 w-full justify-start gap-1.5 border-emerald-200 bg-emerald-50 px-2 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100"
                             >
                               <Plus className="h-3.5 w-3.5" />
+                              Add
                             </Button>
                             <Button
                               type="button"
-                              variant="ghost"
+                              variant="outline"
                               size="sm"
                               title="Delete row"
                               disabled={editItems.length <= 1}
                               onClick={() => handleRemoveItemFromEdit(item.id)}
-                              className="h-6 w-6 p-0 text-red-500 hover:bg-red-50"
+                              className="h-7 w-full justify-start gap-1.5 border-red-200 bg-red-50 px-2 text-[11px] font-semibold text-red-600 hover:bg-red-100"
                             >
                               <Trash2 className="h-3.5 w-3.5" />
+                              Remove
                             </Button>
                           </div>
                         </td>
@@ -861,24 +1030,47 @@ export default function BillViewerPage() {
               </div>
             </div>
 
-            {/* Tax Rates in Edit Dialog */}
-            <div className="grid grid-cols-3 gap-3 border-t pt-4">
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">SGST (%)</Label>
-                <Input type="number" step="any" value={editSgstPercent} onChange={(e) => setEditSgstPercent(parseFloat(e.target.value) || 0)} className="h-8 text-xs text-center" />
+            {/* Tax Rates and Totals */}
+            <div className="grid gap-4 rounded-lg border border-slate-200 bg-white p-4 shadow-xs lg:grid-cols-[minmax(0,1fr)_340px]">
+              <div>
+                <div className="mb-3">
+                  <h4 className="text-sm font-bold text-slate-800">Tax Rates</h4>
+                  <p className="text-xs text-slate-500">Adjust GST percentages and review the calculated invoice total.</p>
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs font-semibold">SGST (%)</Label>
+                    <Input type="number" step="any" value={editSgstPercent} onChange={(e) => setEditSgstPercent(parseFloat(e.target.value) || 0)} className="h-9 text-xs text-center" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs font-semibold">CGST (%)</Label>
+                    <Input type="number" step="any" value={editCgstPercent} onChange={(e) => setEditCgstPercent(parseFloat(e.target.value) || 0)} className="h-9 text-xs text-center" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs font-semibold">IGST (%)</Label>
+                    <Input type="number" step="any" value={editIgstPercent} onChange={(e) => setEditIgstPercent(parseFloat(e.target.value) || 0)} className="h-9 text-xs text-center" />
+                  </div>
+                </div>
               </div>
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">CGST (%)</Label>
-                <Input type="number" step="any" value={editCgstPercent} onChange={(e) => setEditCgstPercent(parseFloat(e.target.value) || 0)} className="h-8 text-xs text-center" />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">IGST (%)</Label>
-                <Input type="number" step="any" value={editIgstPercent} onChange={(e) => setEditIgstPercent(parseFloat(e.target.value) || 0)} className="h-8 text-xs text-center" />
+
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+                <div className="flex items-center justify-between py-1.5">
+                  <span className="text-xs font-medium text-slate-500">Subtotal</span>
+                  <span className="font-semibold text-slate-900">₹{editSubtotal.toLocaleString('en-IN')}</span>
+                </div>
+                <div className="flex items-center justify-between py-1.5">
+                  <span className="text-xs font-medium text-slate-500">Tax</span>
+                  <span className="font-semibold text-slate-900">₹{editGstTotal.toLocaleString('en-IN')}</span>
+                </div>
+                <div className="mt-2 flex items-center justify-between rounded-md border border-emerald-200 bg-white px-3 py-2">
+                  <span className="text-sm font-bold text-slate-900">Grand Total</span>
+                  <span className="text-base font-extrabold text-emerald-700">₹{editGrandTotal.toLocaleString('en-IN')}</span>
+                </div>
               </div>
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="sticky bottom-0 border-t border-slate-200 bg-white px-5 py-4">
             <Button variant="outline" onClick={() => setEditDialogOpen(false)}>Cancel</Button>
             <Button onClick={handleSaveEdit} disabled={savingEdit} className="bg-emerald-600 hover:bg-emerald-700 gap-2">
               <CheckCircle className="h-4 w-4" />

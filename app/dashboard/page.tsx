@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import {
   Plus,
@@ -16,6 +17,7 @@ import {
   Building2,
   Search,
   Copy,
+  Edit,
   Printer,
   Layers,
   ChevronDown,
@@ -27,7 +29,6 @@ import {
   Wallet,
   Percent,
   Clock,
-  Languages,
   Package,
 } from 'lucide-react';
 import { Bill, Firm, Tender } from '@/types';
@@ -42,6 +43,16 @@ function getTenderGrandTotal(tender: Tender): number {
   const subtotal = tender.items.reduce((sum, item) => sum + item.quantity * item.rate, 0);
   const gst = tender.items.reduce((sum, item) => sum + (item.quantity * item.rate * item.gstPercent) / 100, 0);
   return subtotal + gst;
+}
+
+function getTenderLocationLine(tender: Tender): string {
+  const localBody = tender.localBodyTypeHindi || tender.localBodyType || '';
+  const place = tender.placeName || '';
+  const district = tender.districtName || '';
+  const districtPart = district ? `जिला ${district}` : '';
+  const locationLine = [localBody, place, districtPart].filter(Boolean).join(' ');
+
+  return locationLine || district || place || 'N/A';
 }
 
 /** Parses a tender's submission date and classifies how urgent it is, for the dashboard's deadline chip. */
@@ -160,6 +171,7 @@ function getNextInvoiceNumber(currentNumber: string, existingBills: Bill[], firm
 }
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [tenders, setTenders] = useState<Tender[]>([]);
   const [bills, setBills] = useState<Bill[]>([]);
   const [firms, setFirms] = useState<Firm[]>([]);
@@ -186,6 +198,12 @@ export default function DashboardPage() {
   // Cascading Stack Cards toggle
   const [enableStacking, setEnableStacking] = useState(true);
   const [expandedStacks, setExpandedStacks] = useState<Record<string, boolean>>({});
+  const [expandedTenderItems, setExpandedTenderItems] = useState<Record<string, boolean>>({});
+  const [expandedBillItems, setExpandedBillItems] = useState<Record<string, boolean>>({});
+  const [visibleTenderCount, setVisibleTenderCount] = useState(20);
+  const [visibleBillCount, setVisibleBillCount] = useState(20);
+  const tenderLoadMoreRef = useRef<HTMLDivElement | null>(null);
+  const billLoadMoreRef = useRef<HTMLDivElement | null>(null);
 
   // Map for quick firm lookup
   const firmsMap = useMemo(() => {
@@ -238,6 +256,7 @@ export default function DashboardPage() {
       if (created) {
         setBills((prev) => [created, ...prev]);
         setActiveTab('bills');
+        router.push(`/bills/${created.id}?edit=1`);
       }
     } catch (err) {
       console.error('Error duplicating bill:', err);
@@ -442,6 +461,16 @@ export default function DashboardPage() {
     return result;
   }, [filteredBills, enableStacking, billSortBy]);
 
+  const visibleTenders = useMemo(
+    () => filteredTenders.slice(0, visibleTenderCount),
+    [filteredTenders, visibleTenderCount]
+  );
+
+  const visibleBillGroups = useMemo(
+    () => stackedBillGroups.slice(0, visibleBillCount),
+    [stackedBillGroups, visibleBillCount]
+  );
+
   const hasActiveFilters =
     searchQuery ||
     selectedFirmId !== 'all' ||
@@ -450,6 +479,42 @@ export default function DashboardPage() {
     billStatusFilter !== 'all' ||
     billDateFilter !== 'all' ||
     billSortBy !== 'created_desc';
+
+  useEffect(() => {
+    setVisibleTenderCount(20);
+  }, [searchQuery, selectedFirmId, tenderStatusFilter, tenderLangFilter, tenders.length, firmsMap]);
+
+  useEffect(() => {
+    setVisibleBillCount(20);
+  }, [searchQuery, selectedFirmId, billStatusFilter, billDateFilter, billSortBy, bills.length, enableStacking, firmsMap]);
+
+  useEffect(() => {
+    const target = activeTab === 'tenders' ? tenderLoadMoreRef.current : billLoadMoreRef.current;
+    if (!target) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const [entry] = entries;
+        if (!entry?.isIntersecting) return;
+        if (activeTab === 'tenders' && visibleTenderCount < filteredTenders.length) {
+          setVisibleTenderCount((current) => Math.min(current + 20, filteredTenders.length));
+        }
+        if (activeTab === 'bills' && visibleBillCount < stackedBillGroups.length) {
+          setVisibleBillCount((current) => Math.min(current + 20, stackedBillGroups.length));
+        }
+      },
+      { root: null, rootMargin: '300px 0px', threshold: 0.1 }
+    );
+
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [
+    activeTab,
+    filteredTenders.length,
+    stackedBillGroups.length,
+    visibleTenderCount,
+    visibleBillCount,
+  ]);
 
   const clearFilters = () => {
     setSearchQuery('');
@@ -722,12 +787,16 @@ export default function DashboardPage() {
                 </Card>
               ) : (
                 <div className="grid gap-6 animate-in fade-in-up">
-                  {filteredTenders.map((tender) => {
+                  {visibleTenders.map((tender) => {
                     const firm = firmsMap.get(tender.mainFirmId || '');
                     // Main Item Name of first item
                     const mainItem = tender.items[0];
                     const mainItemName = mainItem?.productName || 'No items specified';
                     const deadline = getDeadlineUrgency(tender.submissionDate);
+                    const grandTotal = getTenderGrandTotal(tender).toLocaleString('en-IN');
+                    const locationName = getTenderLocationLine(tender);
+                    const createdDate = format(new Date(tender.createdAt), 'dd/MM/yyyy');
+                    const isItemsExpanded = expandedTenderItems[tender.id] ?? false;
 
                     return (
                       <Card
@@ -736,11 +805,24 @@ export default function DashboardPage() {
                           tender.status === 'final' ? 'border-l-emerald-400' : 'border-l-amber-400'
                         }`}
                       >
-                        <CardHeader className="bg-slate-50/60 pb-4">
-                          <div className="flex flex-wrap items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <CardTitle className="text-lg font-bold text-slate-800 sm:text-xl">{tender.title}</CardTitle>
-                              <CardDescription className="flex flex-wrap items-center gap-2 mt-1.5 font-medium text-xs sm:gap-2.5">
+                        <CardHeader className="bg-slate-50/60 px-4 py-3 sm:px-5">
+                          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+                            <div className="min-w-0 space-y-2">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <CardTitle className="min-w-0 text-base font-bold text-slate-900 sm:text-lg">
+                                  {tender.title}
+                                </CardTitle>
+                                <span
+                                  className={`inline-flex shrink-0 rounded-full border px-2.5 py-0.5 text-[10px] font-bold tracking-wide uppercase ${
+                                    tender.status === 'final'
+                                      ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                                      : 'bg-amber-100 text-amber-800 border-amber-200'
+                                  }`}
+                                >
+                                  {tender.status}
+                                </span>
+                              </div>
+                              <CardDescription className="flex flex-wrap items-center gap-1.5 font-medium text-xs sm:gap-2">
                                 <span className="flex items-center gap-1 text-slate-700 bg-white px-2 py-0.5 rounded border border-slate-200 font-mono">
                                   <Hash className="h-3 w-3 text-slate-400" />
                                   {tender.tenderNumber}
@@ -752,7 +834,10 @@ export default function DashboardPage() {
                                   </span>
                                 )}
                                 <span className="hidden text-slate-300 sm:inline">•</span>
-                                <span className="text-slate-600">{tender.items.length} items</span>
+                                <span className="inline-flex items-center gap-1 rounded border border-slate-200 bg-white px-2 py-0.5 text-slate-600">
+                                  <Package className="h-3 w-3 text-slate-400" />
+                                  {tender.items.length} items
+                                </span>
                                 {deadline && (
                                   <span className={`flex items-center gap-1 rounded border px-2 py-0.5 font-semibold ${deadline.classes}`}>
                                     <Clock className="h-3 w-3" />
@@ -761,103 +846,126 @@ export default function DashboardPage() {
                                 )}
                               </CardDescription>
                             </div>
-                            <span
-                              className={`inline-flex shrink-0 rounded-full px-3 py-1 text-xs font-bold tracking-wide uppercase ${
-                                tender.status === 'final'
-                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                                  : 'bg-amber-100 text-amber-800 border border-amber-200'
-                              }`}
-                            >
-                              {tender.status}
-                            </span>
+                            <div className="grid grid-cols-[1fr_auto] items-center gap-2 lg:min-w-[280px]">
+                              <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2">
+                                <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700/70">Total</p>
+                                <p className="text-base font-extrabold leading-tight text-emerald-900 sm:text-lg">₹{grandTotal}</p>
+                              </div>
+                              <div className="flex justify-end gap-1.5">
+                                <Link href={`/tenders/${tender.id}`} className="contents">
+                                  <Button size="sm" className="h-9 px-3" title="View Documents">
+                                    <Eye className="h-4 w-4" />
+                                    <span className="ml-1.5 hidden sm:inline">View</span>
+                                  </Button>
+                                </Link>
+                                <Link href={`/tenders/${tender.id}`} className="contents">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-9 bg-white px-2.5 text-slate-700 border-slate-200 hover:bg-slate-50"
+                                    title="Print Tender Documents"
+                                  >
+                                    <Printer className="h-4 w-4 text-slate-600" />
+                                    <span className="sr-only sm:not-sr-only sm:ml-1.5">Print</span>
+                                  </Button>
+                                </Link>
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={() => handleDeleteTender(tender.id)}
+                                  className="h-9 bg-red-50 px-2.5 text-red-600 border border-red-200 hover:bg-red-100"
+                                  title="Delete Tender"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                  <span className="sr-only">Delete</span>
+                                </Button>
+                              </div>
+                            </div>
                           </div>
 
-                          {/* Item Highlight Section */}
-                          <div className="mt-3.5 pt-3 border-t border-slate-200/70 flex flex-wrap items-center gap-2 text-xs">
-                            <span className="font-semibold text-slate-500 uppercase tracking-wider text-[10px]">
-                              Main Item Name:
-                            </span>
-                            <span className="font-semibold text-slate-900 bg-amber-50 text-amber-900 px-2.5 py-1 rounded-md border border-amber-200/80">
-                              {mainItemName}
-                            </span>
-                            {tender.items.length > 1 && (
-                              <span className="text-slate-500 font-medium text-[11px]">
-                                (+{tender.items.length - 1} more items)
-                              </span>
-                            )}
-                          </div>
                         </CardHeader>
 
-                        <CardContent className="pt-5">
-                          <div className="mb-6 grid grid-cols-2 gap-2.5 text-sm sm:gap-4 sm:grid-cols-4">
-                            <div className="flex items-start gap-2 bg-slate-50 p-3 rounded-lg border border-slate-100">
-                              <Languages className="h-4 w-4 shrink-0 mt-0.5 text-slate-400" />
-                              <div className="min-w-0">
-                                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Language</p>
-                                <p className="font-medium capitalize text-slate-900 truncate">{tender.language}</p>
+                        <CardContent className="px-4 py-3 sm:px-5">
+                          <div className="grid gap-3 text-sm md:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] md:items-center">
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                                <span className="font-semibold text-slate-500 uppercase tracking-wider text-[10px]">
+                                  Main item
+                                </span>
+                                <span className="min-w-0 max-w-full truncate rounded-md border border-amber-200/80 bg-amber-50 px-2 py-0.5 font-semibold text-amber-900">
+                                  {mainItemName}
+                                </span>
+                                {tender.items.length > 1 && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setExpandedTenderItems((current) => ({
+                                        ...current,
+                                        [tender.id]: !isItemsExpanded,
+                                      }))
+                                    }
+                                    className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-600 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+                                    aria-expanded={isItemsExpanded}
+                                  >
+                                    {isItemsExpanded ? 'Hide items' : `+${tender.items.length - 1} more`}
+                                    {isItemsExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                                  </button>
+                                )}
                               </div>
                             </div>
-                            <div className="flex items-start gap-2 bg-slate-50 p-3 rounded-lg border border-slate-100">
-                              <MapPin className="h-4 w-4 shrink-0 mt-0.5 text-slate-400" />
-                              <div className="min-w-0">
-                                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Location</p>
-                                <p className="font-medium text-slate-900 truncate">{tender.districtName || tender.placeName || 'N/A'}</p>
-                              </div>
+                            <div className="grid grid-cols-2 gap-1.5 text-xs text-slate-700">
+                              {/* <span className="inline-flex min-w-0 items-center gap-1 rounded-md bg-slate-50 px-2 py-1.5">
+                                <Languages className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                                <span className="truncate capitalize">{tender.language}</span>
+                              </span> */}
+                              <span className="inline-flex min-w-0 items-center gap-1 rounded-md bg-slate-50 px-2 py-1.5">
+                                <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                                <span className="truncate">{locationName}</span>
+                              </span>
+                              <span className="inline-flex min-w-0 items-center gap-1 rounded-md bg-slate-50 px-2 py-1.5">
+                                <Calendar className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                                <span className="truncate">{createdDate}</span>
+                              </span>
                             </div>
-                            <div className="flex items-start gap-2 bg-slate-50 p-3 rounded-lg border border-slate-100">
-                              <Wallet className="h-4 w-4 shrink-0 mt-0.5 text-slate-400" />
-                              <div className="min-w-0">
-                                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Grand Total</p>
-                                <p className="font-bold text-slate-900 truncate">₹{getTenderGrandTotal(tender).toLocaleString('en-IN')}</p>
-                              </div>
-                            </div>
-                            <div className="flex items-start gap-2 bg-slate-50 p-3 rounded-lg border border-slate-100">
-                              <Calendar className="h-4 w-4 shrink-0 mt-0.5 text-slate-400" />
-                              <div className="min-w-0">
-                                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Created</p>
-                                <p className="font-medium text-slate-900 truncate">{format(new Date(tender.createdAt), 'dd/MM/yyyy')}</p>
+                          </div>
+                          <div
+                            className={`grid transition-all duration-300 ease-out ${
+                              isItemsExpanded ? 'mt-3 grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+                            }`}
+                          >
+                            <div className="overflow-hidden">
+                              <div className="rounded-md border border-slate-200 bg-white p-2">
+                                <div className="grid gap-1.5">
+                                  {tender.items.map((item, itemIndex) => (
+                                    <div
+                                      key={item.id || `${tender.id}-${itemIndex}`}
+                                      className="grid gap-2 rounded bg-slate-50 px-2.5 py-2 text-xs text-slate-700 sm:grid-cols-[minmax(0,1fr)_auto_auto]"
+                                    >
+                                      <span className="min-w-0 truncate font-semibold text-slate-900">
+                                        {itemIndex + 1}. {item.productName}
+                                      </span>
+                                      <span className="text-slate-500">
+                                        {item.quantity} {item.unit || 'unit'} x ₹{item.rate.toLocaleString('en-IN')}
+                                      </span>
+                                      <span className="font-bold text-slate-900">
+                                        ₹{item.totalAmount.toLocaleString('en-IN')}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
                               </div>
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-3 gap-2 border-t border-slate-100 pt-4 sm:flex sm:justify-end sm:gap-2.5">
-                            {/* View Documents Button */}
-                            <Link href={`/tenders/${tender.id}`} className="contents">
-                              <Button size="sm" className="flex items-center justify-center gap-2 shadow-xs">
-                                <Eye className="h-4 w-4" />
-                                <span className="hidden sm:inline">View Documents</span>
-                                <span className="sm:hidden">View</span>
-                              </Button>
-                            </Link>
-
-                            {/* Direct Print Button */}
-                            <Link href={`/tenders/${tender.id}`} className="contents">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="flex items-center justify-center gap-1.5 bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
-                                title="Print Tender Documents"
-                              >
-                                <Printer className="h-4 w-4 text-slate-600" />
-                                Print
-                              </Button>
-                            </Link>
-
-                            {/* Delete Button */}
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => handleDeleteTender(tender.id)}
-                              className="flex items-center justify-center gap-1.5 bg-red-50 text-red-600 border border-red-200 hover:bg-red-100"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                              <span className="sm:hidden">Delete</span>
-                            </Button>
-                          </div>
                         </CardContent>
                       </Card>
                     );
                   })}
+                  {visibleTenders.length < filteredTenders.length && (
+                    <div ref={tenderLoadMoreRef} className="py-6 text-center text-xs font-medium text-slate-400">
+                      Loading more tenders...
+                    </div>
+                  )}
                 </div>
               )}
             </TabsContent>
@@ -890,7 +998,7 @@ export default function DashboardPage() {
                 </Card>
               ) : (
                 <div className="space-y-8 animate-in fade-in-up">
-                  {stackedBillGroups.map(({ key: stackKey, bills: stackBillsList }) => {
+                  {visibleBillGroups.map(({ key: stackKey, bills: stackBillsList }) => {
                     const isStacked = enableStacking && stackBillsList.length > 1;
                     const isExpanded = expandedStacks[stackKey] ?? false;
                     const primaryBill = stackBillsList[0];
@@ -906,6 +1014,9 @@ export default function DashboardPage() {
                       const isDateBlank = !bill.invoiceDate || !bill.invoiceDate.trim();
                       const dateDisplay = isDateBlank ? '_____________' : bill.invoiceDate;
                       const gstAmount = (bill.sgstAmount || 0) + (bill.cgstAmount || 0) + (bill.igstAmount || 0);
+                      const createdDate = format(new Date(bill.createdAt), 'dd/MM/yyyy');
+                      const isBillItemsExpanded = expandedBillItems[bill.id] ?? false;
+                      const recipientName = bill.recipientDesignation || bill.recipientDepartment || 'N/A';
 
                       return (
                         <Card
@@ -918,14 +1029,14 @@ export default function DashboardPage() {
                               : 'hover:border-emerald-300 shadow-sm hover:shadow-md'
                           }`}
                         >
-                          <CardHeader className="bg-emerald-50/40 pb-3.5 border-b border-slate-100">
-                            <div className="flex flex-wrap items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <CardTitle className="text-lg font-bold text-slate-800 flex items-center gap-2 sm:text-xl">
-                                  <Receipt className="h-5 w-5 shrink-0 text-emerald-600" />
+                          <CardHeader className="bg-emerald-50/40 px-4 py-3 border-b border-slate-100 sm:px-5">
+                            <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+                              <div className="min-w-0 space-y-2">
+                                <CardTitle className="text-base font-bold text-slate-900 flex items-center gap-2 sm:text-lg">
+                                  <Receipt className="h-4 w-4 shrink-0 text-emerald-600" />
                                   Invoice No. {bill.invoiceNumber || 'Draft'}
                                 </CardTitle>
-                                <CardDescription className="flex flex-wrap items-center gap-2 mt-1.5 font-medium text-xs text-slate-600">
+                                <CardDescription className="flex flex-wrap items-center gap-1.5 font-medium text-xs text-slate-600 sm:gap-2">
                                   {cardFirm && (
                                     <span className="bg-emerald-100/70 text-emerald-900 border border-emerald-200 px-2 py-0.5 rounded font-semibold flex items-center gap-1">
                                       <Building2 className="h-3 w-3 text-emerald-700" />
@@ -933,20 +1044,62 @@ export default function DashboardPage() {
                                     </span>
                                   )}
                                   <span className="hidden text-slate-300 sm:inline">•</span>
-                                  <span>
-                                    Recipient:{' '}
-                                    <strong className="text-slate-800">
-                                      {bill.recipientDesignation || bill.recipientDepartment || 'N/A'}
-                                    </strong>
+                                  <span className="inline-flex min-w-0 items-center gap-1 rounded border border-slate-200 bg-white px-2 py-0.5">
+                                    <Building2 className="h-3 w-3 shrink-0 text-slate-400" />
+                                    <strong className="truncate text-slate-800">{recipientName}</strong>
                                   </span>
                                   <span className="hidden text-slate-300 sm:inline">•</span>
-                                  <span>
-                                    Date: <strong className="text-slate-800">{dateDisplay}</strong>
+                                  <span className="inline-flex items-center gap-1 rounded border border-slate-200 bg-white px-2 py-0.5">
+                                    <Calendar className="h-3 w-3 text-slate-400" />
+                                    <strong className="text-slate-800">{dateDisplay}</strong>
                                   </span>
                                 </CardDescription>
                               </div>
 
-                              <div className="flex shrink-0 items-center gap-2">
+                              <div className="grid grid-cols-[1fr_auto] items-center gap-2 lg:min-w-[430px]">
+                                <div className="rounded-md border border-emerald-200 bg-white px-3 py-2">
+                                  <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700/70">Grand total</p>
+                                  <p className="text-base font-extrabold leading-tight text-emerald-900 sm:text-lg">₹{bill.grandTotal.toLocaleString('en-IN')}</p>
+                                </div>
+                                <div className="grid grid-cols-4 gap-1.5">
+                                  <Link href={`/bills/${bill.id}`} className="contents">
+                                    <Button size="sm" className="h-9 px-3 bg-emerald-600 hover:bg-emerald-700" title="View, Edit & Print">
+                                      <Eye className="h-4 w-4" />
+                                      <span className="ml-1.5 hidden xl:inline">View</span>
+                                    </Button>
+                                  </Link>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleDuplicateBill(bill)}
+                                    className="h-9 bg-white px-2.5 text-slate-700 border-slate-200 hover:bg-slate-50"
+                                    title="Duplicate & Edit this bill"
+                                  >
+                                    <Edit className="h-3.5 w-3.5 text-blue-600" />
+                                    <span className="sr-only xl:not-sr-only xl:ml-1.5">Edit Copy</span>
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleIncrementDuplicateBill(bill)}
+                                    className="h-9 bg-amber-50 px-2.5 text-amber-900 border-amber-300 hover:bg-amber-100"
+                                    title="Duplicate copy with Invoice No. +1"
+                                  >
+                                    <Copy className="h-3.5 w-3.5 text-amber-700" />
+                                    <span className="text-xs font-bold">+1</span>
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    onClick={() => handleDeleteBill(bill.id)}
+                                    className="h-9 bg-red-50 px-2.5 text-red-600 border border-red-200 hover:bg-red-100"
+                                    title="Delete Bill"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                    <span className="sr-only">Delete</span>
+                                  </Button>
+                                </div>
+                                <div className="col-span-2 flex flex-wrap justify-end gap-1.5">
                                 <span
                                   className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold tracking-wide uppercase ${
                                     bill.status === 'final'
@@ -966,6 +1119,7 @@ export default function DashboardPage() {
                                     {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
                                   </button>
                                 )}
+                                </div>
                               </div>
                             </div>
 
@@ -978,15 +1132,71 @@ export default function DashboardPage() {
                                 {primaryItemName}
                               </span>
                               {bill.items.length > 1 && (
-                                <span className="text-slate-500 font-medium text-[11px]">
-                                  (+{bill.items.length - 1} more items)
-                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setExpandedBillItems((current) => ({
+                                      ...current,
+                                      [bill.id]: !isBillItemsExpanded,
+                                    }))
+                                  }
+                                  className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-600 transition-colors hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
+                                  aria-expanded={isBillItemsExpanded}
+                                >
+                                  {isBillItemsExpanded ? 'Hide items' : `+${bill.items.length - 1} more`}
+                                  {isBillItemsExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                                </button>
                               )}
                             </div>
                           </CardHeader>
 
-                          <CardContent className="pt-5">
-                            <div className="mb-6 grid grid-cols-2 gap-2.5 text-sm sm:gap-4 sm:grid-cols-4">
+                          <CardContent className="px-4 py-3 sm:px-5">
+                            <div className="grid gap-3 text-sm md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+                              <div className="grid grid-cols-3 gap-1.5 text-xs text-slate-700">
+                                <span className="inline-flex min-w-0 items-center gap-1 rounded-md bg-slate-50 px-2 py-1.5">
+                                  <Wallet className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                                  <span className="truncate">Sub ₹{bill.totalAmount.toLocaleString('en-IN')}</span>
+                                </span>
+                                <span className="inline-flex min-w-0 items-center gap-1 rounded-md bg-slate-50 px-2 py-1.5">
+                                  <Percent className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                                  <span className="truncate">GST ₹{gstAmount.toLocaleString('en-IN')}</span>
+                                </span>
+                                <span className="inline-flex min-w-0 items-center gap-1 rounded-md bg-slate-50 px-2 py-1.5">
+                                  <Calendar className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                                  <span className="truncate">{createdDate}</span>
+                                </span>
+                              </div>
+                            </div>
+                            <div
+                              className={`grid transition-all duration-300 ease-out ${
+                                isBillItemsExpanded ? 'mt-3 grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+                              }`}
+                            >
+                              <div className="overflow-hidden">
+                                <div className="rounded-md border border-slate-200 bg-white p-2">
+                                  <div className="grid gap-1.5">
+                                    {bill.items.map((item, itemIndex) => (
+                                      <div
+                                        key={item.id || `${bill.id}-${itemIndex}`}
+                                        className="grid gap-2 rounded bg-slate-50 px-2.5 py-2 text-xs text-slate-700 sm:grid-cols-[minmax(0,1fr)_auto_auto]"
+                                      >
+                                        <span className="min-w-0 truncate font-semibold text-slate-900">
+                                          {itemIndex + 1}. {item.productName}
+                                        </span>
+                                        <span className="text-slate-500">
+                                          {item.quantity} {item.unit || 'unit'} x ₹{item.rate.toLocaleString('en-IN')}
+                                        </span>
+                                        <span className="font-bold text-slate-900">
+                                          ₹{item.amount.toLocaleString('en-IN')}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="hidden">
                               <div className="flex items-start gap-2 bg-slate-50 p-3 rounded-lg border border-slate-100">
                                 <Wallet className="h-4 w-4 shrink-0 mt-0.5 text-slate-400" />
                                 <div className="min-w-0">
@@ -1018,7 +1228,7 @@ export default function DashboardPage() {
                             </div>
 
                             {/* Actions Bar */}
-                            <div className="grid grid-cols-2 gap-2 border-t border-slate-100 pt-4 sm:flex sm:flex-wrap sm:justify-end">
+                            <div className="hidden">
                               {/* View, Edit & Print Button */}
                               <Link href={`/bills/${bill.id}`} className="col-span-2 contents sm:col-span-1">
                                 <Button size="sm" className="col-span-2 flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 shadow-2xs text-xs font-semibold sm:col-span-1">
@@ -1148,6 +1358,11 @@ export default function DashboardPage() {
                       </div>
                     );
                   })}
+                  {visibleBillGroups.length < stackedBillGroups.length && (
+                    <div ref={billLoadMoreRef} className="py-6 text-center text-xs font-medium text-slate-400">
+                      Loading more bills...
+                    </div>
+                  )}
                 </div>
               )}
             </TabsContent>

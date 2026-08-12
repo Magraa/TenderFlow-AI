@@ -14,6 +14,7 @@ import {
   verifySitePassword,
 } from '@/services/passwordAuthService'
 import { Settings } from '@/types'
+import type { SyncedCollectionName } from '@/services/localDb/indexedDb'
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<Settings | null>(null)
@@ -50,6 +51,18 @@ export function Providers({ children }: { children: React.ReactNode }) {
       cancelled = true
     }
   }, [])
+
+  useEffect(() => {
+    if (!unlocked) return
+    const enabled = (process.env.NEXT_PUBLIC_SYNC_COLLECTIONS || '')
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter(Boolean) as SyncedCollectionName[]
+    if (enabled.length === 0) return
+    import('@/services/sync/collectionSync').then(({ startAllSyncedCollections }) =>
+      startAllSyncedCollections(enabled)
+    )
+  }, [unlocked])
 
   const handleLogin = async (event: FormEvent) => {
     event.preventDefault()

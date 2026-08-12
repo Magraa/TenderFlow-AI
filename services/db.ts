@@ -1,4 +1,5 @@
 import { db as localDb } from '@/services/storageService';
+import type { SyncedCollectionName } from '@/services/localDb/indexedDb';
 
 export type DataBackend = 'local' | 'firestore';
 
@@ -6,6 +7,34 @@ function resolveBackend(): DataBackend {
   const raw = (process.env.NEXT_PUBLIC_DATA_BACKEND || 'local').toLowerCase();
   if (raw === 'firestore') return 'firestore';
   return 'local';
+}
+
+let syncedCollectionsCache: Set<SyncedCollectionName> | null = null;
+
+function getSyncedCollections(): Set<SyncedCollectionName> {
+  if (!syncedCollectionsCache) {
+    const raw = process.env.NEXT_PUBLIC_SYNC_COLLECTIONS || '';
+    syncedCollectionsCache = new Set(
+      raw
+        .split(',')
+        .map((entry) => entry.trim())
+        .filter(Boolean) as SyncedCollectionName[]
+    );
+  }
+  return syncedCollectionsCache;
+}
+
+function isCollectionSynced(name: SyncedCollectionName): boolean {
+  return typeof window !== 'undefined' && getSyncedCollections().has(name);
+}
+
+let syncedAdaptersPromise: Promise<typeof import('@/services/localDb/syncedAdapters')> | null = null;
+
+function getSyncedAdapters() {
+  if (!syncedAdaptersPromise) {
+    syncedAdaptersPromise = import('@/services/localDb/syncedAdapters');
+  }
+  return syncedAdaptersPromise;
 }
 
 let firestoreDbPromise: Promise<any> | null = null;
@@ -104,44 +133,44 @@ async function getAdapter(): Promise<LocalAdapter | import('@/services/firestore
 
 // Promise-first facade. Keep firebase out of the local-only bundle path via dynamic import.
 export const db: DbAdapter = {
-  // Tenders
-  createTender: async (...args) => (await getAdapter()).createTender(...args),
-  getTender: async (...args) => (await getAdapter()).getTender(...args),
-  listTenders: async (...args) => (await getAdapter()).listTenders(...args),
-  updateTender: async (...args) => (await getAdapter()).updateTender(...args),
-  deleteTender: async (...args) => (await getAdapter()).deleteTender(...args),
+  // Tenders (routed through the IndexedDB + outbox sync engine when 'tenders' is in NEXT_PUBLIC_SYNC_COLLECTIONS)
+  createTender: async (...args) => (isCollectionSynced('tenders') ? (await getSyncedAdapters()).syncedTendersAdapter.create(...args) : (await getAdapter()).createTender(...args)),
+  getTender: async (...args) => (isCollectionSynced('tenders') ? (await getSyncedAdapters()).syncedTendersAdapter.get(...args) : (await getAdapter()).getTender(...args)),
+  listTenders: async (...args) => (isCollectionSynced('tenders') ? (await getSyncedAdapters()).syncedTendersAdapter.list(...args) : (await getAdapter()).listTenders(...args)),
+  updateTender: async (...args) => (isCollectionSynced('tenders') ? (await getSyncedAdapters()).syncedTendersAdapter.update(...args) : (await getAdapter()).updateTender(...args)),
+  deleteTender: async (...args) => (isCollectionSynced('tenders') ? (await getSyncedAdapters()).syncedTendersAdapter.delete(...args) : (await getAdapter()).deleteTender(...args)),
 
   // Firms
-  createFirm: async (...args) => (await getAdapter()).createFirm(...args),
-  getFirm: async (...args) => (await getAdapter()).getFirm(...args),
-  listFirms: async (...args) => (await getAdapter()).listFirms(...args),
-  updateFirm: async (...args) => (await getAdapter()).updateFirm(...args),
-  deleteFirm: async (...args) => (await getAdapter()).deleteFirm(...args),
+  createFirm: async (...args) => (isCollectionSynced('firms') ? (await getSyncedAdapters()).syncedFirmsAdapter.create(...args) : (await getAdapter()).createFirm(...args)),
+  getFirm: async (...args) => (isCollectionSynced('firms') ? (await getSyncedAdapters()).syncedFirmsAdapter.get(...args) : (await getAdapter()).getFirm(...args)),
+  listFirms: async (...args) => (isCollectionSynced('firms') ? (await getSyncedAdapters()).syncedFirmsAdapter.list(...args) : (await getAdapter()).listFirms(...args)),
+  updateFirm: async (...args) => (isCollectionSynced('firms') ? (await getSyncedAdapters()).syncedFirmsAdapter.update(...args) : (await getAdapter()).updateFirm(...args)),
+  deleteFirm: async (...args) => (isCollectionSynced('firms') ? (await getSyncedAdapters()).syncedFirmsAdapter.delete(...args) : (await getAdapter()).deleteFirm(...args)),
 
   // Documents
-  createDocument: async (...args) => (await getAdapter()).createDocument(...args),
-  getDocument: async (...args) => (await getAdapter()).getDocument(...args),
-  listDocumentsByTender: async (...args) => (await getAdapter()).listDocumentsByTender(...args),
-  updateDocument: async (...args) => (await getAdapter()).updateDocument(...args),
-  deleteDocument: async (...args) => (await getAdapter()).deleteDocument(...args),
+  createDocument: async (...args) => (isCollectionSynced('documents') ? (await getSyncedAdapters()).syncedDocumentsAdapter.create(...args) : (await getAdapter()).createDocument(...args)),
+  getDocument: async (...args) => (isCollectionSynced('documents') ? (await getSyncedAdapters()).syncedDocumentsAdapter.get(...args) : (await getAdapter()).getDocument(...args)),
+  listDocumentsByTender: async (...args) => (isCollectionSynced('documents') ? (await getSyncedAdapters()).syncedDocumentsAdapter.listByTender(...args) : (await getAdapter()).listDocumentsByTender(...args)),
+  updateDocument: async (...args) => (isCollectionSynced('documents') ? (await getSyncedAdapters()).syncedDocumentsAdapter.update(...args) : (await getAdapter()).updateDocument(...args)),
+  deleteDocument: async (...args) => (isCollectionSynced('documents') ? (await getSyncedAdapters()).syncedDocumentsAdapter.delete(...args) : (await getAdapter()).deleteDocument(...args)),
 
   // Settings
   getSettings: async (...args) => (await getAdapter()).getSettings(...args),
   updateSettings: async (...args) => (await getAdapter()).updateSettings(...args),
 
   // Department profiles
-  createDepartmentProfile: async (...args) => (await getAdapter()).createDepartmentProfile(...args),
-  getDepartmentProfile: async (...args) => (await getAdapter()).getDepartmentProfile(...args),
-  listDepartmentProfiles: async (...args) => (await getAdapter()).listDepartmentProfiles(...args),
-  updateDepartmentProfile: async (...args) => (await getAdapter()).updateDepartmentProfile(...args),
-  deleteDepartmentProfile: async (...args) => (await getAdapter()).deleteDepartmentProfile(...args),
+  createDepartmentProfile: async (...args) => (isCollectionSynced('departmentProfiles') ? (await getSyncedAdapters()).syncedDepartmentProfilesAdapter.create(...args) : (await getAdapter()).createDepartmentProfile(...args)),
+  getDepartmentProfile: async (...args) => (isCollectionSynced('departmentProfiles') ? (await getSyncedAdapters()).syncedDepartmentProfilesAdapter.get(...args) : (await getAdapter()).getDepartmentProfile(...args)),
+  listDepartmentProfiles: async (...args) => (isCollectionSynced('departmentProfiles') ? (await getSyncedAdapters()).syncedDepartmentProfilesAdapter.list(...args) : (await getAdapter()).listDepartmentProfiles(...args)),
+  updateDepartmentProfile: async (...args) => (isCollectionSynced('departmentProfiles') ? (await getSyncedAdapters()).syncedDepartmentProfilesAdapter.update(...args) : (await getAdapter()).updateDepartmentProfile(...args)),
+  deleteDepartmentProfile: async (...args) => (isCollectionSynced('departmentProfiles') ? (await getSyncedAdapters()).syncedDepartmentProfilesAdapter.delete(...args) : (await getAdapter()).deleteDepartmentProfile(...args)),
 
-  // Tender items
-  createTenderItem: async (...args) => (await getAdapter()).createTenderItem(...args),
-  getTenderItem: async (...args) => (await getAdapter()).getTenderItem(...args),
-  listTenderItems: async (...args) => (await getAdapter()).listTenderItems(...args),
-  updateTenderItem: async (...args) => (await getAdapter()).updateTenderItem(...args),
-  deleteTenderItem: async (...args) => (await getAdapter()).deleteTenderItem(...args),
+  // Tender items (embedded in the parent tender doc; synced whenever 'tenders' is)
+  createTenderItem: async (...args) => (isCollectionSynced('tenders') ? (await getSyncedAdapters()).syncedTenderItemsAdapter.create(...args) : (await getAdapter()).createTenderItem(...args)),
+  getTenderItem: async (...args) => (isCollectionSynced('tenders') ? (await getSyncedAdapters()).syncedTenderItemsAdapter.get(...args) : (await getAdapter()).getTenderItem(...args)),
+  listTenderItems: async (...args) => (isCollectionSynced('tenders') ? (await getSyncedAdapters()).syncedTenderItemsAdapter.list(...args) : (await getAdapter()).listTenderItems(...args)),
+  updateTenderItem: async (...args) => (isCollectionSynced('tenders') ? (await getSyncedAdapters()).syncedTenderItemsAdapter.update(...args) : (await getAdapter()).updateTenderItem(...args)),
+  deleteTenderItem: async (...args) => (isCollectionSynced('tenders') ? (await getSyncedAdapters()).syncedTenderItemsAdapter.delete(...args) : (await getAdapter()).deleteTenderItem(...args)),
 
   // Document versions
   createDocumentVersion: async (...args) => (await getAdapter()).createDocumentVersion(...args),
@@ -196,17 +225,17 @@ export const db: DbAdapter = {
   deleteDocumentPhraseMapping: async (...args) => (await getAdapter()).deleteDocumentPhraseMapping(...args),
 
   // Custom Templates
-  createCustomTemplate: async (...args) => (await getAdapter()).createCustomTemplate(...args),
-  getCustomTemplate: async (...args) => (await getAdapter()).getCustomTemplate(...args),
-  listCustomTemplates: async (...args) => (await getAdapter()).listCustomTemplates(...args),
-  updateCustomTemplate: async (...args) => (await getAdapter()).updateCustomTemplate(...args),
-  deleteCustomTemplate: async (...args) => (await getAdapter()).deleteCustomTemplate(...args),
+  createCustomTemplate: async (...args) => (isCollectionSynced('customTemplates') ? (await getSyncedAdapters()).syncedCustomTemplatesAdapter.create(...args) : (await getAdapter()).createCustomTemplate(...args)),
+  getCustomTemplate: async (...args) => (isCollectionSynced('customTemplates') ? (await getSyncedAdapters()).syncedCustomTemplatesAdapter.get(...args) : (await getAdapter()).getCustomTemplate(...args)),
+  listCustomTemplates: async (...args) => (isCollectionSynced('customTemplates') ? (await getSyncedAdapters()).syncedCustomTemplatesAdapter.list(...args) : (await getAdapter()).listCustomTemplates(...args)),
+  updateCustomTemplate: async (...args) => (isCollectionSynced('customTemplates') ? (await getSyncedAdapters()).syncedCustomTemplatesAdapter.update(...args) : (await getAdapter()).updateCustomTemplate(...args)),
+  deleteCustomTemplate: async (...args) => (isCollectionSynced('customTemplates') ? (await getSyncedAdapters()).syncedCustomTemplatesAdapter.delete(...args) : (await getAdapter()).deleteCustomTemplate(...args)),
 
   // Bills
-  createBill: async (...args) => (await getAdapter()).createBill(...args),
-  getBill: async (...args) => (await getAdapter()).getBill(...args),
-  listBills: async (...args) => (await getAdapter()).listBills(...args),
-  updateBill: async (...args) => (await getAdapter()).updateBill(...args),
-  deleteBill: async (...args) => (await getAdapter()).deleteBill(...args),
+  createBill: async (...args) => (isCollectionSynced('bills') ? (await getSyncedAdapters()).syncedBillsAdapter.create(...args) : (await getAdapter()).createBill(...args)),
+  getBill: async (...args) => (isCollectionSynced('bills') ? (await getSyncedAdapters()).syncedBillsAdapter.get(...args) : (await getAdapter()).getBill(...args)),
+  listBills: async (...args) => (isCollectionSynced('bills') ? (await getSyncedAdapters()).syncedBillsAdapter.list(...args) : (await getAdapter()).listBills(...args)),
+  updateBill: async (...args) => (isCollectionSynced('bills') ? (await getSyncedAdapters()).syncedBillsAdapter.update(...args) : (await getAdapter()).updateBill(...args)),
+  deleteBill: async (...args) => (isCollectionSynced('bills') ? (await getSyncedAdapters()).syncedBillsAdapter.delete(...args) : (await getAdapter()).deleteBill(...args)),
 };
 

@@ -165,10 +165,11 @@ export class FirestoreDB {
 
   async createEntity<TName extends CollectionName>(
     name: TName,
-    data: Omit<Collections[TName], 'id' | 'createdAt' | 'updatedAt'>
+    data: Omit<Collections[TName], 'id' | 'createdAt' | 'updatedAt'>,
+    presetId?: string
   ): Promise<Collections[TName]> {
     const createdAt = nowIso();
-    const entity = withTimestamps({ ...(data as any), id: uuid(), createdAt, updatedAt: createdAt });
+    const entity = withTimestamps({ ...(data as any), id: presetId || uuid(), createdAt, updatedAt: createdAt });
 
     // Remove undefined values before saving to Firestore
     const cleanData = removeUndefinedValues(entity);
@@ -222,14 +223,14 @@ export class FirestoreDB {
   }
 
   // Tenders
-  async createTender(data: Omit<Tender, 'id' | 'createdAt' | 'updatedAt'>): Promise<Tender> {
+  async createTender(data: Omit<Tender, 'id' | 'createdAt' | 'updatedAt'>, presetId?: string): Promise<Tender> {
     const normalized: Omit<Tender, 'id' | 'createdAt' | 'updatedAt'> = {
       ...data,
       items: normalizeTenderItemTotals(data.items || []),
       version: Math.max(1, data.version || 1),
       alternateFirms: (data.alternateFirms || []).slice(0, 2),
     };
-    return this.createEntity('tenders', normalized);
+    return this.createEntity('tenders', normalized, presetId);
   }
 
   getTender(id: string): Promise<Tender | undefined> {
@@ -250,13 +251,17 @@ export class FirestoreDB {
   }
 
   // Firms
-  createFirm(data: Omit<Firm, 'id' | 'createdAt' | 'updatedAt'>): Promise<Firm> {
-    return this.createEntity('firms', {
-      ...data,
-      contentStartY: data.headerSpacing,
-      pagePaddingLeft: data.pageMargin,
-      layoutReferenceWidth: data.layoutReferenceWidth || 424,
-    });
+  createFirm(data: Omit<Firm, 'id' | 'createdAt' | 'updatedAt'>, presetId?: string): Promise<Firm> {
+    return this.createEntity(
+      'firms',
+      {
+        ...data,
+        contentStartY: data.headerSpacing,
+        pagePaddingLeft: data.pageMargin,
+        layoutReferenceWidth: data.layoutReferenceWidth || 424,
+      },
+      presetId
+    );
   }
   async getFirm(id: string): Promise<Firm | undefined> {
     const firm = await this.getEntity('firms', id);
@@ -280,8 +285,8 @@ export class FirestoreDB {
   }
 
   // Documents
-  createDocument(data: Omit<TenderDocument, 'id' | 'createdAt' | 'updatedAt'>): Promise<TenderDocument> {
-    return this.createEntity('documents', data);
+  createDocument(data: Omit<TenderDocument, 'id' | 'createdAt' | 'updatedAt'>, presetId?: string): Promise<TenderDocument> {
+    return this.createEntity('documents', data, presetId);
   }
   getDocument(id: string): Promise<TenderDocument | undefined> {
     return this.getEntity('documents', id);
@@ -340,8 +345,11 @@ export class FirestoreDB {
   }
 
   // Department profiles
-  createDepartmentProfile(data: Omit<DepartmentProfile, 'id' | 'createdAt' | 'updatedAt'>): Promise<DepartmentProfile> {
-    return this.createEntity('departmentProfiles', data);
+  createDepartmentProfile(
+    data: Omit<DepartmentProfile, 'id' | 'createdAt' | 'updatedAt'>,
+    presetId?: string
+  ): Promise<DepartmentProfile> {
+    return this.createEntity('departmentProfiles', data, presetId);
   }
   getDepartmentProfile(id: string): Promise<DepartmentProfile | undefined> {
     return this.getEntity('departmentProfiles', id);
@@ -846,8 +854,11 @@ export class FirestoreDB {
 
   // ─── Custom Templates ─────────────────────────────────────────────────────
 
-  async createCustomTemplate(data: Omit<CustomTemplate, 'id' | 'createdAt' | 'updatedAt'>): Promise<CustomTemplate> {
-    return this.createEntity('customTemplates', data);
+  async createCustomTemplate(
+    data: Omit<CustomTemplate, 'id' | 'createdAt' | 'updatedAt'>,
+    presetId?: string
+  ): Promise<CustomTemplate> {
+    return this.createEntity('customTemplates', data, presetId);
   }
 
   async getCustomTemplate(id: string): Promise<CustomTemplate | undefined> {
@@ -871,8 +882,8 @@ export class FirestoreDB {
 
   // ─── Bills ─────────────────────────────────────────────────────────────
 
-  async createBill(data: Omit<Bill, 'id' | 'createdAt' | 'updatedAt'>): Promise<Bill> {
-    return this.createEntity('bills', data);
+  async createBill(data: Omit<Bill, 'id' | 'createdAt' | 'updatedAt'>, presetId?: string): Promise<Bill> {
+    return this.createEntity('bills', data, presetId);
   }
 
   async getBill(id: string): Promise<Bill | undefined> {

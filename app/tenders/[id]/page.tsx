@@ -808,11 +808,14 @@ export default function TenderDetailPage() {
 
                     {(() => {
                       const isQuotationType = docType === 'quotation_main' || docType === 'quotation_alt_1' || docType === 'quotation_alt_2';
-                      // Only offer templates authored for this exact quotation doc type —
-                      // previously this listed every custom template (including Bill/Invoice
-                      // templates), which had no business appearing in a quotation dropdown.
+                      // Offer all quotation templates irrespective of whether they are Main, Alt A, or Alt B
                       const availableTemplates = isQuotationType
-                        ? customTemplates.filter((t) => t.docType === docType)
+                        ? customTemplates.filter(
+                            (t) =>
+                              t.docType === 'quotation_main' ||
+                              t.docType === 'quotation_alt_1' ||
+                              t.docType === 'quotation_alt_2'
+                          )
                         : [];
                       
                       return (
@@ -832,7 +835,14 @@ export default function TenderDetailPage() {
                                 <option value="">Firm Default Template</option>
                                 {availableTemplates.map((tpl) => (
                                   <option key={tpl.id} value={tpl.id}>
-                                    {tpl.name} ({tpl.language === 'hindi' ? 'Hindi' : 'English'})
+                                    {tpl.name} ({tpl.language === 'hindi' ? 'Hindi' : 'English'}{' '}
+                                    -{' '}
+                                    {tpl.docType === 'quotation_main'
+                                      ? 'Main'
+                                      : tpl.docType === 'quotation_alt_1'
+                                        ? 'Alt A'
+                                        : 'Alt B'}
+                                    )
                                   </option>
                                 ))}
                               </select>

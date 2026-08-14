@@ -43,9 +43,9 @@ export async function POST(request: NextRequest) {
       {
         systemPrompt:
           'You identify Indian municipal place metadata. Return only compact JSON with no markdown.',
-        userPrompt: `For the place "${placeName}", return JSON fields englishName, hindiName, districtName, districtHindiName, stateName, stateHindiName, confidence. If unsure, use the most likely official Indian district and confidence below 0.7.`,
+        userPrompt: `For the place "${placeName}", return JSON fields englishName, hindiName, districtName, districtHindiName, stateName, stateHindiName, localBodyType, localBodyTypeHindi, confidence. If unsure, use the most likely official Indian district and confidence below 0.7. For localBodyType, output the type of municipal/local governance body (e.g. "Nagar Palika Parishad", "Nagar Parishad", "Municipal Corporation" etc.) and its Hindi transliteration/equivalent in localBodyTypeHindi.`,
         temperature: 0.1,
-        maxTokens: 400,
+        maxTokens: 450,
       }
     );
 
@@ -59,6 +59,8 @@ export async function POST(request: NextRequest) {
       districtHindiName: asString(parsed.districtHindiName),
       stateName: asString(parsed.stateName) || 'Madhya Pradesh',
       stateHindiName: asString(parsed.stateHindiName),
+      localBodyType: asString(parsed.localBodyType),
+      localBodyTypeHindi: asString(parsed.localBodyTypeHindi),
       confidence: asConfidence(parsed.confidence),
       source: 'ai',
     };

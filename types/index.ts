@@ -118,6 +118,8 @@ export interface AILocationCache extends BaseEntity {
   districtHindiName?: string;
   stateName: string;
   stateHindiName?: string;
+  localBodyType?: string;
+  localBodyTypeHindi?: string;
   confidence: number;
   provider: string;
 }
@@ -329,4 +331,5 @@ export interface CustomTemplate extends BaseEntity {
   language: Language;
   content: string;
   fontFamily?: string;
+  textColor?: string;
 }

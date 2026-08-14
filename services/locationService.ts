@@ -13,6 +13,8 @@ export interface AILocationResult {
   districtHindiName?: string;
   stateName: string;
   stateHindiName?: string;
+  localBodyType?: string;
+  localBodyTypeHindi?: string;
   confidence: number;
   source: 'cache' | 'ai' | 'local';
 }
@@ -86,6 +88,8 @@ function cacheToResult(cache: AILocationCache): AILocationResult {
     districtHindiName: cache.districtHindiName,
     stateName: cache.stateName,
     stateHindiName: cache.stateHindiName,
+    localBodyType: cache.localBodyType,
+    localBodyTypeHindi: cache.localBodyTypeHindi,
     confidence: cache.confidence,
     source: 'cache',
   };
@@ -177,6 +181,8 @@ export async function fetchDistrict(placeName: string): Promise<AILocationResult
       districtHindiName: localMatch.place.districtHindiName,
       stateName: localMatch.place.stateName,
       stateHindiName: localMatch.place.stateHindiName,
+      localBodyType: localMatch.place.localBodyType,
+      localBodyTypeHindi: localMatch.place.localBodyTypeHindi,
       confidence: localMatch.score / 100,
       source: 'local',
     };
@@ -200,6 +206,8 @@ export async function fetchDistrict(placeName: string): Promise<AILocationResult
       districtHindiName: result.districtHindiName || '',
       stateName: result.stateName || 'Madhya Pradesh',
       stateHindiName: result.stateHindiName || 'मध्य प्रदेश',
+      localBodyType: result.localBodyType || '',
+      localBodyTypeHindi: result.localBodyTypeHindi || '',
       confidence: result.confidence,
       provider: 'location-api',
     });

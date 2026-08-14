@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Sparkles } from 'lucide-react';
 import { LocalBodyType, PlaceMapping } from '@/types';
 import { Button } from '@/components/ui/button';
 import {
@@ -36,6 +37,9 @@ export function AddPlaceDialog({ open, initialName, place, onOpenChange, onCreat
   const [customLocalBodyType, setCustomLocalBodyType] = useState('');
   const [customLocalBodyTypeHindi, setCustomLocalBodyTypeHindi] = useState('');
 
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiMessage, setAiMessage] = useState('');
+
   useEffect(() => {
     if (!open) return;
     setEnglishName(place?.englishName || initialName);
@@ -46,6 +50,7 @@ export function AddPlaceDialog({ open, initialName, place, onOpenChange, onCreat
     setStateHindiName(place?.stateHindiName || 'मध्य प्रदेश');
     setCustomLocalBodyType(place?.localBodyType || '');
     setCustomLocalBodyTypeHindi(place?.localBodyTypeHindi || '');
+    setAiMessage('');
   }, [initialName, open, place]);
 
   useEffect(() => {
@@ -59,6 +64,45 @@ export function AddPlaceDialog({ open, initialName, place, onOpenChange, onCreat
       setSelectedBodyTypeId(matchingBodyType?.id || (place?.localBodyType || place?.localBodyTypeHindi ? 'other' : loadedBodyTypes[0]?.id || ''));
     });
   }, [open, place]);
+
+  const handleAIFill = async () => {
+    if (!englishName.trim()) return;
+    setAiLoading(true);
+    setAiMessage('');
+    try {
+      const query = stateName.trim() ? `${englishName.trim()}, ${stateName.trim()}` : englishName.trim();
+      const result = await locationService.fetchDistrict(query);
+      if (result) {
+        if (result.hindiName) setHindiName(result.hindiName);
+        if (result.districtName) setDistrictName(result.districtName);
+        if (result.districtHindiName) setDistrictHindiName(result.districtHindiName);
+        if (result.stateName) setStateName(result.stateName);
+        if (result.stateHindiName) setStateHindiName(result.stateHindiName);
+        
+        if (result.localBodyType || result.localBodyTypeHindi) {
+          const matchingBodyType = bodyTypes.find(
+            (bt) =>
+              bt.englishName.toLowerCase() === result.localBodyType?.toLowerCase() ||
+              bt.hindiName.toLowerCase() === result.localBodyTypeHindi?.toLowerCase()
+          );
+          if (matchingBodyType) {
+            setSelectedBodyTypeId(matchingBodyType.id);
+          } else {
+            setSelectedBodyTypeId('other');
+            setCustomLocalBodyType(result.localBodyType || '');
+            setCustomLocalBodyTypeHindi(result.localBodyTypeHindi || '');
+          }
+        }
+        setAiMessage(`Success (${Math.round((result.confidence || 0.8) * 100)}% conf)`);
+      } else {
+        setAiMessage('No details found for this place.');
+      }
+    } catch {
+      setAiMessage('AI Autofill error.');
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   const handleSave = async () => {
     const selectedBodyType = bodyTypes.find((bodyType) => bodyType.id === selectedBodyTypeId);
@@ -92,6 +136,24 @@ export function AddPlaceDialog({ open, initialName, place, onOpenChange, onCreat
           <DialogDescription>Save a reusable place, district, and local body mapping.</DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 p-6">
+          <div className="flex justify-between items-center bg-blue-50/60 p-3 rounded-lg border border-blue-100/80">
+            <div className="text-xs text-blue-800 font-medium">
+              Enter Name & State, then let AI fill the rest.
+              {aiMessage && <span className="block mt-0.5 text-blue-600 font-semibold text-[10px]">{aiMessage}</span>}
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="bg-blue-600 hover:bg-blue-700 text-white hover:text-white border-0 font-semibold text-xs rounded-md shadow-xs h-8 shrink-0"
+              loading={aiLoading}
+              onClick={handleAIFill}
+              disabled={!englishName.trim() || aiLoading}
+            >
+              {!aiLoading && <Sparkles className="mr-1.5 h-3.5 w-3.5" />}
+              AI Autofill
+            </Button>
+          </div>
           <div className="grid gap-2">
             <Label htmlFor="newPlaceEnglish">English Name *</Label>
             <Input id="newPlaceEnglish" value={englishName} onChange={(event) => setEnglishName(event.target.value)} />

@@ -1,0 +1,48 @@
+
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e40af" />
+      <stop offset="50%" stop-color="#2563eb" />
+      <stop offset="100%" stop-color="#0284c7" />
+    </linearGradient>
+    <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="100%" stop-color="#e2e8f0" />
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fbbf24" />
+      <stop offset="100%" stop-color="#f59e0b" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="10.24" stdDeviation="10.24" flood-opacity="0.25" />
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect x="0" y="0" width="512" height="512" rx="112.64" fill="url(#bgGrad)" />
+
+  <!-- Grid subtle overlay -->
+  <circle cx="409.6" cy="102.4" r="179.2" fill="#ffffff" fill-opacity="0.06" />
+  <circle cx="102.4" cy="409.6" r="128" fill="#ffffff" fill-opacity="0.04" />
+
+  <!-- Document / Tender Symbol -->
+  <g transform="translate(256, 256) scale(4.6080000000000005) translate(-50, -50)" filter="url(#shadow)">
+    <!-- Document Base -->
+    <rect x="22" y="14" width="56" height="72" rx="7" fill="url(#shieldGrad)" />
+    
+    <!-- Folded Corner Effect -->
+    <path d="M60 14 L78 32 L60 32 Z" fill="#cbd5e1" />
+    <path d="M22 21 C22 17.13 25.13 14 29 14 L60 14 L78 32 L78 79 C78 82.87 74.87 86 71 86 L29 86 C25.13 86 22 82.87 22 79 Z" fill="none" stroke="#f1f5f9" stroke-width="1.5" />
+
+    <!-- Document Lines -->
+    <rect x="30" y="38" width="40" height="4.5" rx="2.25" fill="#3b82f6" />
+    <rect x="30" y="47" width="28" height="4" rx="2" fill="#94a3b8" />
+    <rect x="30" y="55" width="34" height="4" rx="2" fill="#94a3b8" />
+    <rect x="30" y="63" width="22" height="4" rx="2" fill="#94a3b8" />
+
+    <!-- Badge / Stamp (Automation Icon) -->
+    <circle cx="64" cy="68" r="14" fill="url(#accentGrad)" filter="url(#shadow)" />
+    <path d="M59 68 L63 72 L70 64" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+</svg>

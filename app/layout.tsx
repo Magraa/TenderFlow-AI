@@ -1,10 +1,37 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Providers } from "./providers";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Tender Automation Panel",
   description: "Professional government tender generation and management system",
+  manifest: "/manifest.json",
+  applicationName: "Tender Automation Panel",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Tender Panel",
+  },
+  formatDetection: {
+    telephone: false,
+  },
+  icons: {
+    icon: [
+      { url: "/icons/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+      { url: "/icons/favicon-16x16.png", sizes: "16x16", type: "image/png" },
+      { url: "/icons/icon-192x192.png", sizes: "192x192", type: "image/png" },
+    ],
+    apple: [
+      { url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#2563eb",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
 };
 
 export default function RootLayout({
@@ -40,7 +67,7 @@ export default function RootLayout({
           }
         `}</style>
       </head>
-      <body className="bg-white text-gray-900">
+      <body className="bg-white text-gray-900 antialiased">
         <Providers>
           {children}
         </Providers>

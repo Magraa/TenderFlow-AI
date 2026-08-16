@@ -16,6 +16,8 @@ import {
 import { Settings } from '@/types'
 import type { SyncedCollectionName } from '@/services/localDb/indexedDb'
 import { SyncStatusPill } from '@/components/SyncStatusPill'
+import { PWAInstallPrompt } from '@/components/PWAInstallPrompt'
+import { PWAUpdateToast } from '@/components/PWAUpdateToast'
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<Settings | null>(null)
@@ -94,20 +96,17 @@ export function Providers({ children }: { children: React.ReactNode }) {
       const validationError = validateNewPassword(newPassword)
       if (validationError) {
         setError(validationError)
-        return
-      }
-      if (newPassword !== confirmPassword) {
+      } else if (newPassword !== confirmPassword) {
         setError('Passwords do not match.')
-        return
+      } else {
+        const passwordAuth = await createPasswordAuthSettings(newPassword)
+        const updated = await dataService.settings.update({ passwordAuth })
+        sessionStorage.setItem(SITE_PASSWORD_SESSION_KEY, passwordAuth.passwordHash)
+        setSettings(updated)
+        setUnlocked(true)
+        setNewPassword('')
+        setConfirmPassword('')
       }
-
-      const passwordAuth = await createPasswordAuthSettings(newPassword)
-      const updated = await dataService.settings.update({ passwordAuth })
-      sessionStorage.setItem(SITE_PASSWORD_SESSION_KEY, passwordAuth.passwordHash)
-      setSettings(updated)
-      setUnlocked(true)
-      setNewPassword('')
-      setConfirmPassword('')
     } finally {
       setSubmitting(false)
     }
@@ -190,6 +189,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <>
       {children}
       <SyncStatusPill />
+      <PWAInstallPrompt />
+      <PWAUpdateToast />
     </>
   )
 }

@@ -43,6 +43,7 @@ pnpm-debug.log*
 .kiro/
 *.swp
 *.swo
+*.bak
 *.sublime-workspace
 
 # OS junk files

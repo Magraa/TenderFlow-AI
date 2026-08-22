@@ -1,4 +1,4 @@
-﻿# 📚 Project Documentation Hub
+# 📚 Project Documentation Hub
 
 Welcome to the comprehensive documentation hub. Here you'll find architectural designs, AI prompt engineering guides, storage configurations, user onboarding manuals, and troubleshooting logs.
 
@@ -6,14 +6,16 @@ Welcome to the comprehensive documentation hub. Here you'll find architectural d
 
 ## 📂 Documentation Directory
 
-`
-docs/
-├── 🏛️ architecture/           # System design, roadmaps, and UI/UX evolution
-├── 🤖 ai/                     # AI engine prompt stacks, transliteration & dictionaries
-├── 🗄️ storage/                # IndexedDB & Firebase/Firestore dual storage backends
-├── 📖 guides/                 # User guide, quick reference, and onboarding docs
-└── 🛠️ fixes-and-history/      # Change summaries, bug fixes, and patch records
-`
+```mermaid
+flowchart LR
+    DOCS["📂 <b>docs/ Hub</b>"]
+    
+    DOCS --> ARC["🏛️ <b>architecture/</b><br/>System design, roadmap & UI evolution"]
+    DOCS --> AI["🤖 <b>ai/</b><br/>Multi-LLM prompts & bilingual dictionaries"]
+    DOCS --> STO["🗄️ <b>storage/</b><br/>Firebase Firestore & IndexedDB setup"]
+    DOCS --> GUI["📖 <b>guides/</b><br/>User manual & quick reference cards"]
+    DOCS --> FIX["🛠️ <b>fixes-and-history/</b><br/>Changelogs, patch notes & bug fixes"]
+```
 
 ---
 

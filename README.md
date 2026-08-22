@@ -1,4 +1,4 @@
-﻿<div align="center">
+<div align="center">
 
 # ⚡ TENDERFLOW AI
 ### *Next-Gen Autonomous Government Tender & Procurement Automation Suite*
@@ -10,7 +10,7 @@
 [![Groq](https://img.shields.io/badge/Groq-Llama_3_Fast-F55036?style=for-the-badge&logo=groq&logoColor=white)](https://groq.com/)
 [![OpenAI](https://img.shields.io/badge/OpenAI-GPT_4o-412991?style=for-the-badge&logo=openai&logoColor=white)](https://openai.com/)
 [![Firebase](https://img.shields.io/badge/Firebase-Firestore-FFCA28?style=for-the-badge&logo=firebase&logoColor=black)](https://firebase.google.com/)
-[![License](https://img.shields.io/badge/License-Proprietary-blue.svg?style=for-the-badge)](LICENSE)
+[![PWA Ready](https://img.shields.io/badge/PWA-Offline_First-5A0FC8?style=for-the-badge&logo=pwa&logoColor=white)](https://web.dev/progressive-web-apps/)
 
 <br />
 
@@ -21,11 +21,12 @@
 
 <p align="center">
   <a href="#-key-features">Key Features</a> •
+  <a href="#-system-workflow">System Workflow</a> •
   <a href="#-document-pipeline">Document Pipeline</a> •
   <a href="#-architecture--tech-stack">Architecture</a> •
-  <a href="#-ai--bilingual-engine">AI & Master Dictionaries</a> •
-  <a href="#-getting-started">Quickstart</a> •
-  <a href="#-project-name--repo-suggestions">Name Suggestions</a> •
+  <a href="#-bilingual--ai-intelligence">AI Engine</a> •
+  <a href="#-quickstart-guide">Quickstart</a> •
+  <a href="#-naming--branding-options">Naming Options</a> •
   <a href="docs/README.md">Documentation Hub</a>
 </p>
 
@@ -37,21 +38,44 @@
 
 ## 🌟 Executive Overview
 
-**TenderFlow AI** (Magra Tender Automation) is an enterprise-grade procurement automation platform tailored specifically for government contractors, vendors, and public administrative departments.
+**TenderFlow AI** is an enterprise-grade procurement automation platform engineered specifically for government contractors, vendors, and administrative departments.
 
-By entering core tender specifications and line items once, TenderFlow instantly orchestrates, formats, and renders a synchronized set of official documents — complete with firm-specific letterheads, custom legal terms, localized Hindi translations, automatic GST calculations, and pixel-perfect A4 print-ready layouts.
+By entering core tender specifications and line items just once, TenderFlow instantly orchestrates, drafts, and renders an entire synchronized package of official documents — complete with firm-specific letterheads, custom legal conditions, localized Hindi transliterations, dynamic GST calculations, and pixel-perfect A4 print-ready layouts.
 
-`
-                  ┌───────────────────────────────────────────────────────────┐
-                  │                 TenderFlow Single-Entry                   │
-                  │   Tender ID • Line Items • Budget • GST • Department      │
-                  └─────────────────────────────┬─────────────────────────────┘
-                                                │
-       ┌────────────────────────┬───────────────┴───────────────┬────────────────────────┐
-       ▼                        ▼                               ▼                        ▼
- 📜 VIGYAPTI             📄 QUOTATION                    📋 SUPPLY ORDER          🧾 FIRM TAX BILL
-(Tender Notice)       (Main & Alternates)               (Official Sanction)      (Bank Details & GST)
-`
+---
+
+## 🔄 System Workflow
+
+```mermaid
+flowchart TD
+    subgraph INPUT ["📝 Unified Single-Entry Input"]
+        T["<b>Tender Specifications & Line Items</b><br/>Tender ID • Budget • Quantities • Rates • GST % • Department"]
+    end
+
+    subgraph ENGINE ["⚡ TenderFlow Automation Core"]
+        O["<b>Orchestration Engine</b><br/>AI Prompt Stacks • Purpose Dictionary • A4 Layout System"]
+    end
+
+    subgraph OUTPUTS ["📑 Synchronized Document Generation"]
+        D1["📜 <b>Vigyapti (NIT)</b><br/>Public Tender Notice"]
+        D2["📄 <b>Quotation (L1)</b><br/>Primary Firm Letterhead"]
+        D3["📑 <b>Quotations (L2/L3)</b><br/>Alternate Competing Quotes"]
+        D4["📋 <b>Supply Order</b><br/>Work Award Sanction"]
+        D5["🧾 <b>Firm Tax Bill</b><br/>GST & Bank Invoice"]
+    end
+
+    subgraph EXPORT ["🖨️ Precision Output"]
+        P["<b>A4 Print-Ready PDF with Margins & Signatures</b>"]
+    end
+
+    T --> O
+    O --> D1
+    O --> D2
+    O --> D3
+    O --> D4
+    O --> D5
+    D1 & D2 & D3 & D4 & D5 --> P
+```
 
 ---
 
@@ -62,8 +86,8 @@ By entering core tender specifications and line items once, TenderFlow instantly
     <td width="50%" valign="top">
       <h3>🏛️ 1-Click Multi-Document Generation</h3>
       <ul>
-        <li>Generate <b>Vigyapti (निविदा सूचना)</b>, <b>Quotations (Main & Alternate Rates)</b>, <b>Supply Orders (आपूर्ति आदेश)</b>, and <b>Firm Bills (टैक्स बिल)</b> simultaneously.</li>
-        <li>Eliminates duplicate manual entries and human calculation errors.</li>
+        <li>Generate <b>Vigyapti</b>, <b>Quotations (Main & Alternate Rates)</b>, <b>Supply Orders</b>, and <b>Firm Bills</b> in one synchronized step.</li>
+        <li>Eliminates duplicate manual entries, mismatched dates, and calculation mistakes.</li>
         <li>Instant document versioning snapshot engine with rollback support.</li>
       </ul>
     </td>
@@ -71,8 +95,8 @@ By entering core tender specifications and line items once, TenderFlow instantly
       <h3>🎨 Precision A4 Letterhead Engine</h3>
       <ul>
         <li>Dynamic background letterhead integration with <code>contain</code>, <code>cover</code>, and <code>stretch</code> fit modes.</li>
-        <li>Print-safe margin boundaries, overflow detection, and page break controls.</li>
-        <li>Drag-and-drop firm digital signatures and official stamps.</li>
+        <li>Print-safe margin boundaries, live safe-zone guides, and overflow detection.</li>
+        <li>Drag-and-drop firm digital signatures and official seals.</li>
       </ul>
     </td>
   </tr>
@@ -80,17 +104,17 @@ By entering core tender specifications and line items once, TenderFlow instantly
     <td width="50%" valign="top">
       <h3>🤖 Multi-LLM Bilingual Intelligence</h3>
       <ul>
-        <li>Supports <b>Google Gemini</b>, <b>Groq (Llama 3)</b>, <b>NVIDIA NIM</b>, and <b>OpenAI</b>.</li>
-        <li>Context-aware formal Hindi government procurement terminology.</li>
-        <li>Smart transliteration engine for English item catalogs to Hindi.</li>
+        <li>Native support for <b>Google Gemini</b>, <b>Groq (Llama 3)</b>, <b>NVIDIA NIM</b>, and <b>OpenAI</b>.</li>
+        <li>Domain-tuned for formal Hindi government procurement terminology.</li>
+        <li>Automated English-to-Hindi item catalog transliteration cache.</li>
       </ul>
     </td>
     <td width="50%" valign="top">
       <h3>⚡ Local-First + Cloud-Ready Hybrid</h3>
       <ul>
-        <li><b>100% Offline Capable:</b> Instant client-side IndexedDB storage.</li>
-        <li><b>Cloud Sync:</b> Seamless Firestore integration with namespace isolation.</li>
-        <li>Built-in JSON backup and restore capabilities.</li>
+        <li><b>100% Offline Capable:</b> Instant client-side IndexedDB database.</li>
+        <li><b>Cloud Sync:</b> Real-time Firestore synchronization with namespace isolation.</li>
+        <li>PWA support with service worker asset caching.</li>
       </ul>
     </td>
   </tr>
@@ -100,188 +124,180 @@ By entering core tender specifications and line items once, TenderFlow instantly
 
 ## 📋 Document Pipeline
 
-TenderFlow automates the entire lifecycle of tender document submission:
-
-`mermaid
+```mermaid
 flowchart LR
-    A[📝 Single Input Form] --> B[⚙️ Core Orchestrator]
-    B --> C[📜 1. Vigyapti / NIT]
-    B --> D[📄 2. Main Quotation L1]
-    B --> E[📑 3. Alternate Quotations L2/L3]
-    B --> F[📋 4. Supply Aadesh]
-    B --> G[🧾 5. GST Tax Bill]
+    A["📝 Input Specs"] --> B["⚙️ Core Orchestrator"]
+    B --> C["📜 1. Vigyapti / NIT"]
+    B --> D["📄 2. Main Quotation L1"]
+    B --> E["📑 3. Alternate Quotes L2/L3"]
+    B --> F["📋 4. Supply Order"]
+    B --> G["🧾 5. GST Tax Bill"]
     
-    C --> H[🖨️ A4 Print-Safe PDF]
-    D --> H
-    E --> H
-    F --> H
-    G --> H
-`
+    C & D & E & F & G --> H["🖨️ A4 Print-Safe PDF"]
+```
 
-| Document Type | Hindi Name | Letterhead Applied? | Description |
+| Document Type | Official Hindi Title | Letterhead Applied? | Description |
 | :--- | :--- | :---: | :--- |
-| **igyapti** | निविदा सूचना | ❌ Plain (Public) | Official tender notification with item lists, terms, and dates |
-| **quotation_main** | मुख्य कोटेशन (L1) | ✅ Yes | Lowest rate bid generated on selected primary firm's letterhead |
-| **quotation_alt_1** | वैकल्पिक कोटेशन 1 | ✅ Yes | Competing rate quote on alternate firm's letterhead |
-| **quotation_alt_2** | वैकल्पिक कोटेशन 2 | ✅ Yes | Second alternate rate quote for compliant procurement records |
-| **supply_aadesh** | आपूर्ति आदेश | ✅ Yes | Formal work/supply award sanction letter |
-| **irm_bill** | फर्म टैक्स बिल | ✅ Yes | Detailed GST invoice with bank account, IFSC & HSN breakdown |
-
----
-
-## 🧠 AI & Bilingual Master Dictionaries
-
-TenderFlow bridges English commercial catalogs with strict Hindi administrative standards.
-
-### 1. Purpose Library Engine
-Transforms generic item categories into legally sound administrative procurement statements:
-`
-Category: "fire_fighting"
-  ├── Hindi : "अग्निशमन एवं आपातकालीन जल आपूर्ति कार्य हेतु आवश्यक उच्च क्षमता सामग्री"
-  └── English: "Essential high-capacity materials for fire fighting and emergency water supply"
-`
-
-### 2. Auto-Transliteration Engine
-English line items are automatically transliterated and cached into Master Dictionaries for instant reuse:
-`
-"Fire Hose Nozzle 63mm" ────▶ AI Engine ────▶ "अग्निशमन होज नोज़ल 63 मि.मी."
-`
-
-### 3. Multi-Model AI Stack
-Customize AI prompt stacks per firm and document type:
-* **System Directive**: Government procurement phrasing compliance.
-* **Firm Profile**: govt_formal, minimal_business, ilingual, or 	able_heavy.
-* **Dynamic Context**: Line items, GST slabs, department headers, and budget constraints.
+| **`vigyapti`** | निविदा सूचना (NIT) | ❌ Plain (Public) | Official public procurement notice detailing line items, earnest money, and deadlines |
+| **`quotation_main`** | मुख्य कोटेशन (L1) | ✅ Yes (Branded) | Lowest-rate compliant bid generated on selected primary firm's letterhead |
+| **`quotation_alt_1`** | वैकल्पिक कोटेशन 1 (L2) | ✅ Yes (Branded) | Alternate quotation on secondary firm's letterhead for price comparison |
+| **`quotation_alt_2`** | वैकल्पिक कोटेशन 2 (L3) | ✅ Yes (Branded) | Third competitive rate quote for statutory departmental compliance |
+| **`supply_aadesh`** | आपूर्ति आदेश / कार्यादेश | ✅ Yes (Branded) | Official supply award sanction letter with contractual conditions |
+| **`firm_bill`** | फर्म टैक्स बिल | ✅ Yes (Branded) | Complete GST tax invoice with bank details, IFSC, and HSN breakdown |
 
 ---
 
 ## 🏛️ Architecture & Tech Stack
 
-`
-┌─────────────────────────────────────────────────────────────────────────┐
-│                           PRESENTATION LAYER                            │
-│    Next.js 15 (App Router) • React 18 • Tailwind CSS • Lucide Icons     │
-│             TipTap WYSIWYG Rich Editor • Live A4 Canvas Viewer          │
-└────────────────────────────────────┬────────────────────────────────────┘
-                                     │
-┌────────────────────────────────────▼────────────────────────────────────┐
-│                             SERVICE LAYER                               │
-│  ┌───────────────────────┐ ┌──────────────────────┐ ┌────────────────┐  │
-│  │    documentService    │ │    aiDraftService    │ │  layoutEngine  │  │
-│  └───────────────────────┘ └──────────────────────┘ └────────────────┘  │
-│  ┌───────────────────────┐ ┌──────────────────────┐ ┌────────────────┐  │
-│  │    mappingService     │ │   governmentTmpl     │ │  dataService   │  │
-│  └───────────────────────┘ └──────────────────────┘ └────────────────┘  │
-└────────────────────────────────────┬────────────────────────────────────┘
-                                     │
-┌────────────────────────────────────▼────────────────────────────────────┐
-│                             STORAGE LAYER                               │
-│  ┌─────────────────────────────────────┐ ┌───────────────────────────┐  │
-│  │      Client-Side IndexedDB (idb)    │ │   Cloud Firestore (v11)   │  │
-│  │    Instant Offline Local-First      │ │    Real-Time Sync Engine  │  │
-│  └─────────────────────────────────────┘ └───────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────────┘
-`
+```mermaid
+graph TB
+    subgraph UI ["🖥️ PRESENTATION LAYER"]
+        P1["Next.js 15 App Router"]
+        P2["Tailwind CSS + Lucide Icons"]
+        P3["TipTap WYSIWYG Rich Editor"]
+        P4["Live A4 Canvas & Layout Engine"]
+    end
+
+    subgraph SERVICES ["⚙️ BUSINESS SERVICE LAYER"]
+        S1["<b>documentService</b><br/>Generation & Version Snapshots"]
+        S2["<b>aiDraftService</b><br/>Prompt Stacks & LLM Orchestration"]
+        S3["<b>layoutEngine</b><br/>A4 Margins, Bleeds & Letterhead"]
+        S4["<b>mappingService</b><br/>Purpose & Transliteration Dictionaries"]
+        S5["<b>governmentTemplates</b><br/>Standardized Legal Layouts"]
+    end
+
+    subgraph AI_LAYER ["🤖 MULTI-LLM AI ENGINE"]
+        A1["Google Gemini 1.5"]
+        A2["Groq Llama 3"]
+        A3["OpenAI GPT-4o"]
+        A4["NVIDIA NIM"]
+    end
+
+    subgraph STORAGE ["🗄️ DUAL-ENGINE STORAGE LAYER"]
+        DB1["<b>Client-Side IndexedDB</b><br/>Local-First • Instant • 100% Offline"]
+        DB2["<b>Firebase Firestore</b><br/>Multi-Device Cloud Sync & Backup"]
+    end
+
+    UI --> SERVICES
+    SERVICES <--> AI_LAYER
+    SERVICES <--> STORAGE
+```
 
 ---
 
-## 📂 Project Organization & Documentation
+## 🧠 Bilingual & AI Intelligence
 
-All technical documentation is organized inside the [docs/](docs/) directory:
+TenderFlow bridges standard English commercial terminology with formal Hindi administrative procurement standards.
 
-`
-docs/
-├── 🏛️ architecture/           # System topology, UI redesign & technical roadmap
-├── 🤖 ai/                     # Multi-LLM integration, prompts & master dictionaries
-├── 🗄️ storage/                # Firebase Firestore config & IndexedDB dual-engine
-├── 📖 guides/                 # Complete User Manual, quick references & onboarding
-├── 🛠️ fixes-and-history/      # Patch notes, letterhead alignment & image fixes
-└── 📑 README.md               # Complete Documentation Index
-`
+### 1. Purpose Library Engine
+Transforms simple categories into legally sound administrative purpose statements:
 
-👉 **[Explore Full Documentation Center ➔](docs/README.md)**
+```mermaid
+flowchart LR
+    C["Category: <b>fire_fighting</b>"] --> E["⚡ Purpose Mapping Engine"]
+    E --> H1["🇮🇳 <b>Hindi:</b> 'अग्निशमन एवं आपातकालीन जल आपूर्ति कार्य हेतु आवश्यक सामग्री'"]
+    E --> H2["🇬🇧 <b>English:</b> 'Materials required for fire fighting and emergency water supply'"]
+```
+
+### 2. Automated Transliteration Cache
+English line items are automatically translated/transliterated and cached in IndexedDB for instantaneous future queries:
+
+```mermaid
+flowchart LR
+    IN["Input: 'Fire Hose Nozzle 63mm'"] --> AI["🤖 Multi-LLM Transliteration"]
+    AI --> OUT["Output: 'अग्निशमन होज नोज़ल 63 मि.मी.'"]
+    OUT --> CACHE["💾 Saved to Master Dictionary"]
+```
 
 ---
 
-## 🛠️ Getting Started
+## 📂 Documentation Center
+
+All technical documentation is organized inside the [`docs/`](docs/) directory:
+
+```mermaid
+flowchart LR
+    DOCS["📂 <b>docs/ Hub</b>"]
+    
+    DOCS --> ARC["🏛️ <b>architecture/</b><br/>System design, roadmap & UI evolution"]
+    DOCS --> AI["🤖 <b>ai/</b><br/>Multi-LLM prompts & bilingual dictionaries"]
+    DOCS --> STO["🗄️ <b>storage/</b><br/>Firebase Firestore & IndexedDB setup"]
+    DOCS --> GUI["📖 <b>guides/</b><br/>User manual & quick reference cards"]
+    DOCS --> FIX["🛠️ <b>fixes-and-history/</b><br/>Changelogs, patch notes & bug fixes"]
+```
+
+| Section | Description | Link |
+| :--- | :--- | :---: |
+| 🏛️ **Architecture** | System topology, roadmap, before/after comparison | [Explore ➔](docs/architecture/ARCHITECTURE.md) |
+| 🤖 **AI & Transliteration** | Multi-LLM configuration, prompt engineering & dictionaries | [Explore ➔](docs/ai/AI_INTEGRATION_GUIDE.md) |
+| 🗄️ **Storage & Cloud** | IndexedDB offline layer & Firestore cloud sync setup | [Explore ➔](docs/storage/FIREBASE_STORAGE_SETUP.md) |
+| 📖 **Guides & Manuals** | Comprehensive user manual, quick references & onboarding | [Explore ➔](docs/guides/USER_GUIDE.md) |
+| 🛠️ **Fixes & Changelogs** | Implementation status, layout fixes & patch history | [Explore ➔](docs/fixes-and-history/IMPLEMENTATION_STATUS.md) |
+
+👉 **[View Complete Documentation Directory ➔](docs/README.md)**
+
+---
+
+## ⚡ Quickstart Guide
 
 ### 📋 Prerequisites
-* **Node.js**: 18.17.0 or higher
-* **Package Manager**: 
-pm, yarn, pnpm, or un
+* **Node.js**: `v18.17.0` or higher
+* **Package Manager**: `npm`, `yarn`, `pnpm`, or `bun`
 
-### ⚡ Installation
+### 🛠️ Installation & Setup
 
 1. **Clone the repository:**
-   `ash
+   ```bash
    git clone https://github.com/your-username/tenderflow-ai.git
    cd tenderflow-ai
-   `
+   ```
 
 2. **Install dependencies:**
-   `ash
+   ```bash
    npm install
-   `
+   ```
 
-3. **Configure Environment Variables:**
-   `ash
+3. **Configure Environment:**
+   ```bash
    cp .env.example .env.local
-   `
-   *Fill in your AI API key and backend configuration:*
-   `env
-   # AI Provider Configuration (gemini, openai, groq, nvidia, mock)
+   ```
+   Configure your preferred AI provider and storage backend in `.env.local`:
+   ```env
+   # AI Provider (gemini, openai, groq, nvidia, mock)
    NEXT_PUBLIC_AI_PROVIDER=gemini
-   NEXT_PUBLIC_AI_API_KEY=your_gemini_api_key_here
+   NEXT_PUBLIC_AI_API_KEY=your_api_key_here
    NEXT_PUBLIC_AI_MODEL=gemini-1.5-flash
 
-   # Storage Backend (indexeddb or firestore)
+   # Storage Mode (indexeddb or firestore)
    NEXT_PUBLIC_DATA_BACKEND=indexeddb
-   `
+   ```
 
-4. **Launch the Development Server:**
-   `ash
+4. **Launch Development Server:**
+   ```bash
    npm run dev
-   `
-   Open [http://localhost:3000](http://localhost:3000) in your browser.
+   ```
+   Navigate to [http://localhost:3000](http://localhost:3000).
 
 ---
 
 ## 🏷️ Recommended Project Names & Descriptions
 
-If you are naming and describing this repository on GitHub, here are top curated suggestions:
+If you are setting up or renaming the repository on GitHub, here are the top curated suggestions:
 
-### 🏆 Top Choice: **TenderFlow-AI**
-* **Repository Name:** 	enderflow-ai
-* **Short Description:** *🚀 Next-Gen Autonomous Government Tender & Procurement Automation Suite. One-click multi-document drafting, precision A4 letterheads, bilingual Hindi/English AI engine, and offline-first dual storage.*
-* **Tagline:** *From Tender to Tax Bill in 60 Seconds.*
-
----
-
-### 🌟 Option 2: **GovDoc-Studio**
-* **Repository Name:** govdoc-studio
-* **Short Description:** *⚡ Intelligent Government Tender Document Engine & Firm Management Platform with Bilingual AI Transliteration & A4 Letterhead Layouts.*
-* **Tagline:** *The Smartest Way to Manage Government Contracts & Quotations.*
+| Name | Short Description | Recommended Tagline |
+| :--- | :--- | :--- |
+| 🏆 **`TenderFlow-AI`** | *Autonomous Government Tender & Procurement Automation Suite with Multi-LLM Drafting, Letterhead Engine & Bilingual Transliteration.* | *From Tender to Tax Bill in 60 Seconds.* |
+| 🌟 **`GovDoc-Studio`** | *Intelligent Government Tender Document Engine & Firm Management Platform with Bilingual AI Transliteration & A4 Letterhead Layouts.* | *The Smartest Way to Manage Government Contracts.* |
+| 🌟 **`BidForge-AI`** | *Full-stack bilingual tender management suite: Auto-generate Vigyapti, Quotations, Supply Orders & GST Bills with AI-powered drafting.* | *Craft Winning Government Bids with AI Precision.* |
+| 🌟 **`Magra-Tender-Automation`** | *Complete government tender document automation system with firm-specific branding, bilingual Hindi support, and local-first architecture.* | *Original Enterprise Brand.* |
 
 ---
 
-### 🌟 Option 3: **BidForge-AI**
-* **Repository Name:** idforge-ai
-* **Short Description:** *📄 Full-stack bilingual tender management suite: Auto-generate Vigyapti, Quotations, Supply Orders & GST Bills with AI-powered drafting and print-ready A4 exports.*
-* **Tagline:** *Craft Winning Government Bids with AI Precision.*
+## 🏷️ Suggested GitHub Topics
 
----
-
-### 🌟 Option 4: **Magra-Tender-Automation** (Original Brand)
-* **Repository Name:** magra-tender-automation
-* **Short Description:** *💼 Complete government tender document automation system with firm-specific branding, bilingual Hindi support, multi-LLM drafting, and local-first architecture.*
-
----
-
-## 🏷️ Suggested GitHub Topics / Tags
-
-`
+```text
 tender-automation • government-procurement • nextjs15 • typescript • tailwindcss • gemini-ai • groq • openai • tiptap • indexeddb • firestore • hindi-transliteration • document-generator • pwa • a4-pdf-layout
-`
+```
 
 ---
 
@@ -290,17 +306,18 @@ tender-automation • government-procurement • nextjs15 • typescript • tai
 Contributions, issues, and feature requests are welcome!
 
 1. Fork the repository
-2. Create your branch (git checkout -b feature/awesome-feature)
-3. Commit your changes (git commit -m 'feat: Add awesome feature')
-4. Push to the branch (git push origin feature/awesome-feature)
+2. Create your branch (`git checkout -b feature/awesome-feature`)
+3. Commit your changes (`git commit -m 'feat: Add awesome feature'`)
+4. Push to the branch (`git push origin feature/awesome-feature`)
 5. Open a Pull Request
 
 ---
 
 ## 📄 License
 
-This software is licensed under proprietary terms. See [LICENSE](LICENSE) for details.
+This software is distributed under proprietary licensing. See [LICENSE](LICENSE) for details.
 
 <div align="center">
-  <sub>Built with ❤️ by the Magra Automation Team. Powered by Next.js, TypeScript & Advanced AI.</sub>
+  <sub>Crafted with ❤️ by the Magra Automation Team. Powered by Next.js, TypeScript & Advanced AI.</sub>
 </div>
+

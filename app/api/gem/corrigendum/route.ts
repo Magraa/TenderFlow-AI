@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getGeMCorrigendum } from '@/services/gemScraperService';
 
+export const dynamic = 'force-dynamic';
+export const preferredRegion = ['bom1'];
+export const maxDuration = 30;
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);

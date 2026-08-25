@@ -2,12 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { searchGeMBids } from '@/services/gemScraperService';
 import { GeMSearchFilters } from '@/types/gem';
 
+export const dynamic = 'force-dynamic';
+export const preferredRegion = ['bom1'];
+export const maxDuration = 30;
+
 export async function POST(req: NextRequest) {
   try {
     const filters: GeMSearchFilters = await req.json();
     const result = await searchGeMBids(filters);
     return NextResponse.json(result);
   } catch (error: any) {
+    const causeMsg = error?.cause ? ` (${error.cause.message || error.cause.code || JSON.stringify(error.cause)})` : '';
     return NextResponse.json(
       {
         success: false,
@@ -16,7 +21,7 @@ export async function POST(req: NextRequest) {
         pageSize: 10,
         totalPages: 0,
         bids: [],
-        error: error?.message || 'Internal server error while fetching bids',
+        error: `${error?.message || 'Internal server error'}${causeMsg}`,
       },
       { status: 500 }
     );

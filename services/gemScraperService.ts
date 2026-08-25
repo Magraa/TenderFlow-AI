@@ -8,7 +8,45 @@ interface SessionCache {
 
 let cachedSession: SessionCache | null = null;
 
-const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+const DEFAULT_HEADERS: Record<string, string> = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+  'Accept-Language': 'en-US,en;q=0.9,hi;q=0.8',
+  'Sec-Ch-Ua': '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+  'Sec-Ch-Ua-Mobile': '?0',
+  'Sec-Ch-Ua-Platform': '"Windows"',
+  'Sec-Fetch-Dest': 'document',
+  'Sec-Fetch-Mode': 'navigate',
+  'Sec-Fetch-Site': 'none',
+  'Sec-Fetch-User': '?1',
+  'Upgrade-Insecure-Requests': '1',
+};
+
+const AJAX_HEADERS: Record<string, string> = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Accept': 'application/json, text/javascript, */*; q=0.01',
+  'Accept-Language': 'en-US,en;q=0.9,hi;q=0.8',
+  'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+  'X-Requested-With': 'XMLHttpRequest',
+  'Origin': 'https://bidplus.gem.gov.in',
+  'Referer': 'https://bidplus.gem.gov.in/advance-search',
+  'Sec-Ch-Ua': '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+  'Sec-Ch-Ua-Mobile': '?0',
+  'Sec-Ch-Ua-Platform': '"Windows"',
+  'Sec-Fetch-Dest': 'empty',
+  'Sec-Fetch-Mode': 'cors',
+  'Sec-Fetch-Site': 'same-origin',
+};
+
+function extractErrorMessage(error: any): string {
+  if (!error) return 'Unknown error';
+  const cause = error?.cause ? (error.cause.message || error.cause.code || JSON.stringify(error.cause)) : '';
+  const msg = error?.message || String(error);
+  if (cause && !msg.includes(cause)) {
+    return `${msg} (Cause: ${cause})`;
+  }
+  return msg;
+}
 
 /**
  * Obtain a valid session cookie and CSRF token from GeM advance-search page.
@@ -23,12 +61,9 @@ export async function getGeMSession(forceRefresh = false): Promise<{ cookieStr: 
   }
 
   const response = await fetch('https://bidplus.gem.gov.in/advance-search', {
-    headers: {
-      'User-Agent': USER_AGENT,
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-      'Accept-Language': 'en-US,en;q=0.9',
-    },
+    headers: DEFAULT_HEADERS,
     cache: 'no-store',
+    signal: AbortSignal.timeout(20000),
   });
 
   if (!response.ok) {
@@ -203,15 +238,11 @@ export async function searchGeMBids(filters: GeMSearchFilters, isRetry = false):
     const response = await fetch('https://bidplus.gem.gov.in/search-bids', {
       method: 'POST',
       headers: {
-        'User-Agent': USER_AGENT,
-        'Accept': 'application/json, text/javascript, */*; q=0.01',
-        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        'X-Requested-With': 'XMLHttpRequest',
-        'Origin': 'https://bidplus.gem.gov.in',
-        'Referer': 'https://bidplus.gem.gov.in/advance-search',
-        'Cookie': cookieStr,
+        ...AJAX_HEADERS,
+        Cookie: cookieStr,
       },
       body: formData.toString(),
+      signal: AbortSignal.timeout(20000),
     });
 
     if (response.status === 422 && !isRetry) {
@@ -270,7 +301,7 @@ export async function searchGeMBids(filters: GeMSearchFilters, isRetry = false):
       pageSize: 10,
       totalPages: 0,
       bids: [],
-      error: error?.message || 'Failed to fetch bids from GeM',
+      error: extractErrorMessage(error),
     };
   }
 }
@@ -282,9 +313,10 @@ export async function getGeMCorrigendum(bidId: number | string): Promise<{ succe
   try {
     const response = await fetch(`https://bidplus.gem.gov.in/bidding/bid/viewCorrigendum/${bidId}`, {
       headers: {
-        'User-Agent': USER_AGENT,
+        ...DEFAULT_HEADERS,
         'X-Requested-With': 'XMLHttpRequest',
       },
+      signal: AbortSignal.timeout(20000),
     });
 
     if (!response.ok) {
@@ -294,7 +326,7 @@ export async function getGeMCorrigendum(bidId: number | string): Promise<{ succe
     const html = await response.text();
     return { success: true, html };
   } catch (error: any) {
-    return { success: false, html: '', error: error?.message || 'Failed to fetch corrigendum' };
+    return { success: false, html: '', error: extractErrorMessage(error) };
   }
 }
 
@@ -310,12 +342,11 @@ export async function getGeMStates(): Promise<GeMDropdownOption[]> {
     const res = await fetch('https://bidplus.gem.gov.in/state-list-adv', {
       method: 'POST',
       headers: {
-        'User-Agent': USER_AGENT,
-        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        'X-Requested-With': 'XMLHttpRequest',
-        'Cookie': cookieStr,
+        ...AJAX_HEADERS,
+        Cookie: cookieStr,
       },
       body: formData.toString(),
+      signal: AbortSignal.timeout(20000),
     });
 
     const json = await res.json();
@@ -350,12 +381,11 @@ export async function getGeMMinistries(): Promise<GeMDropdownOption[]> {
     const res = await fetch('https://bidplus.gem.gov.in/ministry-list-adv', {
       method: 'POST',
       headers: {
-        'User-Agent': USER_AGENT,
-        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        'X-Requested-With': 'XMLHttpRequest',
-        'Cookie': cookieStr,
+        ...AJAX_HEADERS,
+        Cookie: cookieStr,
       },
       body: formData.toString(),
+      signal: AbortSignal.timeout(20000),
     });
 
     const json = await res.json();
@@ -392,12 +422,11 @@ export async function getGeMCities(stateName: string): Promise<GeMDropdownOption
     const res = await fetch('https://bidplus.gem.gov.in/city-list-adv', {
       method: 'POST',
       headers: {
-        'User-Agent': USER_AGENT,
-        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        'X-Requested-With': 'XMLHttpRequest',
-        'Cookie': cookieStr,
+        ...AJAX_HEADERS,
+        Cookie: cookieStr,
       },
       body: formData.toString(),
+      signal: AbortSignal.timeout(20000),
     });
 
     const json = await res.json();

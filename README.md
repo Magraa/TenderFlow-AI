@@ -16,17 +16,17 @@
 
 <p align="center">
   <b>Transform 4 hours of tedious government tender paperwork into a 60-second automated workflow.</b><br />
-  One-Click Multi-Document Generation • Firm Letterhead Engine • Bilingual Hindi-English Transliteration • AI-Driven Procurement Drafting • Print-Ready A4 PDF Engine • 100% Offline-First (IndexedDB) + Cloud Sync (Firestore)
+  Live GeM Tender Explorer & 1-Click Import • Multi-Document Generation • Firm Letterhead Engine • Bilingual Hindi-English Transliteration • AI Procurement Drafting • Print-Ready A4 PDF Engine • 100% Offline-First (IndexedDB) + Cloud Sync (Firestore)
 </p>
 
 <p align="center">
   <a href="#-key-features">Key Features</a> •
   <a href="#-system-workflow">System Workflow</a> •
+  <a href="#-gem-tender-explorer">GeM Explorer</a> •
   <a href="#-document-pipeline">Document Pipeline</a> •
   <a href="#-architecture--tech-stack">Architecture</a> •
   <a href="#-bilingual--ai-intelligence">AI Engine</a> •
   <a href="#-quickstart-guide">Quickstart</a> •
-  <a href="#-naming--branding-options">Naming Options</a> •
   <a href="docs/README.md">Documentation Hub</a>
 </p>
 
@@ -40,7 +40,7 @@
 
 **TenderFlow AI** is an enterprise-grade procurement automation platform engineered specifically for government contractors, vendors, and administrative departments.
 
-By entering core tender specifications and line items just once, TenderFlow instantly orchestrates, drafts, and renders an entire synchronized package of official documents — complete with firm-specific letterheads, custom legal conditions, localized Hindi transliterations, dynamic GST calculations, and pixel-perfect A4 print-ready layouts.
+Whether importing live published bids from India's official **GeM (Government e-Marketplace)** portal or entering custom tender specifications, TenderFlow instantly orchestrates, drafts, and renders an entire synchronized package of official documents — complete with firm-specific letterheads, custom legal conditions, localized Hindi transliterations, dynamic GST calculations, and pixel-perfect A4 print-ready layouts.
 
 ---
 
@@ -48,12 +48,13 @@ By entering core tender specifications and line items just once, TenderFlow inst
 
 ```mermaid
 flowchart TD
-    subgraph INPUT ["📝 Unified Single-Entry Input"]
-        T["<b>Tender Specifications & Line Items</b><br/>Tender ID • Budget • Quantities • Rates • GST % • Department"]
+    subgraph SOURCES ["🌐 Tender Input & Live Discovery"]
+        G["<b>GeM Portal Live Explorer</b><br/>bidplus.gem.gov.in (Bid/RA, Category, Ministry, BOQ)"]
+        M["<b>Manual / Custom Entry</b><br/>Tender ID • Budget • Quantities • Rates • GST %"]
     end
 
     subgraph ENGINE ["⚡ TenderFlow Automation Core"]
-        O["<b>Orchestration Engine</b><br/>AI Prompt Stacks • Purpose Dictionary • A4 Layout System"]
+        O["<b>Orchestration Engine</b><br/>gemScraperService • AI Prompt Stacks • Purpose Dictionary • A4 Layout"]
     end
 
     subgraph OUTPUTS ["📑 Synchronized Document Generation"]
@@ -68,7 +69,8 @@ flowchart TD
         P["<b>A4 Print-Ready PDF with Margins & Signatures</b>"]
     end
 
-    T --> O
+    G -->|1-Click Auto-Import| O
+    M --> O
     O --> D1
     O --> D2
     O --> D3
@@ -84,6 +86,14 @@ flowchart TD
 <table>
   <tr>
     <td width="50%" valign="top">
+      <h3>🌐 GeM Live Tender Explorer & Auto-Import</h3>
+      <ul>
+        <li>Live real-time discovery of active tenders directly from India's official <b>GeM Portal (bidplus.gem.gov.in)</b>.</li>
+        <li>Multi-vector search: Bid/RA Number, Category, Ministry, State/City, and BOQ budget ranges.</li>
+        <li><b>1-Click Import:</b> Auto-populates line items, quantities, and deadlines into the tender drafting suite.</li>
+      </ul>
+    </td>
+    <td width="50%" valign="top">
       <h3>🏛️ 1-Click Multi-Document Generation</h3>
       <ul>
         <li>Generate <b>Vigyapti</b>, <b>Quotations (Main & Alternate Rates)</b>, <b>Supply Orders</b>, and <b>Firm Bills</b> in one synchronized step.</li>
@@ -91,6 +101,8 @@ flowchart TD
         <li>Instant document versioning snapshot engine with rollback support.</li>
       </ul>
     </td>
+  </tr>
+  <tr>
     <td width="50%" valign="top">
       <h3>⚡ QuickCustomizer™ Floating Drawer</h3>
       <ul>
@@ -99,8 +111,6 @@ flowchart TD
         <li><b>Per-Clause AI Micro-Regenerator:</b> Inline rephrasing with custom prompt instructions.</li>
       </ul>
     </td>
-  </tr>
-  <tr>
     <td width="50%" valign="top">
       <h3>🔍 Smart Product Autocomplete Portal</h3>
       <ul>
@@ -109,6 +119,8 @@ flowchart TD
         <li>Auto-fills product descriptions, units, rates, and GST tax slabs with 1-click.</li>
       </ul>
     </td>
+  </tr>
+  <tr>
     <td width="50%" valign="top">
       <h3>🎨 Precision A4 Letterhead Engine</h3>
       <ul>
@@ -117,8 +129,6 @@ flowchart TD
         <li>Drag-and-drop firm digital signatures and official seals.</li>
       </ul>
     </td>
-  </tr>
-  <tr>
     <td width="50%" valign="top">
       <h3>🤖 Multi-LLM Bilingual Intelligence</h3>
       <ul>
@@ -127,8 +137,10 @@ flowchart TD
         <li>Automated English-to-Hindi item catalog transliteration cache.</li>
       </ul>
     </td>
-    <td width="50%" valign="top">
-      <h3>⚡ Local-First + Cloud-Ready Hybrid</h3>
+  </tr>
+  <tr>
+    <td width="50%" valign="top" colspan="2">
+      <h3>⚡ Local-First + Cloud-Ready Hybrid Architecture</h3>
       <ul>
         <li><b>100% Offline Capable:</b> Instant client-side IndexedDB database.</li>
         <li><b>Cloud Sync:</b> Real-time Firestore synchronization with namespace isolation.</li>
@@ -137,6 +149,24 @@ flowchart TD
     </td>
   </tr>
 </table>
+
+---
+
+## 🌐 GeM Open Tender Explorer
+
+Search, filter, and import active government bids in real time without leaving TenderFlow:
+
+```mermaid
+flowchart LR
+    GEM["🌐 <b>GeM Portal</b><br/>bidplus.gem.gov.in"] --> SCRAPE["⚙️ <b>gemScraperService</b><br/>Session & Token Bridge"]
+    SCRAPE --> FILTERS["🔍 <b>Filter & Search</b><br/>Bid ID • Category • Ministry • BOQ"]
+    FILTERS --> CARDS["📑 <b>Live Tender Cards</b><br/>Quantities • Deadlines • PDF Links"]
+    CARDS -->|1-Click Import| SUITE["📝 <b>TenderFlow Suite</b><br/>Bilingual Drafts • Multi-Firm Quotes • Tax Bills"]
+```
+
+* **Live Bid PDF & Corrigendum Links**: Directly access official bid documents and corrigendum addendums.
+* **Auto-Populate Specs**: Imports product specifications, quantities, and submission dates instantly.
+* 👉 **[Read Detailed GeM Explorer Documentation ➔](docs/guides/GEM_TENDER_EXPLORER.md)**
 
 ---
 
@@ -172,17 +202,19 @@ graph TB
     subgraph UI ["🖥️ PRESENTATION LAYER"]
         P1["Next.js 15 App Router"]
         P2["Tailwind CSS + Lucide Icons"]
-        P3["TipTap WYSIWYG Rich Editor"]
-        P4["QuickCustomizer™ Floating Drawer"]
-        P5["Live A4 Canvas & Layout Engine"]
+        P3["GeM Open Tenders Explorer (/tenders/open)"]
+        P4["TipTap WYSIWYG Rich Editor"]
+        P5["QuickCustomizer™ Floating Drawer"]
+        P6["Live A4 Canvas & Layout Engine"]
     end
 
     subgraph SERVICES ["⚙️ BUSINESS SERVICE LAYER"]
-        S1["<b>documentService</b><br/>Generation & Version Snapshots"]
-        S2["<b>aiDraftService</b><br/>Prompt Stacks & LLM Orchestration"]
-        S3["<b>layoutEngine</b><br/>A4 Margins, Bleeds & Letterhead"]
-        S4["<b>mappingService</b><br/>4-Variant Dictionaries & Transliteration"]
-        S5["<b>governmentTemplates</b><br/>Standardized Legal Layouts"]
+        S1["<b>gemScraperService</b><br/>GeM Session, CSRF & Solr Client"]
+        S2["<b>documentService</b><br/>Generation & Version Snapshots"]
+        S3["<b>aiDraftService</b><br/>Prompt Stacks & LLM Orchestration"]
+        S4["<b>layoutEngine</b><br/>A4 Margins, Bleeds & Letterhead"]
+        S5["<b>mappingService</b><br/>4-Variant Dictionaries & Transliteration"]
+        S6["<b>governmentTemplates</b><br/>Standardized Legal Layouts"]
     end
 
     subgraph AI_LAYER ["🤖 MULTI-LLM AI ENGINE"]
@@ -202,6 +234,7 @@ graph TB
     SERVICES <--> AI_LAYER
     SERVICES <--> STORAGE
 ```
+
 
 ---
 

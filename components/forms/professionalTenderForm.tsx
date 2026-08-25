@@ -163,13 +163,46 @@ export function ProfessionalTenderForm() {
       setSettings(loadedSettings);
       setPhrasePacks(loadedPhrasePacks);
 
+      // Check if arriving from GeM Open Tenders import
+      let importedTenderData: any = null;
+      if (typeof window !== 'undefined') {
+        try {
+          const rawImport = sessionStorage.getItem('gem_import_tender');
+          if (rawImport) {
+            importedTenderData = JSON.parse(rawImport);
+            sessionStorage.removeItem('gem_import_tender');
+          }
+        } catch (e) {
+          console.error('Failed to parse gem_import_tender from sessionStorage:', e);
+        }
+      }
+
       // Default to Municipal Corporation if no department selected
       const municipalCorp = uniqueDepts.find((d) => d.name === 'Municipal Corporation');
       setFormData((previous) => ({
         ...previous,
+        title: importedTenderData?.title || previous.title,
+        submissionDate: importedTenderData?.submissionDate || previous.submissionDate,
         departmentProfileId: previous.departmentProfileId || (municipalCorp?.id || uniqueDepts[0]?.id || ''),
         mainFirmId: previous.mainFirmId || loadedFirms[0]?.id || '',
       }));
+
+      // If imported items exist, populate items state
+      if (importedTenderData?.items && Array.isArray(importedTenderData.items)) {
+        const newItems: TenderItem[] = importedTenderData.items.map((it: any, index: number) => ({
+          id: `item-${Date.now()}-${index}`,
+          tenderId: tempTenderId,
+          productName: it.productName || 'Imported Product',
+          description: it.productName || '',
+          quantity: it.quantity || 1,
+          rate: it.rate || 0,
+          gstPercent: (it.gstPercent || 18) as any,
+          totalAmount: (it.quantity || 1) * (it.rate || 0),
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }));
+        setItems(newItems);
+      }
     })();
 
     return () => {

@@ -54,6 +54,7 @@ flowchart LR
 ### 📖 User & Developer Guides
 | Document | Description |
 | :--- | :--- |
+| [GeM Open Tender Explorer](guides/GEM_TENDER_EXPLORER.md) | Search, filter & 1-click import live bids from official GeM portal |
 | [User Guide](guides/USER_GUIDE.md) | End-to-end user manual: creating tenders, managing firms, and exporting |
 | [Quick Reference Card](guides/QUICK_REFERENCE.md) | Shortcut reference for daily operational workflows |
 | [Document Generation Onboarding](guides/DOCUMENT_GENERATION_ENHANCEMENT_ONBOARDING.md) | Onboarding guide for dynamic multi-document generation |

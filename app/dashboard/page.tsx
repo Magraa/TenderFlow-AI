@@ -30,6 +30,7 @@ import {
   Percent,
   Clock,
   Package,
+  Globe,
 } from 'lucide-react';
 import { Bill, Firm, Tender } from '@/types';
 import { dataService } from '@/services/dataService';
@@ -541,6 +542,17 @@ export default function DashboardPage() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2.5">
+            {/* Open Tenders (GeM) Explorer Button */}
+            <Link href="/tenders/open">
+              <Button
+                variant="outline"
+                className="flex items-center gap-2 bg-blue-50 text-blue-800 border-blue-300 hover:bg-blue-100 shadow-xs font-semibold text-xs h-9"
+              >
+                <Globe className="h-4 w-4 text-blue-600" />
+                GeM Open Tenders
+              </Button>
+            </Link>
+
             {/* New Bill Button */}
             <Link href="/bills/new">
               <Button

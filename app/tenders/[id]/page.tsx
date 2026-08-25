@@ -17,6 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { RichTextEditor } from '@/components/editors/richTextEditor';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import DocumentViewer from '@/components/documentViewer';
+import { QuickCustomizerToolbar } from '@/components/tender/QuickCustomizerToolbar';
 
 const DOC_TYPES: TenderDocType[] = [
   'vigyapti',
@@ -197,7 +198,8 @@ export default function TenderDetailPage() {
   const generateDocument = async (
     docType: TenderDocType,
     forceTemplateFallback = false,
-    languageOverride?: 'hindi' | 'english'
+    languageOverride?: 'hindi' | 'english',
+    customPrompt?: string
   ) => {
     if (!tender || !mainFirm) return;
     setGenerating(true);
@@ -227,6 +229,7 @@ export default function TenderDetailPage() {
         forceTemplateFallback,
         customTemplateId: selectedTemplateId || undefined,
         priceMarkupRange: PRICE_MARKUP_BY_DOC_TYPE[docType],
+        customPrompt,
       });
 
       await refreshDocuments();
@@ -539,6 +542,24 @@ export default function TenderDetailPage() {
       setTender(updated);
       setSuccess(`Tender marked as ${nextStatus}.`);
       setTimeout(() => setSuccess(''), 1800);
+    }
+  };
+
+  const handleQuickCustomizerUpdateContent = async (newHtml: string) => {
+    const current = getDocument(activeTab);
+    if (!current) return;
+    setPendingContentByDocumentId((previous) => ({ ...previous, [current.id]: newHtml }));
+    await saveDocumentContent(current.id, newHtml, 'Quick Customizer Update');
+    setDocuments((previous) =>
+      previous.map((doc) => (doc.id === current.id ? { ...doc, contentHTML: newHtml } : doc))
+    );
+  };
+
+  const handleQuickCustomizerRegenerate = async (customPrompt?: string) => {
+    if (activeTab === 'firm_bill') {
+      await generateOrSyncFirmBill();
+    } else {
+      await generateDocument(activeTab, false, undefined, customPrompt);
     }
   };
 
@@ -1028,6 +1049,22 @@ export default function TenderDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      {tender && (
+        <QuickCustomizerToolbar
+          tender={tender}
+          activeDocType={activeTab}
+          currentDocument={getDocument(activeTab)}
+          firmBill={firmBill}
+          mainFirm={mainFirm}
+          targetFirm={getFirmForDocType(activeTab)}
+          language={getLanguageForDocType(activeTab)}
+          generating={generating}
+          onUpdateDocumentContent={handleQuickCustomizerUpdateContent}
+          onUpdateFirmBill={(updatedBill) => setFirmBill(updatedBill)}
+          onRegenerateDocument={handleQuickCustomizerRegenerate}
+        />
+      )}
     </div>
   );
 }

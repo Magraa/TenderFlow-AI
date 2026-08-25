@@ -58,38 +58,130 @@ export default function SettingsPage() {
   const [documentPhraseMappings, setDocumentPhraseMappings] = useState<DocumentPhraseMapping[]>([]);
   const [loadingMappings, setLoadingMappings] = useState(false);
 
+  // Helper to safely parse any date or Firestore timestamp into milliseconds
+  const parseTimestampToMs = (dateVal: any): number => {
+    if (!dateVal) return 0;
+    if (typeof dateVal === 'number') return dateVal;
+    if (typeof dateVal === 'string') {
+      const ms = new Date(dateVal).getTime();
+      return isNaN(ms) ? 0 : ms;
+    }
+    if (typeof dateVal === 'object') {
+      if (typeof dateVal.toDate === 'function') {
+        try { return dateVal.toDate().getTime(); } catch { return 0; }
+      }
+      if (typeof dateVal.seconds === 'number') {
+        return dateVal.seconds * 1000 + Math.floor((dateVal.nanoseconds || 0) / 1000000);
+      }
+      if (typeof dateVal._seconds === 'number') {
+        return dateVal._seconds * 1000 + Math.floor((dateVal._nanoseconds || 0) / 1000000);
+      }
+    }
+    return 0;
+  };
+
+  // Helper to format date and time into a clean string (guaranteed never returns an object)
+  const formatDateTime = (dateVal?: any): string => {
+    if (!dateVal) return '';
+    try {
+      let dateObj: Date | null = null;
+
+      if (typeof dateVal === 'string' || typeof dateVal === 'number') {
+        dateObj = new Date(dateVal);
+      } else if (typeof dateVal === 'object') {
+        if (typeof dateVal.toDate === 'function') {
+          dateObj = dateVal.toDate();
+        } else if (typeof dateVal.seconds === 'number') {
+          dateObj = new Date(dateVal.seconds * 1000);
+        } else if (typeof dateVal._seconds === 'number') {
+          dateObj = new Date(dateVal._seconds * 1000);
+        }
+      }
+
+      if (!dateObj || isNaN(dateObj.getTime())) {
+        return '';
+      }
+
+      return dateObj.toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+      });
+    } catch {
+      return '';
+    }
+  };
+
   // Search state for item mappings
   const [itemSearchQuery, setItemSearchQuery] = useState('');
 
-  const filteredItemHindiMappings = useMemo(() => {
-    if (!itemSearchQuery.trim()) return itemHindiMappings;
-    const q = itemSearchQuery.toLowerCase().trim();
-    return itemHindiMappings.filter((m) => {
-      const raw = (m.rawName || '').toLowerCase();
-      const rawDesc = (m.rawDescription || '').toLowerCase();
-      const eng = (m.englishName || '').toLowerCase();
-      const engDesc = (m.englishDescription || '').toLowerCase();
-      const hin = (m.hindiName || '').toLowerCase();
-      const hinDesc = (m.hindiDescription || '').toLowerCase();
-      const altHin1 = (m.altHindiName || '').toLowerCase();
-      const altHin2 = (m.altHindiName2 || '').toLowerCase();
-      const altEng1 = (m.altEnglishName1 || '').toLowerCase();
-      const altEng2 = (m.altEnglishName2 || '').toLowerCase();
+  // Purpose Library sorted newest first
+  const sortedPurposeMappings = useMemo(() => {
+    return [...purposeMappings].sort((a, b) => {
+      const timeA = parseTimestampToMs(a.updatedAt || a.createdAt);
+      const timeB = parseTimestampToMs(b.updatedAt || b.createdAt);
+      return timeB - timeA;
+    });
+  }, [purposeMappings]);
 
-      return (
-        raw.includes(q) ||
-        rawDesc.includes(q) ||
-        eng.includes(q) ||
-        engDesc.includes(q) ||
-        hin.includes(q) ||
-        hinDesc.includes(q) ||
-        altHin1.includes(q) ||
-        altHin2.includes(q) ||
-        altEng1.includes(q) ||
-        altEng2.includes(q)
-      );
+  // Item mappings filtered and sorted newest first
+  const filteredItemHindiMappings = useMemo(() => {
+    let list = itemHindiMappings;
+    if (itemSearchQuery.trim()) {
+      const q = itemSearchQuery.toLowerCase().trim();
+      list = list.filter((m) => {
+        const raw = (m.rawName || '').toLowerCase();
+        const rawDesc = (m.rawDescription || '').toLowerCase();
+        const eng = (m.englishName || '').toLowerCase();
+        const engDesc = (m.englishDescription || '').toLowerCase();
+        const hin = (m.hindiName || '').toLowerCase();
+        const hinDesc = (m.hindiDescription || '').toLowerCase();
+        const altHin1 = (m.altHindiName || '').toLowerCase();
+        const altHin2 = (m.altHindiName2 || '').toLowerCase();
+        const altHin3 = (m.altHindiName3 || '').toLowerCase();
+        const altHin4 = (m.altHindiName4 || '').toLowerCase();
+        const altEng1 = (m.altEnglishName1 || '').toLowerCase();
+        const altEng2 = (m.altEnglishName2 || '').toLowerCase();
+        const altEng3 = (m.altEnglishName3 || '').toLowerCase();
+        const altEng4 = (m.altEnglishName4 || '').toLowerCase();
+
+        return (
+          raw.includes(q) ||
+          rawDesc.includes(q) ||
+          eng.includes(q) ||
+          engDesc.includes(q) ||
+          hin.includes(q) ||
+          hinDesc.includes(q) ||
+          altHin1.includes(q) ||
+          altHin2.includes(q) ||
+          altHin3.includes(q) ||
+          altHin4.includes(q) ||
+          altEng1.includes(q) ||
+          altEng2.includes(q) ||
+          altEng3.includes(q) ||
+          altEng4.includes(q)
+        );
+      });
+    }
+
+    return [...list].sort((a, b) => {
+      const timeA = parseTimestampToMs(a.updatedAt || a.createdAt);
+      const timeB = parseTimestampToMs(b.updatedAt || b.createdAt);
+      return timeB - timeA;
     });
   }, [itemHindiMappings, itemSearchQuery]);
+
+  // Phrase packs sorted newest first
+  const sortedPhrasePacks = useMemo(() => {
+    return [...documentPhraseMappings].sort((a, b) => {
+      const timeA = parseTimestampToMs(a.updatedAt || a.createdAt);
+      const timeB = parseTimestampToMs(b.updatedAt || b.createdAt);
+      return timeB - timeA;
+    });
+  }, [documentPhraseMappings]);
 
   // Phrase pack dialog state
   const [phraseDialogOpen, setPhraseDialogOpen] = useState(false);
@@ -467,8 +559,16 @@ export default function SettingsPage() {
       hindiDescription: '',
       altHindiName: '',
       altHindiName2: '',
+      altHindiName3: '',
+      altHindiName4: '',
       altEnglishName1: '',
       altEnglishName2: '',
+      altEnglishName3: '',
+      altEnglishName4: '',
+      altHindiDescription1: '',
+      altHindiDescription2: '',
+      altEnglishDescription1: '',
+      altEnglishDescription2: '',
       language: 'hindi',
       type: type === 'purpose' ? undefined : type,
     });
@@ -488,17 +588,26 @@ export default function SettingsPage() {
         language: mapping.language,
       });
     } else {
+      const rawDesc = mapping.rawDescription || mapping.englishDescription || mapping.hindiDescription || '';
       setFormData({
-        rawName: mapping.rawName || '',
-        rawDescription: mapping.rawDescription || '',
-        englishName: mapping.englishName,
-        hindiName: mapping.hindiName,
-        englishDescription: mapping.englishDescription || '',
-        hindiDescription: mapping.hindiDescription || '',
+        rawName: mapping.rawName || mapping.englishName || '',
+        rawDescription: rawDesc,
+        englishName: mapping.englishName || '',
+        hindiName: mapping.hindiName || '',
+        englishDescription: mapping.englishDescription || rawDesc,
+        hindiDescription: mapping.hindiDescription || rawDesc,
         altHindiName: mapping.altHindiName || '',
         altHindiName2: mapping.altHindiName2 || '',
+        altHindiName3: mapping.altHindiName3 || '',
+        altHindiName4: mapping.altHindiName4 || '',
         altEnglishName1: mapping.altEnglishName1 || '',
         altEnglishName2: mapping.altEnglishName2 || '',
+        altEnglishName3: mapping.altEnglishName3 || '',
+        altEnglishName4: mapping.altEnglishName4 || '',
+        altHindiDescription1: mapping.altHindiDescription1 || '',
+        altHindiDescription2: mapping.altHindiDescription2 || '',
+        altEnglishDescription1: mapping.altEnglishDescription1 || '',
+        altEnglishDescription2: mapping.altEnglishDescription2 || '',
         type: mapping.type,
       });
     }
@@ -1038,6 +1147,8 @@ export default function SettingsPage() {
     return Object.keys(errors).length === 0;
   };
 
+  // Commented out handleGenerateAllHindi as button is commented out
+  /*
   const handleGenerateAllHindi = async () => {
     const englishName = formData.englishName?.trim();
     const englishDesc = formData.englishDescription?.trim();
@@ -1049,7 +1160,6 @@ export default function SettingsPage() {
       let transliteratedDesc = '';
 
       if (englishName && englishDesc) {
-        // Send both in a single request with a separator
         const combinedText = `${englishName} ||| ${englishDesc}`;
         const response = await fetch('/api/ai/transliterate', {
           method: 'POST',
@@ -1072,7 +1182,6 @@ export default function SettingsPage() {
           transliteratedDesc = parts[1]?.trim() || '';
         }
       } else {
-        // Send name only
         const response = await fetch('/api/ai/transliterate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1099,7 +1208,6 @@ export default function SettingsPage() {
         hindiDescription: transliteratedDesc,
       }));
 
-      // Generate alternative names if this is an item
       if (dialogType === 'item') {
         try {
           const altResponse = await fetch('/api/ai/generate-alternates', {
@@ -1124,7 +1232,6 @@ export default function SettingsPage() {
         }
       }
 
-      // Clear any previous hindiName error if resolved
       setFormErrors((prev) => {
         const next = { ...prev };
         delete next.hindiName;
@@ -1137,6 +1244,7 @@ export default function SettingsPage() {
       setGeneratingHindi(false);
     }
   };
+  */
 
   const handleGenerateEnglishFromHindi = async () => {
     const hindiName = formData.hindiName?.trim();
@@ -1248,8 +1356,16 @@ export default function SettingsPage() {
           hindiDescription: data.hindiDescription || prev.hindiDescription || rawDesc,
           altHindiName: data.altHindiName || data.altHindi || prev.altHindiName || '',
           altHindiName2: data.altHindiName2 || prev.altHindiName2 || '',
+          altHindiName3: data.altHindiName3 || prev.altHindiName3 || '',
+          altHindiName4: data.altHindiName4 || prev.altHindiName4 || '',
           altEnglishName1: data.altEnglishName1 || data.altEnglish1 || prev.altEnglishName1 || '',
           altEnglishName2: data.altEnglishName2 || data.altEnglish2 || prev.altEnglishName2 || '',
+          altEnglishName3: data.altEnglishName3 || prev.altEnglishName3 || '',
+          altEnglishName4: data.altEnglishName4 || prev.altEnglishName4 || '',
+          altHindiDescription1: data.altHindiDescription1 || prev.altHindiDescription1 || '',
+          altHindiDescription2: data.altHindiDescription2 || prev.altHindiDescription2 || '',
+          altEnglishDescription1: data.altEnglishDescription1 || prev.altEnglishDescription1 || '',
+          altEnglishDescription2: data.altEnglishDescription2 || prev.altEnglishDescription2 || '',
         }));
       }
     } catch (err) {
@@ -1288,8 +1404,16 @@ export default function SettingsPage() {
           hindiDescription: formData.hindiDescription?.trim() || '',
           altHindiName: formData.altHindiName?.trim() || '',
           altHindiName2: formData.altHindiName2?.trim() || '',
+          altHindiName3: formData.altHindiName3?.trim() || '',
+          altHindiName4: formData.altHindiName4?.trim() || '',
           altEnglishName1: formData.altEnglishName1?.trim() || '',
           altEnglishName2: formData.altEnglishName2?.trim() || '',
+          altEnglishName3: formData.altEnglishName3?.trim() || '',
+          altEnglishName4: formData.altEnglishName4?.trim() || '',
+          altHindiDescription1: formData.altHindiDescription1?.trim() || '',
+          altHindiDescription2: formData.altHindiDescription2?.trim() || '',
+          altEnglishDescription1: formData.altEnglishDescription1?.trim() || '',
+          altEnglishDescription2: formData.altEnglishDescription2?.trim() || '',
           type: dialogType as 'item' | 'vendor',
           usageCount: 0,
           isAutoGenerated: false,
@@ -1312,8 +1436,16 @@ export default function SettingsPage() {
               hindiDescription: formData.hindiDescription?.trim() || '',
               altHindiName: formData.altHindiName?.trim() || '',
               altHindiName2: formData.altHindiName2?.trim() || '',
+              altHindiName3: formData.altHindiName3?.trim() || '',
+              altHindiName4: formData.altHindiName4?.trim() || '',
               altEnglishName1: formData.altEnglishName1?.trim() || '',
               altEnglishName2: formData.altEnglishName2?.trim() || '',
+              altEnglishName3: formData.altEnglishName3?.trim() || '',
+              altEnglishName4: formData.altEnglishName4?.trim() || '',
+              altHindiDescription1: formData.altHindiDescription1?.trim() || '',
+              altHindiDescription2: formData.altHindiDescription2?.trim() || '',
+              altEnglishDescription1: formData.altEnglishDescription1?.trim() || '',
+              altEnglishDescription2: formData.altEnglishDescription2?.trim() || '',
               updatedAt: new Date().toISOString(),
             });
           } else {
@@ -1585,25 +1717,33 @@ export default function SettingsPage() {
                 </div>
                 {loadingMappings ? (
                   <p className="text-sm text-slate-500">Loading mappings...</p>
-                ) : purposeMappings.length === 0 ? (
+                ) : sortedPurposeMappings.length === 0 ? (
                   <p className="text-sm text-slate-500">No purpose mappings configured.</p>
                 ) : (
                   <div className="space-y-2">
-                    {purposeMappings.map((mapping) => (
-                      <div key={mapping.id} className="rounded border border-slate-200 p-3 text-sm">
-                        <div className="flex justify-between items-start">
-                          <div className="flex-1">
-                            <p className="font-medium">
-                              <span className="text-slate-500">Category:</span> {mapping.category}
+                    {sortedPurposeMappings.map((mapping) => (
+                      <div key={mapping.id} className="rounded-xl border border-slate-200 bg-white p-3.5 text-sm shadow-2xs">
+                        <div className="flex justify-between items-start gap-3">
+                          <div className="flex-1 space-y-1">
+                            <p className="font-semibold text-slate-800">
+                              <span className="text-slate-400 text-xs font-normal">Category:</span> {mapping.category}
                             </p>
-                            <p className="mt-1">
-                              <span className="text-slate-500">Purpose:</span> {mapping.professionalPurpose}
+                            <p className="text-slate-700 text-xs">
+                              <span className="text-slate-400 text-xs font-normal">Purpose:</span> {mapping.professionalPurpose}
                             </p>
-                            <p className="mt-1 text-xs text-slate-400">
-                              Language: {mapping.language} | Usage: {mapping.usageCount}
-                            </p>
+                            <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] text-slate-400">
+                              <span className="bg-slate-100 px-2 py-0.5 rounded text-slate-600 font-medium">Language: {mapping.language}</span>
+                              <span>•</span>
+                              <span>Usage: {mapping.usageCount}</span>
+                              {formatDateTime(mapping.updatedAt || mapping.createdAt) && (
+                                <>
+                                  <span>•</span>
+                                  <span>{formatDateTime(mapping.updatedAt || mapping.createdAt)}</span>
+                                </>
+                              )}
+                            </div>
                           </div>
-                          <div className="flex space-x-2">
+                          <div className="flex space-x-2 shrink-0">
                             <Button variant="outline" size="sm" onClick={() => openEditDialog('purpose', mapping)}>
                               Edit
                             </Button>
@@ -1764,10 +1904,16 @@ export default function SettingsPage() {
                               </div>
                             )}
 
-                            <div className="flex items-center gap-3 text-[11px] text-slate-400 pt-0.5">
+                            <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400 pt-0.5">
                               <span>Usage: <strong className="text-slate-600 font-semibold">{mapping.usageCount}</strong></span>
                               <span>•</span>
                               <span>Auto-generated: {mapping.isAutoGenerated ? 'Yes (AI)' : 'No (Raw/Manual)'}</span>
+                              {formatDateTime(mapping.updatedAt || mapping.createdAt) && (
+                                <>
+                                  <span>•</span>
+                                  <span>{formatDateTime(mapping.updatedAt || mapping.createdAt)}</span>
+                                </>
+                              )}
                             </div>
                           </div>
 
@@ -1820,7 +1966,7 @@ export default function SettingsPage() {
 
                 {loadingMappings ? (
                   <p className="text-sm text-slate-500">Loading phrase packs...</p>
-                ) : documentPhraseMappings.length === 0 ? (
+                ) : sortedPhrasePacks.length === 0 ? (
                   <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/60 p-10 text-center">
                     <Package className="h-10 w-10 text-slate-300 mx-auto mb-3" />
                     <p className="text-sm font-medium text-slate-600">No phrase packs yet</p>
@@ -1828,7 +1974,7 @@ export default function SettingsPage() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {documentPhraseMappings.map((pack) => (
+                    {sortedPhrasePacks.map((pack) => (
                       <div
                         key={pack.id}
                         className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden"
@@ -1856,6 +2002,11 @@ export default function SettingsPage() {
                               <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-600">Approved</span>
                             )}
                             <span className="text-xs text-slate-400">Used {pack.usageCount}×</span>
+                            {formatDateTime(pack.updatedAt || pack.createdAt) && (
+                              <span className="text-[11px] text-slate-400">
+                                • {formatDateTime(pack.updatedAt || pack.createdAt)}
+                              </span>
+                            )}
                             <Button
                               variant="outline"
                               size="sm"
@@ -2472,7 +2623,8 @@ export default function SettingsPage() {
                     </div>
                   </div>
 
-                  {formData.englishName?.trim() && (
+                  {/* Commented out Generate Hindi Transliteration button as requested */}
+                  {/* {formData.englishName?.trim() && (
                     <Button
                       type="button"
                       variant="outline"
@@ -2484,10 +2636,10 @@ export default function SettingsPage() {
                       {!generatingHindi && <Sparkles className="h-4 w-4 text-blue-500" />}
                       Generate Hindi Transliteration
                     </Button>
-                  )}
+                  )} */}
                 </div>
 
-                {/* Column 2: Primary Hindi Details & Alternates */}
+                {/* Column 2: Primary Hindi Details */}
                 <div className="space-y-4">
                   <div className="space-y-4 p-4 bg-slate-50/50 rounded-xl border border-slate-100/80 shadow-xs">
                     <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider pb-1 border-b border-slate-100">Primary Hindi Section</h4>
@@ -2532,69 +2684,214 @@ export default function SettingsPage() {
                       Generate English from Hindi
                     </Button>
                   )}
-
-                  {dialogType === 'item' && (
-                    <div className="space-y-4 p-4 bg-blue-50/20 rounded-xl border border-blue-100/80 shadow-xs">
-                      <h4 className="text-xs font-bold text-blue-600 uppercase tracking-wider pb-1 border-b border-blue-50">Alternative Names (for competing bids)</h4>
-                      
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1.5">
-                          <Label htmlFor="altHindiName" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                            Alt Hindi 1 <span className="text-slate-400 font-normal">(Medium)</span>
-                          </Label>
-                          <Input
-                            id="altHindiName"
-                            className="focus-visible:ring-blue-500 border-slate-200 h-9 rounded-lg bg-white shadow-xs text-xs"
-                            value={formData.altHindiName || ''}
-                            onChange={(e) => setFormData({ ...formData, altHindiName: e.target.value })}
-                            placeholder="e.g., प्लास्टिक डस्टबिन"
-                          />
-                        </div>
-
-                        <div className="space-y-1.5">
-                          <Label htmlFor="altHindiName2" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                            Alt Hindi 2 <span className="text-slate-400 font-normal">(Short)</span>
-                          </Label>
-                          <Input
-                            id="altHindiName2"
-                            className="focus-visible:ring-blue-500 border-slate-200 h-9 rounded-lg bg-white shadow-xs text-xs"
-                            value={formData.altHindiName2 || ''}
-                            onChange={(e) => setFormData({ ...formData, altHindiName2: e.target.value })}
-                            placeholder="e.g., डस्टबिन 12L"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1.5">
-                          <Label htmlFor="altEnglishName1" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                            Alt Eng 1 <span className="text-slate-400 font-normal">(Medium)</span>
-                          </Label>
-                          <Input
-                            id="altEnglishName1"
-                            className="focus-visible:ring-blue-500 border-slate-200 h-9 rounded-lg bg-white shadow-xs text-xs"
-                            value={formData.altEnglishName1 || ''}
-                            onChange={(e) => setFormData({ ...formData, altEnglishName1: e.target.value })}
-                            placeholder="e.g., Plastic Waste Bin"
-                          />
-                        </div>
-
-                        <div className="space-y-1.5">
-                          <Label htmlFor="altEnglishName2" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                            Alt Eng 2 <span className="text-slate-400 font-normal">(Short)</span>
-                          </Label>
-                          <Input
-                            id="altEnglishName2"
-                            className="focus-visible:ring-blue-500 border-slate-200 h-9 rounded-lg bg-white shadow-xs text-xs"
-                            value={formData.altEnglishName2 || ''}
-                            onChange={(e) => setFormData({ ...formData, altEnglishName2: e.target.value })}
-                            placeholder="e.g., 12L Garbage Bin"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  )}
                 </div>
+
+                {/* Full 2-Column Width: Alternative Names & Descriptions */}
+                {dialogType === 'item' && (() => {
+                  const hasDescription = Boolean(
+                    formData.rawDescription?.trim() ||
+                    formData.englishDescription?.trim() ||
+                    formData.hindiDescription?.trim()
+                  );
+
+                  return (
+                    <div className="col-span-1 md:col-span-2 space-y-4 p-4 bg-blue-50/20 rounded-xl border border-blue-100/80 shadow-xs">
+                      <div className="flex items-center justify-between pb-1 border-b border-blue-100/60">
+                        <h4 className="text-xs font-bold text-blue-700 uppercase tracking-wider">Alternative Names (for competing bids)</h4>
+                        {hasDescription && (
+                          <span className="text-[10px] text-blue-600 bg-blue-100/80 px-2 py-0.5 rounded font-medium">
+                            Description-aware variations enabled
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Alt Hindi 1 & Alt Hindi 2 */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2 p-3 bg-white rounded-lg border border-slate-200 shadow-xs">
+                          <div className="space-y-1.5">
+                            <Label htmlFor="altHindiName" className="text-xs font-semibold uppercase tracking-wider text-slate-600">
+                              Alt Hindi 1 <span className="text-slate-400 font-normal">(Medium Name)</span>
+                            </Label>
+                            <Input
+                              id="altHindiName"
+                              className="focus-visible:ring-blue-500 border-slate-200 h-9 rounded-lg bg-white shadow-xs text-xs"
+                              value={formData.altHindiName || ''}
+                              onChange={(e) => setFormData({ ...formData, altHindiName: e.target.value })}
+                              placeholder="e.g., प्लास्टिक डस्टबिन"
+                            />
+                          </div>
+                          {hasDescription && (
+                            <div className="space-y-1.5 pt-1">
+                              <Label htmlFor="altHindiDescription1" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                Alt Hindi 1 Description <span className="text-slate-400 font-normal">(Medium)</span>
+                              </Label>
+                              <Textarea
+                                id="altHindiDescription1"
+                                className="focus-visible:ring-blue-500 border-slate-200 rounded-lg bg-white shadow-xs min-h-[60px] text-xs"
+                                value={formData.altHindiDescription1 || ''}
+                                onChange={(e) => setFormData({ ...formData, altHindiDescription1: e.target.value })}
+                                placeholder="e.g., उच्च गुणवत्ता वाले प्लास्टिक से निर्मित..."
+                              />
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="space-y-2 p-3 bg-white rounded-lg border border-slate-200 shadow-xs">
+                          <div className="space-y-1.5">
+                            <Label htmlFor="altHindiName2" className="text-xs font-semibold uppercase tracking-wider text-slate-600">
+                              Alt Hindi 2 <span className="text-slate-400 font-normal">(Short Name)</span>
+                            </Label>
+                            <Input
+                              id="altHindiName2"
+                              className="focus-visible:ring-blue-500 border-slate-200 h-9 rounded-lg bg-white shadow-xs text-xs"
+                              value={formData.altHindiName2 || ''}
+                              onChange={(e) => setFormData({ ...formData, altHindiName2: e.target.value })}
+                              placeholder="e.g., डस्टबिन 12L"
+                            />
+                          </div>
+                          {hasDescription && (
+                            <div className="space-y-1.5 pt-1">
+                              <Label htmlFor="altHindiDescription2" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                Alt Hindi 2 Description <span className="text-slate-400 font-normal">(Short)</span>
+                              </Label>
+                              <Textarea
+                                id="altHindiDescription2"
+                                className="focus-visible:ring-blue-500 border-slate-200 rounded-lg bg-white shadow-xs min-h-[60px] text-xs"
+                                value={formData.altHindiDescription2 || ''}
+                                onChange={(e) => setFormData({ ...formData, altHindiDescription2: e.target.value })}
+                                placeholder="e.g., 12 लीटर क्षमता युक्त कचरा पात्र..."
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Alt Eng 1 & Alt Eng 2 */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2 p-3 bg-white rounded-lg border border-slate-200 shadow-xs">
+                          <div className="space-y-1.5">
+                            <Label htmlFor="altEnglishName1" className="text-xs font-semibold uppercase tracking-wider text-slate-600">
+                              Alt Eng 1 <span className="text-slate-400 font-normal">(Medium Name)</span>
+                            </Label>
+                            <Input
+                              id="altEnglishName1"
+                              className="focus-visible:ring-blue-500 border-slate-200 h-9 rounded-lg bg-white shadow-xs text-xs"
+                              value={formData.altEnglishName1 || ''}
+                              onChange={(e) => setFormData({ ...formData, altEnglishName1: e.target.value })}
+                              placeholder="e.g., Plastic Waste Bin"
+                            />
+                          </div>
+                          {hasDescription && (
+                            <div className="space-y-1.5 pt-1">
+                              <Label htmlFor="altEnglishDescription1" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                Alt Eng 1 Description <span className="text-slate-400 font-normal">(Medium)</span>
+                              </Label>
+                              <Textarea
+                                id="altEnglishDescription1"
+                                className="focus-visible:ring-blue-500 border-slate-200 rounded-lg bg-white shadow-xs min-h-[60px] text-xs"
+                                value={formData.altEnglishDescription1 || ''}
+                                onChange={(e) => setFormData({ ...formData, altEnglishDescription1: e.target.value })}
+                                placeholder="e.g., Heavy duty plastic waste bin..."
+                              />
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="space-y-2 p-3 bg-white rounded-lg border border-slate-200 shadow-xs">
+                          <div className="space-y-1.5">
+                            <Label htmlFor="altEnglishName2" className="text-xs font-semibold uppercase tracking-wider text-slate-600">
+                              Alt Eng 2 <span className="text-slate-400 font-normal">(Short Name)</span>
+                            </Label>
+                            <Input
+                              id="altEnglishName2"
+                              className="focus-visible:ring-blue-500 border-slate-200 h-9 rounded-lg bg-white shadow-xs text-xs"
+                              value={formData.altEnglishName2 || ''}
+                              onChange={(e) => setFormData({ ...formData, altEnglishName2: e.target.value })}
+                              placeholder="e.g., 12L Garbage Bin"
+                            />
+                          </div>
+                          {hasDescription && (
+                            <div className="space-y-1.5 pt-1">
+                              <Label htmlFor="altEnglishDescription2" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                Alt Eng 2 Description <span className="text-slate-400 font-normal">(Short)</span>
+                              </Label>
+                              <Textarea
+                                id="altEnglishDescription2"
+                                className="focus-visible:ring-blue-500 border-slate-200 rounded-lg bg-white shadow-xs min-h-[60px] text-xs"
+                                value={formData.altEnglishDescription2 || ''}
+                                onChange={(e) => setFormData({ ...formData, altEnglishDescription2: e.target.value })}
+                                placeholder="e.g., 12 Litre capacity waste container..."
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Combined Alt 3 & Alt 4 (Only shown when description is given) */}
+                      {hasDescription && (
+                        <div className="space-y-3 pt-2 border-t border-blue-100">
+                          <h5 className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">Combined Name & Description Paragraphs</h5>
+                          
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-1.5">
+                              <Label htmlFor="altHindiName3" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                Alt Hindi 3 <span className="text-slate-400 font-normal">(Combined Med)</span>
+                              </Label>
+                              <Input
+                                id="altHindiName3"
+                                className="focus-visible:ring-blue-500 border-slate-200 h-9 rounded-lg bg-white shadow-xs text-xs"
+                                value={formData.altHindiName3 || ''}
+                                onChange={(e) => setFormData({ ...formData, altHindiName3: e.target.value })}
+                                placeholder="e.g., प्लास्टिक डस्टबिन 12 लीटर क्षमता..."
+                              />
+                            </div>
+
+                            <div className="space-y-1.5">
+                              <Label htmlFor="altHindiName4" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                Alt Hindi 4 <span className="text-slate-400 font-normal">(Combined Short)</span>
+                              </Label>
+                              <Input
+                                id="altHindiName4"
+                                className="focus-visible:ring-blue-500 border-slate-200 h-9 rounded-lg bg-white shadow-xs text-xs"
+                                value={formData.altHindiName4 || ''}
+                                onChange={(e) => setFormData({ ...formData, altHindiName4: e.target.value })}
+                                placeholder="e.g., डस्टबिन 12L ढक्कन सहित"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-1.5">
+                              <Label htmlFor="altEnglishName3" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                Alt Eng 3 <span className="text-slate-400 font-normal">(Combined Med)</span>
+                              </Label>
+                              <Input
+                                id="altEnglishName3"
+                                className="focus-visible:ring-blue-500 border-slate-200 h-9 rounded-lg bg-white shadow-xs text-xs"
+                                value={formData.altEnglishName3 || ''}
+                                onChange={(e) => setFormData({ ...formData, altEnglishName3: e.target.value })}
+                                placeholder="e.g., Plastic Dustbin 12 Litre Heavy Duty..."
+                              />
+                            </div>
+
+                            <div className="space-y-1.5">
+                              <Label htmlFor="altEnglishName4" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                Alt Eng 4 <span className="text-slate-400 font-normal">(Combined Short)</span>
+                              </Label>
+                              <Input
+                                id="altEnglishName4"
+                                className="focus-visible:ring-blue-500 border-slate-200 h-9 rounded-lg bg-white shadow-xs text-xs"
+                                value={formData.altEnglishName4 || ''}
+                                onChange={(e) => setFormData({ ...formData, altEnglishName4: e.target.value })}
+                                placeholder="e.g., Dustbin 12L with lid"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             )}
           </div>

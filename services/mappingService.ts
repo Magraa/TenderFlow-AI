@@ -385,9 +385,16 @@ export async function saveBillItemMappings(
       );
 
       if (matched) {
-        await dataService.itemHindiMappings.update(matched.id, {
+        const patch: Partial<HindiMapping> = {
           usageCount: (matched.usageCount || 0) + 1,
-        });
+        };
+        if (rawDescription) {
+          patch.rawDescription = rawDescription;
+          if (!matched.englishDescription) patch.englishDescription = rawDescription;
+          if (!matched.hindiDescription) patch.hindiDescription = rawDescription;
+        }
+        if (!matched.rawName) patch.rawName = rawName;
+        await dataService.itemHindiMappings.update(matched.id, patch);
       } else {
         // Fast local store without waiting for AI API fetch
         const created = await dataService.itemHindiMappings.create({
@@ -433,12 +440,21 @@ export async function getOrCreateItemMappingPack(
   );
 
   if (matched) {
-    await dataService.itemHindiMappings.update(matched.id, {
+    const patch: Partial<HindiMapping> = {
       usageCount: (matched.usageCount || 0) + 1,
-    });
+    };
+    if (trimmedDesc) {
+      patch.rawDescription = trimmedDesc;
+      if (!matched.englishDescription) patch.englishDescription = trimmedDesc;
+      if (!matched.hindiDescription) patch.hindiDescription = trimmedDesc;
+    }
+    if (!matched.rawName) {
+      patch.rawName = trimmedName;
+    }
+    await dataService.itemHindiMappings.update(matched.id, patch);
     return {
       ...matched,
-      usageCount: (matched.usageCount || 0) + 1,
+      ...patch,
     };
   }
 
@@ -449,10 +465,18 @@ export async function getOrCreateItemMappingPack(
     englishDescription: trimmedDesc,
     hindiName: trimmedName,
     hindiDescription: trimmedDesc,
-    altHindiName: `${trimmedName} (वैकल्पिक 1)`,
-    altHindiName2: `${trimmedName} (वैकल्पिक 2)`,
+    altHindiName: `${trimmedName} (मध्यम 1)`,
+    altHindiName2: `${trimmedName} (संक्षिप्त 2)`,
+    altHindiDescription1: trimmedDesc,
+    altHindiDescription2: trimmedDesc.slice(0, 30),
+    altEnglishDescription1: trimmedDesc,
+    altEnglishDescription2: trimmedDesc.slice(0, 30),
+    altHindiName3: trimmedDesc ? `${trimmedName} सहित ${trimmedDesc}` : '',
+    altHindiName4: trimmedDesc ? `${trimmedName} (${trimmedDesc.slice(0, 20)})` : '',
     altEnglishName1: `${trimmedName} Alt 1`,
     altEnglishName2: `${trimmedName} Alt 2`,
+    altEnglishName3: trimmedDesc ? `${trimmedName} with ${trimmedDesc}` : '',
+    altEnglishName4: trimmedDesc ? `${trimmedName} (${trimmedDesc.slice(0, 20)})` : '',
   };
 
   try {
@@ -476,10 +500,18 @@ export async function getOrCreateItemMappingPack(
         englishDescription: data.englishDescription || trimmedDesc,
         hindiName: data.hindiName || trimmedName,
         hindiDescription: data.hindiDescription || trimmedDesc,
-        altHindiName: data.altHindiName || data.altHindi || `${trimmedName} (वैकल्पिक 1)`,
-        altHindiName2: data.altHindiName2 || `${trimmedName} (वैकल्पिक 2)`,
+        altHindiName: data.altHindiName || data.altHindi || `${trimmedName} (मध्यम 1)`,
+        altHindiName2: data.altHindiName2 || `${trimmedName} (संक्षिप्त 2)`,
+        altHindiDescription1: data.altHindiDescription1 || '',
+        altHindiDescription2: data.altHindiDescription2 || '',
+        altEnglishDescription1: data.altEnglishDescription1 || '',
+        altEnglishDescription2: data.altEnglishDescription2 || '',
+        altHindiName3: data.altHindiName3 || '',
+        altHindiName4: data.altHindiName4 || '',
         altEnglishName1: data.altEnglishName1 || `${trimmedName} Alt 1`,
         altEnglishName2: data.altEnglishName2 || `${trimmedName} Alt 2`,
+        altEnglishName3: data.altEnglishName3 || '',
+        altEnglishName4: data.altEnglishName4 || '',
       };
     }
   } catch (err) {

@@ -50,6 +50,18 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
 
   useEffect(() => {
     setPreviewContent(content);
+    const iframe = iframeRef.current;
+    if (iframe?.contentDocument) {
+      try {
+        const doc = iframe.contentDocument;
+        doc.open();
+        doc.write(content);
+        doc.close();
+        handleIframeLoad();
+      } catch {
+        // Ignore fallback
+      }
+    }
   }, [content]);
 
   const handleLanguageChange = (newLanguage: 'hindi' | 'english') => {

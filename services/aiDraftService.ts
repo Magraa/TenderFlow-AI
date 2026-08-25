@@ -62,6 +62,8 @@ export interface AdvancedDraftRequest {
   showPrintBleedMargin?: boolean;
   forceTemplateFallback?: boolean;
   customTemplateId?: string;
+  customPrompt?: string;
+  itemOverrides?: Record<string, string>;
 }
 
 export interface DraftResponse {
@@ -103,12 +105,13 @@ function getFirmPromptByDocType(firm: Firm, docType: TenderDocType): string {
   return '';
 }
 
-function buildPromptStack(firm: Firm, docType: TenderDocType): string {
+function buildPromptStack(firm: Firm, docType: TenderDocType, customPrompt?: string): string {
   const parts = [
     GLOBAL_SYSTEM_PROMPT,
     STYLE_PROFILE_HINTS[firm.firmStyleProfile],
     DOC_TYPE_PROMPTS[docType],
     getFirmPromptByDocType(firm, docType),
+    customPrompt ? `ADDITIONAL CUSTOM INSTRUCTIONS FOR THIS DOCUMENT:\n${customPrompt}` : '',
   ].filter(Boolean);
 
   return parts.join('\n');
@@ -573,7 +576,7 @@ async function buildContentPages(
   
   if (!request.forceTemplateFallback && AI_PROVIDER !== 'mock') {
     try {
-      const promptStack = buildPromptStack(firm, request.docType);
+      const promptStack = buildPromptStack(firm, request.docType, request.customPrompt);
       const aiResponse = await generateAIDraft(
         { provider: AI_PROVIDER, apiKey: AI_API_KEY, model: AI_MODEL },
         {

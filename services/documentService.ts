@@ -25,6 +25,8 @@ export interface GenerateDocumentRequest {
   forceTemplateFallback?: boolean;
   customTemplateId?: string;
   priceMarkupRange?: PriceMarkupRange;
+  customPrompt?: string;
+  itemOverrides?: Record<string, string>;
 }
 
 function documentUsesLetterhead(docType: TenderDocType): boolean {
@@ -179,6 +181,8 @@ async function generateAndPersistDocument(request: GenerateDocumentRequest): Pro
     forceTemplateFallback: request.forceTemplateFallback,
     customTemplateId: request.customTemplateId,
     priceMarkupRange: request.priceMarkupRange,
+    customPrompt: request.customPrompt,
+    itemOverrides: request.itemOverrides,
   });
 
   if (existing) {

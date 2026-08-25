@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { TenderItem, HindiMapping } from '@/types';
 import { dataService } from '@/services/dataService';
 import { Button } from '@/components/ui/button';
@@ -53,6 +54,240 @@ export interface ItemManagerProps {
   onItemsChange: (items: TenderItem[]) => void;
 }
 
+interface ProductSuggestion {
+  id: string;
+  name: string;
+  description?: string;
+  hindiName?: string;
+  rawName?: string;
+}
+
+interface ProductAutocompleteInputProps {
+  value: string;
+  onChange: (value: string) => void;
+  onSelect: (suggestion: { name: string; description?: string }) => void;
+  suggestions: ProductSuggestion[];
+  placeholder?: string;
+}
+
+function ProductAutocompleteInput({
+  value,
+  onChange,
+  onSelect,
+  suggestions,
+  placeholder = 'Product name',
+}: ProductAutocompleteInputProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const [mounted, setMounted] = useState(false);
+  const [coords, setCoords] = useState<{ top: number; left: number; width: number }>({
+    top: 0,
+    left: 0,
+    width: 0,
+  });
+
+  const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const updateCoords = () => {
+    if (inputRef.current) {
+      const rect = inputRef.current.getBoundingClientRect();
+      setCoords({
+        top: rect.bottom + 4,
+        left: rect.left,
+        width: Math.max(rect.width, 320),
+      });
+    }
+  };
+
+  // Filter suggestions dynamically based on typed text
+  const filteredSuggestions = useMemo(() => {
+    const q = value.trim().toLowerCase();
+    if (!q) return [];
+
+    const exactStarts: ProductSuggestion[] = [];
+    const nameContains: ProductSuggestion[] = [];
+    const otherContains: ProductSuggestion[] = [];
+
+    for (const s of suggestions) {
+      const sName = s.name.toLowerCase();
+      const sRaw = (s.rawName || '').toLowerCase();
+      const sHindi = (s.hindiName || '').toLowerCase();
+      const sDesc = (s.description || '').toLowerCase();
+
+      if (sName.startsWith(q) || sRaw.startsWith(q)) {
+        exactStarts.push(s);
+      } else if (sName.includes(q) || sRaw.includes(q)) {
+        nameContains.push(s);
+      } else if (sHindi.includes(q) || sDesc.includes(q)) {
+        otherContains.push(s);
+      }
+    }
+
+    return [...exactStarts, ...nameContains, ...otherContains];
+  }, [value, suggestions]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    updateCoords();
+    const handleScrollOrResize = () => {
+      updateCoords();
+    };
+    window.addEventListener('scroll', handleScrollOrResize, true);
+    window.addEventListener('resize', handleScrollOrResize);
+    return () => {
+      window.removeEventListener('scroll', handleScrollOrResize, true);
+      window.removeEventListener('resize', handleScrollOrResize);
+    };
+  }, [isOpen]);
+
+  // Click outside to close
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        inputRef.current &&
+        !inputRef.current.contains(e.target as Node) &&
+        listRef.current &&
+        !listRef.current.contains(e.target as Node)
+      ) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen]);
+
+  // Scroll highlighted item into view during keyboard navigation
+  useEffect(() => {
+    if (highlightedIndex >= 0 && listRef.current) {
+      const activeEl = listRef.current.children[highlightedIndex] as HTMLElement;
+      if (activeEl) {
+        activeEl.scrollIntoView({ block: 'nearest' });
+      }
+    }
+  }, [highlightedIndex]);
+
+  const handleSelect = (item: ProductSuggestion) => {
+    onSelect({
+      name: item.name,
+      description: item.description,
+    });
+    setIsOpen(false);
+    setHighlightedIndex(-1);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!isOpen || filteredSuggestions.length === 0) {
+      if (e.key === 'ArrowDown' && value.trim().length > 0) {
+        updateCoords();
+        setIsOpen(true);
+        setHighlightedIndex(0);
+        e.preventDefault();
+      }
+      return;
+    }
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightedIndex((prev) => (prev < filteredSuggestions.length - 1 ? prev + 1 : 0));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : filteredSuggestions.length - 1));
+    } else if (e.key === 'Enter') {
+      if (highlightedIndex >= 0 && highlightedIndex < filteredSuggestions.length) {
+        e.preventDefault();
+        handleSelect(filteredSuggestions[highlightedIndex]);
+      }
+    } else if (e.key === 'Escape') {
+      setIsOpen(false);
+      setHighlightedIndex(-1);
+    }
+  };
+
+  return (
+    <div className="relative w-full">
+      <input
+        ref={inputRef}
+        className="w-full rounded border border-slate-300 bg-white px-2 py-1 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        value={value}
+        onChange={(e) => {
+          onChange(e.target.value);
+          updateCoords();
+          setIsOpen(true);
+          setHighlightedIndex(-1);
+        }}
+        onFocus={() => {
+          if (value.trim().length > 0) {
+            updateCoords();
+            setIsOpen(true);
+          }
+        }}
+        onKeyDown={handleKeyDown}
+        placeholder={placeholder}
+        autoComplete="off"
+      />
+
+      {mounted &&
+        isOpen &&
+        filteredSuggestions.length > 0 &&
+        createPortal(
+          <div
+            ref={listRef}
+            style={{
+              position: 'fixed',
+              top: `${coords.top}px`,
+              left: `${coords.left}px`,
+              width: `${coords.width}px`,
+              zIndex: 99999,
+            }}
+            className="max-h-[220px] overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-2xl py-1 text-slate-800 animate-in fade-in-0 zoom-in-95 duration-100"
+          >
+            {filteredSuggestions.map((item, idx) => {
+              const isHighlighted = idx === highlightedIndex;
+              return (
+                <button
+                  key={`${item.id}-${idx}`}
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    handleSelect(item);
+                  }}
+                  className={`flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left text-sm transition-colors border-b border-slate-50 last:border-b-0 ${
+                    isHighlighted ? 'bg-blue-50 text-blue-900' : 'hover:bg-slate-50 text-slate-800'
+                  }`}
+                >
+                  <div className="flex w-full items-center justify-between gap-2">
+                    <span className="font-medium text-slate-900 text-xs sm:text-sm truncate">
+                      {item.name}
+                    </span>
+                    {item.hindiName && (
+                      <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600 font-normal">
+                        {item.hindiName}
+                      </span>
+                    )}
+                  </div>
+                  {item.description ? (
+                    <span className="line-clamp-1 text-xs text-slate-500">
+                      {item.description}
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>,
+          document.body
+        )}
+    </div>
+  );
+}
+
 export function MultiProductItemManager({ tenderId, items, onItemsChange }: ItemManagerProps) {
   const [mappings, setMappings] = useState<HindiMapping[]>([]);
   // Track which rows are in "custom unit" mode (dropdown shows __custom__ and text input visible)
@@ -68,6 +303,44 @@ export function MultiProductItemManager({ tenderId, items, onItemsChange }: Item
       }
     })();
   }, []);
+
+  // Pre-process mappings into product suggestions
+  const productSuggestions = useMemo(() => {
+    const list: ProductSuggestion[] = [];
+    const seenNames = new Set<string>();
+
+    for (const m of mappings) {
+      if (m.englishName && m.englishName.trim()) {
+        const name = m.englishName.trim();
+        const lower = name.toLowerCase();
+        if (!seenNames.has(lower)) {
+          seenNames.add(lower);
+          list.push({
+            id: `${m.id}-en`,
+            name,
+            description: m.englishDescription?.trim() || m.rawDescription?.trim(),
+            hindiName: m.hindiName?.trim(),
+            rawName: m.rawName?.trim(),
+          });
+        }
+      }
+      if (m.rawName && m.rawName.trim()) {
+        const name = m.rawName.trim();
+        const lower = name.toLowerCase();
+        if (!seenNames.has(lower)) {
+          seenNames.add(lower);
+          list.push({
+            id: `${m.id}-raw`,
+            name,
+            description: m.rawDescription?.trim() || m.englishDescription?.trim(),
+            hindiName: m.hindiName?.trim(),
+            rawName: name,
+          });
+        }
+      }
+    }
+    return list;
+  }, [mappings]);
 
   // On initial load, mark rows that already have a custom (non-preset) unit
   useEffect(() => {
@@ -123,6 +396,21 @@ export function MultiProductItemManager({ tenderId, items, onItemsChange }: Item
       return next;
     });
     updateItems(items.filter((_, i) => i !== index));
+  };
+
+  const handleSelectSuggestion = (
+    index: number,
+    suggestion: { name: string; description?: string }
+  ) => {
+    const next = [...items];
+    const current = { ...next[index] };
+    current.productName = suggestion.name;
+    if (suggestion.description) {
+      current.description = suggestion.description;
+    }
+    current.totalAmount = calculateSubtotal(current);
+    next[index] = current;
+    updateItems(next);
   };
 
   const handleChange = (
@@ -186,7 +474,7 @@ export function MultiProductItemManager({ tenderId, items, onItemsChange }: Item
         <CardDescription>Enter products manually with quantity, rate, and GST slab.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="overflow-x-auto rounded-md border">
+        <div className="overflow-x-auto rounded-md border min-h-[160px]">
           <table className="w-full text-sm">
             <thead className="bg-slate-100">
               <tr className="border-b">
@@ -216,16 +504,16 @@ export function MultiProductItemManager({ tenderId, items, onItemsChange }: Item
 
                   return (
                     <tr key={item.id} className="border-b align-top">
-                      <td className="px-3 py-2">
-                        <input
-                          list="product-suggestions"
-                          className="w-full rounded border border-slate-300 px-2 py-1"
+                      <td className="px-3 py-2 min-w-[220px]">
+                        <ProductAutocompleteInput
                           value={item.productName}
-                          onChange={(event) => handleChange(index, 'productName', event.target.value)}
+                          onChange={(val) => handleChange(index, 'productName', val)}
+                          onSelect={(suggestion) => handleSelectSuggestion(index, suggestion)}
+                          suggestions={productSuggestions}
                           placeholder="Product name"
                         />
                       </td>
-                      <td className="px-3 py-2">
+                      <td className="px-3 py-2 min-w-[200px]">
                         <div className="relative flex items-center">
                           <input
                             className="w-full rounded border border-slate-300 px-2 py-1 pr-6"
@@ -366,27 +654,6 @@ export function MultiProductItemManager({ tenderId, items, onItemsChange }: Item
         <Button type="button" onClick={handleAddItem} variant="outline" className="w-full">
           + Add Item
         </Button>
-
-        <datalist id="product-suggestions">
-          {mappings.flatMap((m) => {
-            const opts = [];
-            if (m.rawName) {
-              opts.push(
-                <option key={`${m.id}-raw`} value={m.rawName}>
-                  {m.rawDescription ? `${m.rawName} - ${m.rawDescription}` : m.rawName}
-                </option>
-              );
-            }
-            if (m.englishName && m.englishName !== m.rawName) {
-              opts.push(
-                <option key={`${m.id}-en`} value={m.englishName}>
-                  {m.englishDescription ? `${m.englishName} - ${m.englishDescription}` : m.englishName}
-                </option>
-              );
-            }
-            return opts;
-          })}
-        </datalist>
       </CardContent>
     </Card>
   );

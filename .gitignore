@@ -46,9 +46,11 @@ pnpm-debug.log*
 *.bak
 *.sublime-workspace
 
-# OS junk files
+# OS & Scratch files
 .DS_Store
 Thumbs.db
+scratch*
+*.html
 
 # Documentation
 *.md

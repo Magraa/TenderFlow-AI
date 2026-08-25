@@ -92,6 +92,24 @@ flowchart TD
       </ul>
     </td>
     <td width="50%" valign="top">
+      <h3>⚡ QuickCustomizer™ Floating Drawer</h3>
+      <ul>
+        <li>Interactive floating side-drawer for live in-document customizations.</li>
+        <li><b>1-Click Clause Injection:</b> Strict Govt Tone, 1-Yr Warranty, 7-Day Urgent Delivery, 30-Day Inspection Payment & ISO Standards.</li>
+        <li><b>Per-Clause AI Micro-Regenerator:</b> Inline rephrasing with custom prompt instructions.</li>
+      </ul>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <h3>🔍 Smart Product Autocomplete Portal</h3>
+      <ul>
+        <li>High-performance floating portal autocomplete for rapid item entry.</li>
+        <li>Instant search across English, Hindi, and Raw vendor catalog names.</li>
+        <li>Auto-fills product descriptions, units, rates, and GST tax slabs with 1-click.</li>
+      </ul>
+    </td>
+    <td width="50%" valign="top">
       <h3>🎨 Precision A4 Letterhead Engine</h3>
       <ul>
         <li>Dynamic background letterhead integration with <code>contain</code>, <code>cover</code>, and <code>stretch</code> fit modes.</li>
@@ -155,14 +173,15 @@ graph TB
         P1["Next.js 15 App Router"]
         P2["Tailwind CSS + Lucide Icons"]
         P3["TipTap WYSIWYG Rich Editor"]
-        P4["Live A4 Canvas & Layout Engine"]
+        P4["QuickCustomizer™ Floating Drawer"]
+        P5["Live A4 Canvas & Layout Engine"]
     end
 
     subgraph SERVICES ["⚙️ BUSINESS SERVICE LAYER"]
         S1["<b>documentService</b><br/>Generation & Version Snapshots"]
         S2["<b>aiDraftService</b><br/>Prompt Stacks & LLM Orchestration"]
         S3["<b>layoutEngine</b><br/>A4 Margins, Bleeds & Letterhead"]
-        S4["<b>mappingService</b><br/>Purpose & Transliteration Dictionaries"]
+        S4["<b>mappingService</b><br/>4-Variant Dictionaries & Transliteration"]
         S5["<b>governmentTemplates</b><br/>Standardized Legal Layouts"]
     end
 
@@ -171,6 +190,7 @@ graph TB
         A2["Groq Llama 3"]
         A3["OpenAI GPT-4o"]
         A4["NVIDIA NIM"]
+        A5["Micro-Regenerator API"]
     end
 
     subgraph STORAGE ["🗄️ DUAL-ENGINE STORAGE LAYER"]
@@ -199,7 +219,14 @@ flowchart LR
     E --> H2["🇬🇧 <b>English:</b> 'Materials required for fire fighting and emergency water supply'"]
 ```
 
-### 2. Automated Transliteration Cache
+### 2. 4-Tier Alternate Translation Variations
+Every line item is equipped with 4 distinct length and styling options for document customization:
+* **Full Title**: Complete formal specification.
+* **Alt 1 (Medium)**: Balanced, standard quotation title.
+* **Alt 2 (Short)**: Concise, high-density table format.
+* **Alt 3 & 4 (Combined)**: Title seamlessly combined with product description paragraphs.
+
+### 3. Automated Transliteration Cache
 English line items are automatically translated/transliterated and cached in IndexedDB for instantaneous future queries:
 
 ```mermaid

@@ -16,6 +16,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { MultiProductItemManager } from '@/components/MultiProductItemManager';
 import { AILocationHelper } from '@/components/forms/Location/AILocationHelper';
 import { LocationSearchInput } from '@/components/forms/Location/LocationSearchInput';
+import { ArrowLeft } from 'lucide-react';
 
 interface FormData {
   title: string;
@@ -438,7 +439,7 @@ export function ProfessionalTenderForm() {
               usageCount: (matched.usageCount || 0) + 1,
             };
             if (!matched.rawName) patch.rawName = inputName;
-            if (!matched.rawDescription && item.description) patch.rawDescription = item.description.trim();
+            if (item.description?.trim()) patch.rawDescription = item.description.trim();
 
             const inputDesc = item.description?.trim() || '';
             if (inputDesc && (!matched.englishDescription || !matched.hindiDescription)) {
@@ -523,11 +524,23 @@ export function ProfessionalTenderForm() {
     <div className="mx-auto w-full max-w-[95%] 2xl:max-w-[95%]">
       <div className="mb-6 rounded-lg border border-slate-200 bg-white px-5 py-4 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold text-slate-950">Create New Tender</h1>
-            <p className="mt-1 text-sm text-slate-500">
-              Enter tender details, location, items, and firms in one reviewable workspace.
-            </p>
+          <div className="flex items-center gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => router.push('/dashboard')}
+              className="shrink-0 gap-1.5 text-slate-700 hover:text-slate-900 border-slate-300 shadow-xs"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back
+            </Button>
+            <div>
+              <h1 className="text-2xl font-semibold text-slate-950">Create New Tender</h1>
+              <p className="mt-1 text-sm text-slate-500">
+                Enter tender details, location, items, and firms in one reviewable workspace.
+              </p>
+            </div>
           </div>
           <div className="grid grid-cols-3 gap-2 text-center sm:min-w-[360px]">
             <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">

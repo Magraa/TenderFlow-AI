@@ -57,47 +57,47 @@ export function AiJobQueueDrawer({
   // Mini Floating Pill when minimized
   if (isMinimized) {
     return (
-      <div className="fixed bottom-5 right-5 z-40 animate-in slide-in-from-bottom-5 duration-200">
+      <div className="fixed bottom-4 right-3 sm:right-5 z-40 animate-in slide-in-from-bottom-3 duration-200 max-w-[calc(100vw-1.5rem)]">
         <button
           onClick={() => setIsMinimized(false)}
-          className="flex items-center gap-3 px-4 py-2.5 rounded-full bg-slate-900/95 text-white shadow-2xl border border-indigo-500/40 backdrop-blur-md hover:bg-slate-800 transition-all hover:scale-105 group"
+          className="flex items-center gap-2 sm:gap-3 px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-full bg-slate-900/95 text-white shadow-2xl border border-indigo-500/40 backdrop-blur-md hover:bg-slate-800 transition-all hover:scale-105 group"
         >
-          <div className="relative">
+          <div className="relative shrink-0">
             <Sparkles className={`w-4 h-4 text-indigo-400 ${runningCount > 0 ? 'animate-spin' : ''}`} />
             {runningCount > 0 && (
               <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
             )}
           </div>
 
-          <div className="flex items-center gap-2 text-xs font-semibold">
-            <span>AI Worker:</span>
+          <div className="flex items-center gap-1.5 text-xs font-semibold truncate">
+            <span className="hidden xs:inline">AI Worker:</span>
             {activeCount > 0 ? (
-              <span className="text-amber-300 font-mono">
-                {runningCount > 0 ? `${runningCount} running` : ''}
-                {queuedCount > 0 ? ` (${queuedCount} queued)` : ''}
+              <span className="text-amber-300 font-mono text-[11px] sm:text-xs">
+                {runningCount > 0 ? `${runningCount} active` : ''}
+                {queuedCount > 0 ? ` (${queuedCount} q)` : ''}
               </span>
             ) : (
-              <span className="text-emerald-400">All Completed ({completedCount})</span>
+              <span className="text-emerald-400 text-[11px] sm:text-xs">Done ({completedCount})</span>
             )}
           </div>
 
-          <div className="w-16 h-1.5 bg-slate-700 rounded-full overflow-hidden ml-1">
+          <div className="w-12 sm:w-16 h-1.5 bg-slate-700 rounded-full overflow-hidden shrink-0">
             <div
               className="h-full bg-gradient-to-r from-indigo-500 to-emerald-400 transition-all duration-300"
               style={{ width: `${progressPercent}%` }}
             />
           </div>
 
-          <ChevronUp className="w-3.5 h-3.5 text-slate-400 group-hover:text-white" />
+          <ChevronUp className="w-3.5 h-3.5 text-slate-400 group-hover:text-white shrink-0" />
         </button>
       </div>
     );
   }
 
   return (
-    <div className="fixed bottom-5 right-5 z-40 w-full max-w-sm sm:max-w-md bg-slate-900/95 text-white rounded-2xl shadow-2xl border border-indigo-500/30 backdrop-blur-xl overflow-hidden animate-in slide-in-from-bottom-5 duration-300">
+    <div className="fixed bottom-4 inset-x-3 sm:inset-x-auto sm:right-5 sm:w-96 z-40 max-w-full bg-slate-900/95 text-white rounded-2xl shadow-2xl border border-indigo-500/30 backdrop-blur-xl overflow-hidden animate-in slide-in-from-bottom-4 duration-300">
       {/* Header */}
-      <div className="px-4 py-3 bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-950 border-b border-indigo-800/40 flex items-center justify-between">
+      <div className="px-3.5 py-3 bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-950 border-b border-indigo-800/40 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <div className="p-1.5 rounded-lg bg-indigo-500/20 text-indigo-400 border border-indigo-400/30">
             <Sparkles className={`w-4 h-4 ${runningCount > 0 ? 'animate-spin' : ''}`} />

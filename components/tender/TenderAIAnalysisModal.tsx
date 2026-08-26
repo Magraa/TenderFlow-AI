@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   X,
   Sparkles,
@@ -19,6 +19,8 @@ import {
 } from 'lucide-react';
 import { GeMAIAnalysis, GeMTender, GeMStarredTender } from '@/types/gem';
 import { Button } from '@/components/ui/button';
+
+import { useScrollLock } from '@/components/ui/useScrollLock';
 
 interface TenderAIAnalysisModalProps {
   isOpen: boolean;
@@ -42,6 +44,32 @@ export function TenderAIAnalysisModal({
   const [activeTab, setActiveTab] = useState<'overview' | 'atc' | 'items' | 'emd' | 'eligibility' | 'docs'>('overview');
   const [copied, setCopied] = useState(false);
   const [atcSearch, setAtcSearch] = useState('');
+  const [isClosing, setIsClosing] = useState(false);
+  const [modalSummaryLang, setModalSummaryLang] = useState<'hindi' | 'english'>('hindi');
+
+  // Lock background scroll when open on PC and Phone
+  useScrollLock(isOpen);
+
+  // Smooth exit animation
+  const handleSmoothClose = () => {
+    if (isClosing) return;
+    setIsClosing(true);
+    setTimeout(() => {
+      setIsClosing(false);
+      onClose();
+    }, 220);
+  };
+
+  // Close on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen && !isClosing) {
+        handleSmoothClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, isClosing]);
 
   if (!isOpen) return null;
 
@@ -75,38 +103,55 @@ ${analysis.items.map((it) => `- ${it.name} | Qty: ${it.quantity} ${it.unit || ''
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/70 backdrop-blur-sm animate-fadeIn">
-      <div className="bg-white rounded-2xl max-w-5xl w-full max-h-[92vh] shadow-2xl border border-slate-200 flex flex-col overflow-hidden text-slate-900">
+    <div
+      className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-950/75 backdrop-blur-sm transition-opacity duration-200 ${
+        isClosing ? 'opacity-0' : 'opacity-100 animate-fadeIn'
+      }`}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) handleSmoothClose();
+      }}
+    >
+      <div
+        className={`bg-white rounded-t-2xl sm:rounded-2xl max-w-5xl w-full max-h-[94vh] sm:max-h-[90vh] shadow-2xl border border-slate-200 flex flex-col overflow-hidden text-slate-900 ${
+          isClosing
+            ? 'animate-slide-down-mobile sm:animate-modal-out'
+            : 'animate-slide-up-mobile sm:animate-modal-in'
+        }`}
+      >
         
+        {/* Mobile Drag Indicator Bar */}
+        <div className="w-12 h-1.5 bg-slate-400/40 rounded-full mx-auto mt-2 sm:hidden shrink-0" />
+
         {/* Header */}
-        <div className="px-5 py-4 border-b border-slate-200 bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-950 text-white flex items-start justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-mono font-bold bg-blue-500/20 text-blue-300 border border-blue-400/30 px-2.5 py-0.5 rounded-full">
+        <div className="px-4 sm:px-5 py-3 sm:py-4 border-b border-slate-200 bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-950 text-white flex items-start justify-between gap-3">
+          <div className="space-y-1 min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+              <span className="text-[11px] sm:text-xs font-mono font-bold bg-blue-500/20 text-blue-300 border border-blue-400/30 px-2 sm:px-2.5 py-0.5 rounded-full truncate max-w-[200px] sm:max-w-none">
                 {tender.bidNumber}
               </span>
-              <span className="text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+              <span className="text-[11px] sm:text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 px-2 sm:px-2.5 py-0.5 rounded-full flex items-center gap-1 shrink-0">
                 <Sparkles className="w-3 h-3" />
-                AI Full Document Intelligence
+                <span className="hidden xs:inline">AI Intelligence</span>
+                <span className="xs:hidden">AI Intel</span>
               </span>
               {analysis?.modelUsed && (
-                <span className="text-[10px] text-slate-400 font-mono hidden sm:inline-block">
+                <span className="text-[10px] text-slate-400 font-mono hidden md:inline-block">
                   ({analysis.modelUsed})
                 </span>
               )}
             </div>
-            <h2 className="text-base sm:text-lg font-extrabold text-white leading-snug line-clamp-1">
+            <h2 className="text-fluid-base font-extrabold text-white leading-snug line-clamp-1">
               {analysis?.itemTitle || tender.categoryName || 'GeM Tender Details'}
             </h2>
           </div>
 
-          <div className="flex items-center gap-1.5 flex-shrink-0">
+          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
             <Button
               variant="outline"
               size="sm"
               onClick={copyAnalysisAsText}
               disabled={!analysis || loading}
-              className="h-8 px-2.5 bg-white/10 hover:bg-white/20 text-white border-white/20 text-xs"
+              className="h-8 px-2 sm:px-2.5 bg-white/10 hover:bg-white/20 text-white border-white/20 text-xs"
               title="Copy Analysis Text"
             >
               {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
@@ -119,7 +164,7 @@ ${analysis.items.map((it) => `- ${it.name} | Qty: ${it.quantity} ${it.unit || ''
                 size="sm"
                 onClick={onReanalyze}
                 disabled={loading}
-                className="h-8 px-2.5 bg-white/10 hover:bg-white/20 text-white border-white/20 text-xs"
+                className="h-8 px-2 sm:px-2.5 bg-white/10 hover:bg-white/20 text-white border-white/20 text-xs"
                 title="Re-run AI Analysis"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
@@ -142,16 +187,16 @@ ${analysis.items.map((it) => `- ${it.name} | Qty: ${it.quantity} ${it.unit || ''
                   window.open(targetUrl, '_blank');
                 }
               }}
-              className="h-8 px-2.5 bg-blue-600 hover:bg-blue-700 text-white border-blue-500 text-xs shadow-sm"
+              className="h-8 px-2 sm:px-2.5 bg-blue-600 hover:bg-blue-700 text-white border-blue-500 text-xs shadow-sm"
               title="Open Full Analysis in New Tab"
             >
               <ExternalLink className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline ml-1.5">Open in New Tab</span>
+              <span className="hidden sm:inline ml-1.5">Full Page</span>
             </Button>
 
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleSmoothClose}
               className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
             >
               <X className="w-5 h-5" />
@@ -161,10 +206,10 @@ ${analysis.items.map((it) => `- ${it.name} | Qty: ${it.quantity} ${it.unit || ''
 
         {/* Loading Banner */}
         {loading && (
-          <div className="bg-blue-50 border-b border-blue-200 px-6 py-8 text-center animate-pulse">
-            <RefreshCw className="w-8 h-8 text-blue-600 animate-spin mx-auto mb-2" />
-            <h4 className="text-sm font-bold text-blue-900">AI Deep Analysis in Progress...</h4>
-            <p className="text-xs text-blue-700 mt-1 max-w-md mx-auto">
+          <div className="bg-blue-50 border-b border-blue-200 px-4 sm:px-6 py-6 sm:py-8 text-center animate-pulse">
+            <RefreshCw className="w-7 h-7 sm:w-8 sm:h-8 text-blue-600 animate-spin mx-auto mb-2" />
+            <h4 className="text-xs sm:text-sm font-bold text-blue-900">AI Deep Analysis in Progress...</h4>
+            <p className="text-[11px] sm:text-xs text-blue-700 mt-1 max-w-md mx-auto">
               Downloading GeM PDF specification document, reading Buyer Added ATC clauses, extracting quantities, Hindi/English government details, and EMD information.
             </p>
           </div>
@@ -226,84 +271,84 @@ ${analysis.items.map((it) => `- ${it.name} | Qty: ${it.quantity} ${it.unit || ''
         })()}
 
         {/* Tabs Bar */}
-        <div className="border-b border-slate-200 bg-white px-4 sm:px-6 flex flex-wrap gap-1">
+        <div className="border-b border-slate-200 bg-white px-3 sm:px-6 flex items-center overflow-x-auto no-scrollbar flex-nowrap gap-1 shrink-0">
           <button
             type="button"
             onClick={() => setActiveTab('overview')}
-            className={`py-3 px-3.5 text-xs sm:text-sm font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
+            className={`py-2.5 sm:py-3 px-3 text-xs sm:text-sm font-semibold border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 shrink-0 ${
               activeTab === 'overview'
                 ? 'border-blue-600 text-blue-600'
                 : 'border-transparent text-slate-600 hover:text-slate-900'
             }`}
           >
-            <Building2 className="w-4 h-4" />
-            Overview & Summary
+            <Building2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span>Overview & Summary</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab('atc')}
-            className={`py-3 px-3.5 text-xs sm:text-sm font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
+            className={`py-2.5 sm:py-3 px-3 text-xs sm:text-sm font-semibold border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 shrink-0 ${
               activeTab === 'atc'
                 ? 'border-blue-600 text-blue-600'
                 : 'border-transparent text-slate-600 hover:text-slate-900'
             }`}
           >
-            <FileText className="w-4 h-4" />
-            Buyer Added ATC ({analysis?.buyerAddedTerms?.length || 0})
+            <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span>Buyer ATC ({analysis?.buyerAddedTerms?.length || 0})</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab('items')}
-            className={`py-3 px-3.5 text-xs sm:text-sm font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
+            className={`py-2.5 sm:py-3 px-3 text-xs sm:text-sm font-semibold border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 shrink-0 ${
               activeTab === 'items'
                 ? 'border-blue-600 text-blue-600'
                 : 'border-transparent text-slate-600 hover:text-slate-900'
             }`}
           >
-            <Layers className="w-4 h-4" />
-            Items & Specs ({analysis?.items?.length || 0})
+            <Layers className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span>Items & BOQ ({analysis?.items?.length || 0})</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab('emd')}
-            className={`py-3 px-3.5 text-xs sm:text-sm font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
+            className={`py-2.5 sm:py-3 px-3 text-xs sm:text-sm font-semibold border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 shrink-0 ${
               activeTab === 'emd'
                 ? 'border-blue-600 text-blue-600'
                 : 'border-transparent text-slate-600 hover:text-slate-900'
             }`}
           >
-            <DollarSign className="w-4 h-4" />
-            EMD & Financials
+            <DollarSign className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span>EMD & Values</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab('eligibility')}
-            className={`py-3 px-3.5 text-xs sm:text-sm font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
+            className={`py-2.5 sm:py-3 px-3 text-xs sm:text-sm font-semibold border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 shrink-0 ${
               activeTab === 'eligibility'
                 ? 'border-blue-600 text-blue-600'
                 : 'border-transparent text-slate-600 hover:text-slate-900'
             }`}
           >
-            <Award className="w-4 h-4" />
-            Eligibility & Criteria
+            <Award className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span>Eligibility</span>
           </button>
 
           {analysis?.linkedDocuments && analysis.linkedDocuments.length > 0 && (
             <button
               type="button"
               onClick={() => setActiveTab('docs')}
-              className={`py-3 px-3.5 text-xs sm:text-sm font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
+              className={`py-2.5 sm:py-3 px-3 text-xs sm:text-sm font-semibold border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 shrink-0 ${
                 activeTab === 'docs'
                   ? 'border-blue-600 text-blue-600'
                   : 'border-transparent text-slate-600 hover:text-slate-900'
               }`}
             >
-              <ExternalLink className="w-4 h-4" />
-              Attachments ({analysis.linkedDocuments.length})
+              <ExternalLink className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <span>Docs ({analysis.linkedDocuments.length})</span>
             </button>
           )}
         </div>
@@ -330,7 +375,51 @@ ${analysis.items.map((it) => `- ${it.name} | Qty: ${it.quantity} ${it.unit || ''
               {activeTab === 'overview' && (
                 <div className="space-y-6">
                   {/* Executive Summaries */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Phone Screen: Language Switcher (Shows one summary at a time) */}
+                  <div className="md:hidden">
+                    <div className="bg-amber-50/70 border border-amber-200/80 rounded-xl p-3.5 space-y-2">
+                      <div className="flex items-center justify-between gap-2 pb-2 border-b border-amber-200/60">
+                        <span className="text-xs font-bold text-amber-950">Executive Summary:</span>
+                        <div className="inline-flex rounded-lg bg-amber-100/90 p-0.5 border border-amber-300/80">
+                          {analysis.summaryHindi && (
+                            <button
+                              type="button"
+                              onClick={() => setModalSummaryLang('hindi')}
+                              className={`px-2.5 py-0.5 rounded text-[11px] font-bold transition-all ${
+                                modalSummaryLang === 'hindi'
+                                  ? 'bg-white text-amber-950 shadow-xs'
+                                  : 'text-amber-800 hover:text-amber-950'
+                              }`}
+                            >
+                              हिंदी
+                            </button>
+                          )}
+                          {analysis.summaryEnglish && (
+                            <button
+                              type="button"
+                              onClick={() => setModalSummaryLang('english')}
+                              className={`px-2.5 py-0.5 rounded text-[11px] font-bold transition-all ${
+                                modalSummaryLang === 'english'
+                                  ? 'bg-white text-amber-950 shadow-xs'
+                                  : 'text-amber-800 hover:text-amber-950'
+                              }`}
+                            >
+                              English
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      <p className="text-xs text-slate-800 leading-relaxed pt-0.5">
+                        {modalSummaryLang === 'hindi'
+                          ? analysis.summaryHindi || analysis.summaryEnglish
+                          : analysis.summaryEnglish || analysis.summaryHindi}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Desktop / Tablet: Side-by-side Dual Summaries */}
+                  <div className="hidden md:grid md:grid-cols-2 gap-4">
                     {analysis.summaryHindi && (
                       <div className="bg-amber-50/70 border border-amber-200/80 rounded-xl p-4">
                         <div className="flex items-center gap-2 mb-2 text-amber-900 font-bold text-xs uppercase tracking-wider">
@@ -730,31 +819,31 @@ ${analysis.items.map((it) => `- ${it.name} | Qty: ${it.quantity} ${it.unit || ''
         </div>
 
         {/* Footer Actions */}
-        <div className="px-5 py-3 border-t border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-3">
+        <div className="px-4 sm:px-5 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between gap-2 shrink-0">
           <div className="flex items-center gap-2">
             <a
               href={tender.pdfUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center text-xs font-semibold px-3 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-sm transition-colors"
+              className="inline-flex items-center text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-xs transition-colors"
             >
-              <Download className="w-3.5 h-3.5 mr-1.5 text-blue-600" />
-              Download Original GeM PDF
+              <Download className="w-3.5 h-3.5 mr-1 sm:mr-1.5 text-blue-600 shrink-0" />
+              <span><span className="hidden xs:inline">GeM</span> PDF</span>
             </a>
           </div>
 
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={onClose} className="text-xs">
+            <Button variant="outline" size="sm" onClick={handleSmoothClose} className="text-xs h-8 px-3">
               Close
             </Button>
             {onImportToTender && (
               <Button
                 size="sm"
                 onClick={() => onImportToTender(tender, analysis || undefined)}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs shadow-sm"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs h-8 px-3 sm:px-4 shadow-sm"
               >
-                <Sparkles className="w-3.5 h-3.5 mr-1.5" />
-                Import into Tender Panel
+                <Sparkles className="w-3.5 h-3.5 mr-1 sm:mr-1.5 shrink-0" />
+                <span><span className="hidden xs:inline">Import to</span> Panel</span>
               </Button>
             )}
           </div>

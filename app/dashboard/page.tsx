@@ -24,7 +24,6 @@ import {
   ChevronUp,
   X,
   SlidersHorizontal,
-  ArrowUpDown,
   MapPin,
   Wallet,
   Percent,
@@ -38,8 +37,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { AIQuotaPill } from '@/components/ai/AIQuotaPill';
+import { CustomDropdown } from '@/components/ui/customDropdown';
 
 function getTenderGrandTotal(tender: Tender): number {
   const subtotal = tender.items.reduce((sum, item) => sum + item.quantity * item.rate, 0);
@@ -528,21 +527,101 @@ export default function DashboardPage() {
     setBillSortBy('created_desc');
   };
 
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const mobileMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (mobileMenuRef.current && !mobileMenuRef.current.contains(event.target as Node)) {
+        setMobileMenuOpen(false);
+      }
+    }
+    if (mobileMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [mobileMenuOpen]);
+
   return (
     <div className="min-h-screen bg-slate-50 pb-16">
       {/* Top Header */}
       <div className="border-b bg-white shadow-xs">
-        <div className="mx-auto flex max-w-screen-xl flex-col gap-4 sm:flex-row sm:items-center sm:justify-between px-4 py-6 sm:px-6 lg:px-8 bg-gradient-to-r from-slate-50 via-white to-emerald-50/20">
+        <div className="mx-auto flex max-w-screen-xl flex-col gap-3.5 sm:gap-4 sm:flex-row sm:items-center sm:justify-between px-3.5 py-4 sm:py-6 sm:px-6 lg:px-8 bg-gradient-to-r from-slate-50 via-white to-emerald-50/20">
           <div>
-            <h1 className="text-2.5xl font-extrabold tracking-tight text-slate-900 flex items-center gap-2.5">
-              <FileText className="h-7 w-7 text-primary" />
-              Tender & Bill Automation
+            <h1 className="text-fluid-2xl font-extrabold tracking-tight text-slate-900 flex items-center gap-2">
+              <FileText className="h-6 w-6 sm:h-7 sm:w-7 text-primary shrink-0" />
+              <span>Tender & Bill Automation</span>
             </h1>
-            <p className="mt-1 text-xs text-slate-500 font-medium">
+            <p className="mt-0.5 sm:mt-1 text-xs text-slate-500 font-medium">
               Offline drafting, firm letterheads, tax bills, & AI item transliterations.
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2.5">
+
+          {/* Mobile Header: Compact Action Bar + Dropdown Menu */}
+          <div className="flex items-center justify-between gap-2 w-full sm:hidden pt-1 border-t border-slate-100">
+            <AIQuotaPill inline />
+            <div className="flex items-center gap-1.5" ref={mobileMenuRef}>
+              <Link href="/tenders/new">
+                <Button size="sm" className="h-8 px-2.5 text-xs font-semibold gap-1 bg-blue-600 hover:bg-blue-700 text-white shadow-xs">
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>Tender</span>
+                </Button>
+              </Link>
+              <Link href="/bills/new">
+                <Button size="sm" variant="outline" className="h-8 px-2.5 text-xs font-semibold gap-1 bg-emerald-50 text-emerald-800 border-emerald-300 shadow-xs">
+                  <Receipt className="h-3.5 w-3.5 text-emerald-600" />
+                  <span>Bill</span>
+                </Button>
+              </Link>
+
+              <div className="relative">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setMobileMenuOpen((prev) => !prev)}
+                  className={`h-8 px-2 bg-white border-slate-300 transition-colors ${mobileMenuOpen ? 'border-blue-500 bg-blue-50 text-blue-600' : 'text-slate-700'}`}
+                  title="More Navigation & Actions"
+                >
+                  <SlidersHorizontal className="h-3.5 w-3.5" />
+                </Button>
+                {mobileMenuOpen && (
+                  <div className="absolute right-0 top-full mt-1.5 z-50 w-52 bg-white rounded-xl border border-slate-200 shadow-2xl overflow-hidden animate-dropdown-in p-1 text-xs divide-y divide-slate-100">
+                    <div className="py-1">
+                      <Link
+                        href="/tenders/open"
+                        onClick={() => setMobileMenuOpen(false)}
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-blue-50 text-blue-900 font-bold"
+                      >
+                        <Globe className="h-4 w-4 text-blue-600" />
+                        <span>GeM Open Tenders</span>
+                      </Link>
+                    </div>
+                    <div className="py-1">
+                      <Link
+                        href="/manage-firms"
+                        onClick={() => setMobileMenuOpen(false)}
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-slate-100 text-slate-700 font-medium"
+                      >
+                        <Building2 className="h-4 w-4 text-slate-500" />
+                        <span>Manage Firms</span>
+                      </Link>
+                      <Link
+                        href="/settings"
+                        onClick={() => setMobileMenuOpen(false)}
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-slate-100 text-slate-700 font-medium"
+                      >
+                        <Settings className="h-4 w-4 text-slate-500" />
+                        <span>Settings & Rules</span>
+                      </Link>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Desktop Header Actions */}
+          <div className="hidden sm:flex flex-wrap items-center gap-2.5">
             {/* AI Free Limit & Quota Live Pill */}
             <AIQuotaPill inline />
 
@@ -593,19 +672,19 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-screen-xl px-4 py-8 sm:px-6 lg:px-8 space-y-6">
+      <div className="mx-auto max-w-screen-xl px-3.5 sm:px-6 lg:px-8 py-4 sm:py-8 space-y-4 sm:space-y-6">
 
         {/* ─── SEARCH & FILTER SECTION ─── */}
         <Card className="bg-white border border-slate-200 shadow-xs overflow-hidden">
-          <CardContent className="p-4 sm:p-5 space-y-4">
+          <CardContent className="p-3.5 sm:p-5 pt-3.5 sm:pt-5 space-y-3.5 sm:space-y-4">
             {/* Search Input Bar */}
             <div className="relative flex items-center">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <Input
-                placeholder="Search by Item Name, Invoice/Tender No, Recipient, Department, or Firm..."
+                placeholder="Search Item, Invoice/Tender No, Recipient, Dept, Firm..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 pr-10 h-10 border-slate-300 rounded-xl focus-visible:ring-emerald-500 text-sm shadow-2xs"
+                className="pl-10 pr-10 h-10 border-slate-300 rounded-xl focus-visible:ring-emerald-500 text-xs sm:text-sm shadow-2xs"
               />
               {searchQuery && (
                 <button
@@ -617,108 +696,107 @@ export default function DashboardPage() {
               )}
             </div>
 
-            {/* Tailored Filter Bar */}
+            {/* Tailored Filter Bar with CustomDropdowns */}
             <div className="flex flex-wrap items-center justify-between gap-3 pt-1 border-t border-slate-100 text-xs">
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1.5 text-[11px]">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full sm:w-auto">
+                <span className="font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1 text-[11px] shrink-0">
                   <SlidersHorizontal className="h-3.5 w-3.5 text-slate-400" />
                   Filters:
                 </span>
 
                 {/* Firm Filter (Shared) */}
-                <div className="flex items-center gap-1.5">
-                  <Label className="text-slate-600 font-medium">Firm:</Label>
-                  <select
+                <div className="w-full sm:w-48">
+                  <CustomDropdown
                     value={selectedFirmId}
-                    onChange={(e) => setSelectedFirmId(e.target.value)}
-                    className="h-8 rounded-lg border border-slate-200 bg-slate-50/70 px-2.5 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                  >
-                    <option value="all">All Firms ({firms.length})</option>
-                    {firms.map((f) => (
-                      <option key={f.id} value={f.id}>
-                        {f.name}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(val) => setSelectedFirmId(val)}
+                    options={[
+                      { value: 'all', label: `All Firms (${firms.length})` },
+                      ...firms.map((f) => ({ value: f.id, label: f.name })),
+                    ]}
+                    searchable
+                    placeholder="All Firms"
+                    buttonClassName="h-8 text-xs"
+                  />
                 </div>
 
                 {/* Tab Specific Filters */}
                 {activeTab === 'tenders' ? (
                   <>
                     {/* Tender Status */}
-                    <div className="flex items-center gap-1.5">
-                      <Label className="text-slate-600 font-medium">Status:</Label>
-                      <select
+                    <div className="w-36 sm:w-36">
+                      <CustomDropdown
                         value={tenderStatusFilter}
-                        onChange={(e) => setTenderStatusFilter(e.target.value)}
-                        className="h-8 rounded-lg border border-slate-200 bg-slate-50/70 px-2.5 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                      >
-                        <option value="all">All Statuses</option>
-                        <option value="final">Final Only</option>
-                        <option value="draft">Draft Only</option>
-                      </select>
+                        onChange={(val) => setTenderStatusFilter(val)}
+                        options={[
+                          { value: 'all', label: 'All Statuses' },
+                          { value: 'final', label: 'Final Only' },
+                          { value: 'draft', label: 'Draft Only' },
+                        ]}
+                        placeholder="All Statuses"
+                        buttonClassName="h-8 text-xs"
+                      />
                     </div>
 
                     {/* Language Filter */}
-                    <div className="flex items-center gap-1.5">
-                      <Label className="text-slate-600 font-medium">Language:</Label>
-                      <select
+                    <div className="w-36 sm:w-36">
+                      <CustomDropdown
                         value={tenderLangFilter}
-                        onChange={(e) => setTenderLangFilter(e.target.value)}
-                        className="h-8 rounded-lg border border-slate-200 bg-slate-50/70 px-2.5 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                      >
-                        <option value="all">All Languages</option>
-                        <option value="hindi">Hindi</option>
-                        <option value="english">English</option>
-                      </select>
+                        onChange={(val) => setTenderLangFilter(val)}
+                        options={[
+                          { value: 'all', label: 'All Languages' },
+                          { value: 'hindi', label: 'Hindi' },
+                          { value: 'english', label: 'English' },
+                        ]}
+                        placeholder="All Languages"
+                        buttonClassName="h-8 text-xs"
+                      />
                     </div>
                   </>
                 ) : (
                   <>
                     {/* Date Type Filter */}
-                    <div className="flex items-center gap-1.5">
-                      <Label className="text-slate-600 font-medium">Date:</Label>
-                      <select
+                    <div className="w-40 sm:w-40">
+                      <CustomDropdown
                         value={billDateFilter}
-                        onChange={(e) => setBillDateFilter(e.target.value)}
-                        className="h-8 rounded-lg border border-slate-200 bg-slate-50/70 px-2.5 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                      >
-                        <option value="all">All Bills</option>
-                        <option value="dated">Dated Bills Only</option>
-                        <option value="blank">Blank Date (_________) Only</option>
-                      </select>
+                        onChange={(val) => setBillDateFilter(val)}
+                        options={[
+                          { value: 'all', label: 'All Bills' },
+                          { value: 'dated', label: 'Dated Bills Only' },
+                          { value: 'blank', label: 'Blank Date (___) Only' },
+                        ]}
+                        placeholder="All Bills"
+                        buttonClassName="h-8 text-xs"
+                      />
                     </div>
 
                     {/* Sort By Filter */}
-                    <div className="flex items-center gap-1.5">
-                      <Label className="text-slate-600 font-medium flex items-center gap-1">
-                        <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />
-                        Sort:
-                      </Label>
-                      <select
+                    <div className="w-48 sm:w-52">
+                      <CustomDropdown
                         value={billSortBy}
-                        onChange={(e) => setBillSortBy(e.target.value)}
-                        className="h-8 rounded-lg border border-slate-200 bg-slate-50/70 px-2.5 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500 font-medium"
-                      >
-                        <option value="created_desc">Created Date (Newest First)</option>
-                        <option value="created_asc">Created Date (Oldest First)</option>
-                        <option value="invoice_date_desc">Invoice Date (Newest First)</option>
-                        <option value="invoice_date_asc">Invoice Date (Oldest First)</option>
-                        <option value="invoice_num_asc">Invoice No (Low to High)</option>
-                        <option value="invoice_num_desc">Invoice No (High to Low)</option>
-                      </select>
+                        onChange={(val) => setBillSortBy(val)}
+                        options={[
+                          { value: 'created_desc', label: 'Created (Newest First)' },
+                          { value: 'created_asc', label: 'Created (Oldest First)' },
+                          { value: 'invoice_date_desc', label: 'Invoice Date (Newest)' },
+                          { value: 'invoice_date_asc', label: 'Invoice Date (Oldest)' },
+                          { value: 'invoice_num_asc', label: 'Invoice No (Low to High)' },
+                          { value: 'invoice_num_desc', label: 'Invoice No (High to Low)' },
+                        ]}
+                        placeholder="Sort by..."
+                        buttonClassName="h-8 text-xs"
+                      />
                     </div>
 
                     {/* Stack View Toggle */}
-                    <label className="flex items-center gap-1.5 cursor-pointer select-none bg-emerald-50/60 text-emerald-900 px-2.5 py-1 rounded-lg border border-emerald-200 font-medium">
+                    <label className="flex items-center gap-1.5 cursor-pointer select-none bg-emerald-50/60 text-emerald-900 px-2.5 py-1 rounded-lg border border-emerald-200 font-medium text-xs h-8">
                       <input
                         type="checkbox"
                         checked={enableStacking}
                         onChange={(e) => setEnableStacking(e.target.checked)}
                         className="rounded border-emerald-300 text-emerald-600 focus:ring-emerald-500 h-3.5 w-3.5"
                       />
-                      <Layers className="h-3.5 w-3.5 text-emerald-600" />
-                      Cascade Stack Bills
+                      <Layers className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                      <span className="truncate">Cascade Stack</span>
                     </label>
                   </>
                 )}
@@ -728,15 +806,15 @@ export default function DashboardPage() {
                     variant="ghost"
                     size="sm"
                     onClick={clearFilters}
-                    className="h-7 text-xs text-red-600 hover:bg-red-50 hover:text-red-700 px-2"
+                    className="h-8 text-xs text-red-600 hover:bg-red-50 hover:text-red-700 px-2.5 shrink-0"
                   >
-                    Reset Filters
+                    Reset
                   </Button>
                 )}
               </div>
 
               {/* Active Results Summary */}
-              <div className="text-slate-500 font-medium text-xs">
+              <div className="text-slate-500 font-medium text-xs pt-1 sm:pt-0">
                 Showing{' '}
                 <span className="font-bold text-slate-900">
                   {activeTab === 'tenders' ? filteredTenders.length : filteredBills.length}

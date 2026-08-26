@@ -228,13 +228,19 @@ export interface GeMScanProfile {
 
 export interface GeMScanLog {
   id: string;
-  profileId: string;
+  profileId?: string;
   profileName: string;
-  runAt: string;
+  type?: 'scan_success' | 'scan_failed' | 'cron_pulse' | 'rule_skipped' | 'manual_scan';
+  runAt: string; // ISO timestamp
   durationMs: number;
-  status: 'success' | 'failed';
+  status: 'success' | 'failed' | 'skipped' | 'info';
   totalBidsFound: number;
   newBidsCount: number;
+  newBidNumbers?: string[];
   analyzedCount: number;
+  scannedCities?: string[];
+  scannedState?: string;
+  message?: string;
+  details?: string;
   error?: string;
 }

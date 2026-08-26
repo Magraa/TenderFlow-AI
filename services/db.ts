@@ -129,7 +129,8 @@ type ExposedKeys =
   | 'saveGeMScanProfile'
   | 'deleteGeMScanProfile'
   | 'saveGeMScanLog'
-  | 'listGeMScanLogs';
+  | 'listGeMScanLogs'
+  | 'clearGeMScanLogs';
 
 
 type DbAdapter = {
@@ -281,5 +282,6 @@ export const db: DbAdapter = {
   deleteGeMScanProfile: async (id: string) => (await getAdapter()).deleteGeMScanProfile(id),
   saveGeMScanLog: async (log: any) => (await getAdapter()).saveGeMScanLog(log),
   listGeMScanLogs: async (profileId?: string, limitCount?: number) => (await getAdapter()).listGeMScanLogs(profileId, limitCount),
+  clearGeMScanLogs: async () => (await getAdapter()).clearGeMScanLogs(),
 };
 

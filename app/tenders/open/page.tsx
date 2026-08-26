@@ -36,6 +36,8 @@ import { aiUsageService } from '@/services/aiUsageService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
+import { CustomDropdown } from '@/components/ui/customDropdown';
+import { useScrollLock } from '@/components/ui/useScrollLock';
 import { TenderAIAnalysisModal } from '@/components/tender/TenderAIAnalysisModal';
 import { AutoScannerModal } from '@/components/tender/AutoScannerModal';
 import { AiJobQueueDrawer, AiAnalysisJob } from '@/components/tender/AiJobQueueDrawer';
@@ -193,9 +195,22 @@ export default function OpenTendersPage() {
 
   // Corrigendum Modal State
   const [corrigendumModalOpen, setCorrigendumModalOpen] = useState(false);
+  const [corrigendumClosing, setCorrigendumClosing] = useState(false);
   const [corrigendumLoading, setCorrigendumLoading] = useState(false);
   const [corrigendumHtml, setCorrigendumHtml] = useState<string>('');
   const [selectedBidForCorrigendum, setSelectedBidForCorrigendum] = useState<GeMTender | null>(null);
+
+  // Lock scroll when Corrigendum Modal is open
+  useScrollLock(corrigendumModalOpen);
+
+  const handleCloseCorrigendum = () => {
+    if (corrigendumClosing) return;
+    setCorrigendumClosing(true);
+    setTimeout(() => {
+      setCorrigendumClosing(false);
+      setCorrigendumModalOpen(false);
+    }, 220);
+  };
 
   // Auto-Scanner 24/7 Modal State
   const [autoScannerOpen, setAutoScannerOpen] = useState(false);
@@ -1045,8 +1060,8 @@ export default function OpenTendersPage() {
     <div className="min-h-screen bg-slate-50 text-slate-900 pb-16">
       {/* Top Banner */}
       <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white shadow-md">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 py-5 sm:py-8">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 sm:gap-4">
             <div>
               <div className="flex items-center gap-2 mb-1">
                 <Link
@@ -1059,25 +1074,25 @@ export default function OpenTendersPage() {
                 <span className="text-blue-300">/</span>
                 <span className="text-xs text-blue-300 font-medium">GeM Portal</span>
               </div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight flex items-center gap-3">
+              <h1 className="text-fluid-2xl font-extrabold tracking-tight flex flex-wrap items-center gap-2 sm:gap-3">
                 <span>GeM Open Tenders & AI Analyzer</span>
-                <span className="text-xs bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2.5 py-0.5 rounded-full font-semibold">
+                <span className="text-[11px] sm:text-xs bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 sm:px-2.5 py-0.5 rounded-full font-semibold shrink-0">
                   Live Scraping & Multimodal AI
                 </span>
               </h1>
-              <p className="text-slate-300 text-sm mt-1 max-w-2xl">
+              <p className="text-slate-300 text-fluid-xs sm:text-sm mt-1 max-w-2xl">
                 Browse, search, star favourite tenders in Firebase, and perform full multimodal AI PDF analysis for Buyer Added ATC, EMD, items, and department hierarchy.
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2.5">
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
               {unanalyzedVisibleBids.length > 0 && (
                 <Button
                   onClick={handleAnalyzeAllVisible}
-                  className="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white border border-indigo-300/30 text-xs sm:text-sm font-bold shadow-md gap-1.5"
+                  className="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white border border-indigo-300/30 text-xs sm:text-sm font-bold shadow-md gap-1.5 h-8 sm:h-9 px-3"
                 >
-                  <Sparkles className="w-4 h-4 animate-pulse text-indigo-200" />
-                  Analyze All ({unanalyzedVisibleBids.length})
+                  <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-pulse text-indigo-200" />
+                  <span><span className="hidden xs:inline">Analyze All</span> ({unanalyzedVisibleBids.length})</span>
                 </Button>
               )}
 
@@ -1085,27 +1100,29 @@ export default function OpenTendersPage() {
                 variant="outline"
                 onClick={() => fetchBids(currentPage)}
                 disabled={loading}
-                className="bg-white/10 hover:bg-white/20 text-white border-white/20 text-xs sm:text-sm"
+                className="bg-white/10 hover:bg-white/20 text-white border-white/20 text-xs sm:text-sm h-8 sm:h-9 px-3"
               >
-                <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-                Refresh Live Bids
+                <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 ${loading ? 'animate-spin' : ''}`} />
+                <span><span className="hidden xs:inline">Refresh</span> Live</span>
               </Button>
             </div>
           </div>
 
-          {/* View Mode Switcher */}
-          <div className="flex items-center gap-2 mt-6 pt-4 border-t border-white/10">
+          {/* View Mode Switcher (Horizontal scroll on phone) */}
+          <div className="flex items-center overflow-x-auto no-scrollbar flex-nowrap gap-1.5 sm:gap-2 mt-4 sm:mt-6 pt-3 sm:pt-4 border-t border-white/10 shrink-0">
             <button
               type="button"
               onClick={() => setViewMode('live')}
-              className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 ${
+              className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all flex items-center gap-1.5 shrink-0 ${
                 viewMode === 'live'
                   ? 'bg-white text-blue-900 shadow-md'
                   : 'bg-white/10 text-white hover:bg-white/20'
               }`}
+              title="Live GeM Search"
             >
-              <Search className="w-4 h-4" />
-              Live GeM Search
+              <Search className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+              <span className="hidden sm:inline">Live GeM Search</span>
+              <span className="sm:hidden">Live</span>
             </button>
 
             <button
@@ -1114,15 +1131,16 @@ export default function OpenTendersPage() {
                 setViewMode('starred');
                 loadStarredTenders();
               }}
-              className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 ${
+              className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all flex items-center gap-1.5 shrink-0 ${
                 viewMode === 'starred'
                   ? 'bg-amber-400 text-slate-950 shadow-md'
                   : 'bg-white/10 text-white hover:bg-white/20'
               }`}
+              title="Starred Archive"
             >
-              <Star className="w-4 h-4 fill-current text-amber-300" />
-              Starred Tenders Archive
-              <span className="bg-slate-900/60 text-white px-2 py-0.5 rounded-full text-xs font-bold">
+              <Star className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-current text-amber-300 shrink-0" />
+              <span className="hidden sm:inline">Starred Archive</span>
+              <span className="bg-slate-900/70 text-white px-1.5 py-0.2 rounded-full text-[10px] sm:text-xs font-bold">
                 {starredTenders.length}
               </span>
             </button>
@@ -1130,12 +1148,13 @@ export default function OpenTendersPage() {
             <button
               type="button"
               onClick={() => setAutoScannerOpen(true)}
-              className="px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white hover:from-indigo-600 hover:to-purple-700 shadow-md border border-indigo-400/40 ml-auto"
+              className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all flex items-center gap-1.5 bg-gradient-to-r from-indigo-500 to-purple-600 text-white hover:from-indigo-600 hover:to-purple-700 shadow-md border border-indigo-400/40 shrink-0 sm:ml-auto"
+              title="Auto-Scanner 24/7 AI"
             >
-              <Bot className="w-4 h-4 animate-pulse" />
-              24/7 Auto-Scanner
-              <span className="bg-emerald-400 text-slate-950 px-2 py-0.2 rounded-full text-[10px] font-black uppercase tracking-wider">
-                Server AI
+              <Bot className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-pulse shrink-0" />
+              <span className="hidden sm:inline">Auto-Scanner</span>
+              <span className="bg-emerald-400 text-slate-950 px-1.5 py-0.2 rounded text-[9px] sm:text-[10px] font-black uppercase tracking-wider">
+                24/7 AI
               </span>
             </button>
           </div>
@@ -1150,21 +1169,21 @@ export default function OpenTendersPage() {
           <>
             {/* Search & Filter Card */}
             <Card className="shadow-lg border-slate-200 bg-white rounded-xl overflow-hidden mb-6">
-              <div className="border-b border-slate-100 bg-slate-50/50 p-2 sm:p-4">
-                <div className="flex flex-wrap gap-2">
+              <div className="border-b border-slate-100 bg-slate-50/50 p-2 sm:p-3.5">
+                <div className="flex items-center overflow-x-auto no-scrollbar flex-nowrap gap-1.5 shrink-0">
                   <button
                     type="button"
                     onClick={() => {
                       setSearchType('bidNumber');
                       setCurrentPage(1);
                     }}
-                    className={`px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all ${
+                    className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap transition-all shrink-0 ${
                       searchType === 'bidNumber'
                         ? 'bg-blue-600 text-white shadow-sm'
                         : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
                     }`}
                   >
-                    Bid / Keyword Search
+                    Bid / Keyword
                   </button>
                   <button
                     type="button"
@@ -1172,13 +1191,13 @@ export default function OpenTendersPage() {
                       setSearchType('ministry-search');
                       setCurrentPage(1);
                     }}
-                    className={`px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all ${
+                    className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap transition-all shrink-0 ${
                       searchType === 'ministry-search'
                         ? 'bg-blue-600 text-white shadow-sm'
                         : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
                     }`}
                   >
-                    By Ministry / Department
+                    Ministry / Dept
                   </button>
                   <button
                     type="button"
@@ -1186,13 +1205,13 @@ export default function OpenTendersPage() {
                       setSearchType('location-search');
                       setCurrentPage(1);
                     }}
-                    className={`px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all ${
+                    className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap transition-all shrink-0 ${
                       searchType === 'location-search'
                         ? 'bg-blue-600 text-white shadow-sm'
                         : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
                     }`}
                   >
-                    By Consignee Location
+                    Location / State
                   </button>
                   <button
                     type="button"
@@ -1200,13 +1219,13 @@ export default function OpenTendersPage() {
                       setSearchType('boq-search');
                       setCurrentPage(1);
                     }}
-                    className={`px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all ${
+                    className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap transition-all shrink-0 ${
                       searchType === 'boq-search'
                         ? 'bg-blue-600 text-white shadow-sm'
                         : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
                     }`}
                   >
-                    By BOQ Title
+                    BOQ Title
                   </button>
                 </div>
               </div>
@@ -1265,18 +1284,17 @@ export default function OpenTendersPage() {
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                       <div>
                         <label className="block text-xs font-semibold text-slate-700 mb-1">Ministry</label>
-                        <select
+                        <CustomDropdown
                           value={ministry}
-                          onChange={(e) => setMinistry(e.target.value)}
-                          className="w-full h-10 px-3 py-2 bg-white border border-slate-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                          <option value="">-- All Ministries --</option>
-                          {ministryList.map((m, idx) => (
-                            <option key={`min-${m.value}-${idx}`} value={m.value}>
-                              {m.label}
-                            </option>
-                          ))}
-                        </select>
+                          onChange={(val) => setMinistry(val)}
+                          options={[
+                            { value: '', label: '-- All Ministries --' },
+                            ...ministryList.map((m) => ({ value: m.value, label: m.label })),
+                          ]}
+                          searchable
+                          placeholder="-- All Ministries --"
+                          buttonClassName="h-10 text-xs sm:text-sm"
+                        />
                       </div>
                       <div>
                         <label className="block text-xs font-semibold text-slate-700 mb-1">Department</label>
@@ -1284,23 +1302,22 @@ export default function OpenTendersPage() {
                           placeholder="e.g. Department of Defence"
                           value={department}
                           onChange={(e) => setDepartment(e.target.value)}
-                          className="text-sm"
+                          className="text-sm h-10"
                         />
                       </div>
                       <div>
                         <label className="block text-xs font-semibold text-slate-700 mb-1">Buyer State</label>
-                        <select
+                        <CustomDropdown
                           value={buyerState}
-                          onChange={(e) => setBuyerState(e.target.value)}
-                          className="w-full h-10 px-3 py-2 bg-white border border-slate-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                          <option value="">-- All States --</option>
-                          {stateList.map((s, idx) => (
-                            <option key={`buyer-state-${s.value}-${idx}`} value={s.value}>
-                              {s.label}
-                            </option>
-                          ))}
-                        </select>
+                          onChange={(val) => setBuyerState(val)}
+                          options={[
+                            { value: '', label: '-- All States --' },
+                            ...stateList.map((s) => ({ value: s.value, label: s.label })),
+                          ]}
+                          searchable
+                          placeholder="-- All States --"
+                          buttonClassName="h-10 text-xs sm:text-sm"
+                        />
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         <div>
@@ -1309,7 +1326,7 @@ export default function OpenTendersPage() {
                             type="date"
                             value={bidEndFrom}
                             onChange={(e) => setBidEndFrom(e.target.value)}
-                            className="text-xs"
+                            className="text-xs h-10"
                           />
                         </div>
                         <div>
@@ -1318,7 +1335,7 @@ export default function OpenTendersPage() {
                             type="date"
                             value={bidEndTo}
                             onChange={(e) => setBidEndTo(e.target.value)}
-                            className="text-xs"
+                            className="text-xs h-10"
                           />
                         </div>
                       </div>
@@ -1330,42 +1347,41 @@ export default function OpenTendersPage() {
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                       <div>
                         <label className="block text-xs font-semibold text-slate-700 mb-1">Consignee State</label>
-                        <select
+                        <CustomDropdown
                           value={consigneeState}
-                          onChange={(e) => setConsigneeState(e.target.value)}
-                          className="w-full h-10 px-3 py-2 bg-white border border-slate-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                          <option value="">-- Select State --</option>
-                          {stateList.map((s, idx) => (
-                            <option key={`consignee-state-${s.value}-${idx}`} value={s.value}>
-                              {s.label}
-                            </option>
-                          ))}
-                        </select>
+                          onChange={(val) => setConsigneeState(val)}
+                          options={[
+                            { value: '', label: '-- Select State --' },
+                            ...stateList.map((s) => ({ value: s.value, label: s.label })),
+                          ]}
+                          searchable
+                          placeholder="-- Select State --"
+                          buttonClassName="h-10 text-xs sm:text-sm"
+                        />
                       </div>
                       <div>
                         <label className="block text-xs font-semibold text-slate-700 mb-1">
                           Consignee City {loadingCities && <span className="text-blue-500 font-normal">(Loading...)</span>}
                         </label>
-                        <select
+                        <CustomDropdown
                           value={consigneeCity}
-                          onChange={(e) => setConsigneeCity(e.target.value)}
+                          onChange={(val) => setConsigneeCity(val)}
                           disabled={!consigneeState || loadingCities}
-                          className="w-full h-10 px-3 py-2 bg-white border border-slate-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-400"
-                        >
-                          <option value="">
-                            {!consigneeState
-                              ? '-- Select State First --'
-                              : loadingCities
-                              ? '-- Loading Cities... --'
-                              : '-- All Cities / Select City --'}
-                          </option>
-                          {cityList.map((c, idx) => (
-                            <option key={`city-${c.value}-${idx}`} value={c.value}>
-                              {c.label}
-                            </option>
-                          ))}
-                        </select>
+                          options={[
+                            {
+                              value: '',
+                              label: !consigneeState
+                                ? '-- Select State First --'
+                                : loadingCities
+                                ? '-- Loading Cities... --'
+                                : '-- All Cities / Select City --',
+                            },
+                            ...cityList.map((c) => ({ value: c.value, label: c.label })),
+                          ]}
+                          searchable
+                          placeholder={!consigneeState ? '-- Select State First --' : '-- All Cities / Select City --'}
+                          buttonClassName="h-10 text-xs sm:text-sm"
+                        />
                       </div>
                       <div className="grid grid-cols-2 gap-2 md:col-span-2">
                         <div>
@@ -1737,52 +1753,48 @@ export default function OpenTendersPage() {
                           </div>
 
                           {/* Right Col: Quantity, EMD, Est Value, Dates */}
-                          <div className="bg-slate-50 rounded-lg p-3.5 border border-slate-100 flex flex-col justify-between space-y-2 text-xs">
-                            <div className="space-y-2">
+                          <div className="bg-slate-50 rounded-lg p-3 sm:p-3.5 border border-slate-100">
+                            <div className="grid grid-cols-2 lg:grid-cols-1 gap-2 text-xs">
                               {analysis && (
                                 <>
-                                  <div className="flex justify-between items-center">
-                                    <span className="text-slate-500 font-medium">EMD Amount:</span>
-                                    <span className="font-bold text-emerald-700">
+                                  <div className="bg-white p-2 rounded border border-slate-200/70 sm:bg-transparent sm:p-0 sm:border-0 sm:flex sm:justify-between sm:items-center">
+                                    <span className="text-slate-500 font-medium block sm:inline">EMD Amount:</span>
+                                    <span className="font-bold text-emerald-700 block sm:inline mt-0.5 sm:mt-0">
                                       {analysis.emdAmount?.required && analysis.emdAmount.amount > 0
                                         ? `₹ ${analysis.emdAmount.amount.toLocaleString('en-IN')}`
                                         : '₹ 0 (Nil)'}
                                     </span>
                                   </div>
-                                  <div className="flex justify-between items-center">
-                                    <span className="text-slate-500 font-medium">Est. Value:</span>
-                                    <div className="text-right">
+                                  <div className="bg-white p-2 rounded border border-slate-200/70 sm:bg-transparent sm:p-0 sm:border-0 sm:flex sm:justify-between sm:items-center">
+                                    <span className="text-slate-500 font-medium block sm:inline">Est. Value:</span>
+                                    <div className="text-left sm:text-right mt-0.5 sm:mt-0">
                                       <span className="font-bold text-slate-800 block">{estValueInfo.text}</span>
                                       {estValueInfo.isCalculated && (
                                         <span className="text-[10px] text-blue-600 font-semibold block">
-                                          (1% EMD Est.)
+                                          (1% EMD)
                                         </span>
                                       )}
                                     </div>
                                   </div>
                                 </>
                               )}
-                              <div className="flex justify-between items-center">
-                                <span className="text-slate-500 font-medium">Quantity:</span>
-                                <span className="font-bold text-slate-800">
+                              <div className="bg-white p-2 rounded border border-slate-200/70 sm:bg-transparent sm:p-0 sm:border-0 sm:flex sm:justify-between sm:items-center">
+                                <span className="text-slate-500 font-medium block sm:inline">Quantity:</span>
+                                <span className="font-bold text-slate-800 block sm:inline mt-0.5 sm:mt-0">
                                   {(analysis?.totalQuantity || tender.totalQuantity || 1).toLocaleString('en-IN')} Units
                                 </span>
                               </div>
-                              <div className="flex justify-between items-center">
-                                <span className="text-slate-500 font-medium">Start Date:</span>
-                                <span className="text-slate-700">{formatDisplayDate(tender.startDate)}</span>
-                              </div>
-                              <div className="flex justify-between items-center">
-                                <span className="text-slate-500 font-medium">Bid End Date:</span>
-                                <span className="font-bold text-red-600">{formatDisplayDate(tender.endDate)}</span>
+                              <div className="bg-white p-2 rounded border border-slate-200/70 sm:bg-transparent sm:p-0 sm:border-0 sm:flex sm:justify-between sm:items-center">
+                                <span className="text-slate-500 font-medium block sm:inline">End Date:</span>
+                                <span className="font-bold text-red-600 block sm:inline mt-0.5 sm:mt-0">{formatDisplayDate(tender.endDate)}</span>
                               </div>
                             </div>
                           </div>
                         </div>
 
                         {/* Bottom Action Buttons */}
-                        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100">
-                          <div className="flex flex-wrap items-center gap-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2.5 pt-3 border-t border-slate-100">
+                          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                             {/* AI Deep Analysis Button */}
                             {(() => {
                               const isJobActive = aiJobs.some(
@@ -1795,7 +1807,7 @@ export default function OpenTendersPage() {
                                   size="sm"
                                   onClick={() => handleRunAIAnalysis(tender)}
                                   disabled={isJobActive}
-                                  className={`text-xs font-semibold h-8 px-3 transition-all shadow-sm ${
+                                  className={`text-xs font-semibold h-8 px-2.5 sm:px-3 transition-all shadow-xs ${
                                     hasAiAnalysis
                                       ? 'bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white'
                                       : isJobActive
@@ -1803,14 +1815,16 @@ export default function OpenTendersPage() {
                                       : 'bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white'
                                   }`}
                                 >
-                                  <Sparkles className={`w-3.5 h-3.5 mr-1.5 ${isJobActive ? 'animate-spin' : ''}`} />
-                                  {isJobActive
-                                    ? activeJob?.status === 'running'
-                                      ? 'Analyzing with AI...'
-                                      : 'Queued in AI Worker...'
-                                    : hasAiAnalysis
-                                    ? 'View AI Insights'
-                                    : 'AI Full Analysis'}
+                                  <Sparkles className={`w-3.5 h-3.5 mr-1 sm:mr-1.5 ${isJobActive ? 'animate-spin' : ''}`} />
+                                  <span>
+                                    {isJobActive
+                                      ? activeJob?.status === 'running'
+                                        ? 'Analyzing...'
+                                        : 'Queued...'
+                                      : hasAiAnalysis
+                                      ? 'AI Insights'
+                                      : 'AI Analysis'}
+                                  </span>
                                 </Button>
                               );
                             })()}
@@ -1819,19 +1833,19 @@ export default function OpenTendersPage() {
                               href={tender.pdfUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition-colors"
+                              className="inline-flex items-center text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition-colors h-8"
                             >
-                              <Download className="w-3.5 h-3.5 mr-1.5 text-blue-600" />
-                              PDF
+                              <Download className="w-3.5 h-3.5 mr-1 text-blue-600" />
+                              <span>PDF</span>
                             </a>
 
                             <button
                               type="button"
                               onClick={() => openCorrigendumModal(tender)}
-                              className="inline-flex items-center text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition-colors"
+                              className="inline-flex items-center text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition-colors h-8"
                             >
-                              <FileText className="w-3.5 h-3.5 mr-1.5 text-slate-500" />
-                              Corrigendum
+                              <FileText className="w-3.5 h-3.5 mr-1 text-slate-500" />
+                              <span>Corrigendum</span>
                             </button>
                           </div>
 
@@ -1841,10 +1855,10 @@ export default function OpenTendersPage() {
                               <Button
                                 size="sm"
                                 onClick={() => handleImportTender(tender, analysis)}
-                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs h-8 px-4 shadow-sm"
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs h-8 px-3 sm:px-4 shadow-xs"
                               >
-                                <Sparkles className="w-3.5 h-3.5 mr-1.5" />
-                                Import to Tender Panel
+                                <Sparkles className="w-3.5 h-3.5 mr-1" />
+                                <span><span className="hidden xs:inline">Import to</span> Panel</span>
                               </Button>
                             </div>
                           )}
@@ -1944,62 +1958,70 @@ export default function OpenTendersPage() {
 
                   {/* 2. Town / District Filter */}
                   <div>
-                    <select
+                    <CustomDropdown
                       value={starredTownDistrictFilter}
-                      onChange={(e) => setStarredTownDistrictFilter(e.target.value)}
-                      className="w-full h-9 px-3 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="">All Towns & Districts</option>
-                      {starredTownDistrictsList.map((place, idx) => (
-                        <option key={idx} value={place}>
-                          📍 {place}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(val) => setStarredTownDistrictFilter(val)}
+                      options={[
+                        { value: '', label: 'All Towns & Districts' },
+                        ...starredTownDistrictsList.map((place) => ({
+                          value: place,
+                          label: `📍 ${place}`,
+                        })),
+                      ]}
+                      searchable
+                      placeholder="All Towns & Districts"
+                      buttonClassName="h-9 text-xs"
+                    />
                   </div>
 
                   {/* 3. AI Analysis Status Filter */}
                   <div>
-                    <select
+                    <CustomDropdown
                       value={starredStatusFilter}
-                      onChange={(e) => setStarredStatusFilter(e.target.value as any)}
-                      className="w-full h-9 px-3 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="all">All AI Status ({starredTenders.length})</option>
-                      <option value="analyzed">AI Analyzed Only ({totalAnalyzedCount})</option>
-                      <option value="pending">Pending AI Analysis ({starredTenders.length - totalAnalyzedCount})</option>
-                    </select>
+                      onChange={(val) => setStarredStatusFilter(val as any)}
+                      options={[
+                        { value: 'all', label: `All AI Status (${starredTenders.length})` },
+                        { value: 'analyzed', label: `AI Analyzed Only (${totalAnalyzedCount})` },
+                        { value: 'pending', label: `Pending AI Analysis (${starredTenders.length - totalAnalyzedCount})` },
+                      ]}
+                      placeholder="All AI Status"
+                      buttonClassName="h-9 text-xs"
+                    />
                   </div>
 
                   {/* 4. Ministry / State Filter */}
                   <div>
-                    <select
+                    <CustomDropdown
                       value={starredMinistryFilter}
-                      onChange={(e) => setStarredMinistryFilter(e.target.value)}
-                      className="w-full h-9 px-3 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="">All States & Ministries</option>
-                      {starredMinistriesList.map((m, idx) => (
-                        <option key={idx} value={m}>
-                          {m}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(val) => setStarredMinistryFilter(val)}
+                      options={[
+                        { value: '', label: 'All States & Ministries' },
+                        ...starredMinistriesList.map((m) => ({
+                          value: m,
+                          label: m,
+                        })),
+                      ]}
+                      searchable
+                      placeholder="All States & Ministries"
+                      buttonClassName="h-9 text-xs"
+                    />
                   </div>
 
                   {/* 5. Sort By */}
                   <div>
-                    <select
+                    <CustomDropdown
                       value={starredSortBy}
-                      onChange={(e) => setStarredSortBy(e.target.value as any)}
-                      className="w-full h-9 px-3 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="recent">Sort: Recently Starred</option>
-                      <option value="ending_soon">Sort: Ending Soonest</option>
-                      <option value="est_value">Sort: Highest Est. Value / EMD</option>
-                      <option value="quantity">Sort: Highest Quantity</option>
-                      <option value="bid_no">Sort: Bid Number (A-Z)</option>
-                    </select>
+                      onChange={(val) => setStarredSortBy(val as any)}
+                      options={[
+                        { value: 'recent', label: 'Sort: Recently Starred' },
+                        { value: 'ending_soon', label: 'Sort: Ending Soonest' },
+                        { value: 'est_value', label: 'Sort: Highest Value / EMD' },
+                        { value: 'quantity', label: 'Sort: Highest Quantity' },
+                        { value: 'bid_no', label: 'Sort: Bid Number (A-Z)' },
+                      ]}
+                      placeholder="Sort by..."
+                      buttonClassName="h-9 text-xs"
+                    />
                   </div>
                 </div>
               </div>
@@ -2205,44 +2227,44 @@ export default function OpenTendersPage() {
                           </div>
 
                           {/* Financials & Key Info Strip */}
-                          <div className="bg-slate-50 rounded-lg p-3.5 border border-slate-100 flex flex-col justify-between space-y-2 text-xs">
-                            <div className="space-y-2">
-                              <div className="flex justify-between items-center">
-                                <span className="text-slate-500 font-medium">EMD Amount:</span>
-                                <span className="font-bold text-emerald-700">
+                          <div className="bg-slate-50 rounded-lg p-3 sm:p-3.5 border border-slate-100">
+                            <div className="grid grid-cols-2 lg:grid-cols-1 gap-2 text-xs">
+                              <div className="bg-white p-2 rounded border border-slate-200/70 sm:bg-transparent sm:p-0 sm:border-0 sm:flex sm:justify-between sm:items-center">
+                                <span className="text-slate-500 font-medium block sm:inline">EMD Amount:</span>
+                                <span className="font-bold text-emerald-700 block sm:inline mt-0.5 sm:mt-0">
                                   {analysis?.emdAmount?.required && analysis.emdAmount.amount > 0
                                     ? `₹ ${analysis.emdAmount.amount.toLocaleString('en-IN')}`
                                     : '₹ 0 (Nil)'}
                                 </span>
                               </div>
-                              <div className="flex justify-between items-center">
-                                <span className="text-slate-500 font-medium">Est. Value:</span>
-                                <div className="text-right">
+                              <div className="bg-white p-2 rounded border border-slate-200/70 sm:bg-transparent sm:p-0 sm:border-0 sm:flex sm:justify-between sm:items-center">
+                                <span className="text-slate-500 font-medium block sm:inline">Est. Value:</span>
+                                <div className="text-left sm:text-right mt-0.5 sm:mt-0">
                                   <span className="font-bold text-slate-800 block">{estValueInfo.text}</span>
                                   {estValueInfo.isCalculated && (
                                     <span className="text-[10px] text-blue-600 font-semibold block">
-                                      (1% EMD Est.)
+                                      (1% EMD)
                                     </span>
                                   )}
                                 </div>
                               </div>
-                              <div className="flex justify-between items-center">
-                                <span className="text-slate-500 font-medium">Quantity:</span>
-                                <span className="font-bold text-slate-800">
+                              <div className="bg-white p-2 rounded border border-slate-200/70 sm:bg-transparent sm:p-0 sm:border-0 sm:flex sm:justify-between sm:items-center">
+                                <span className="text-slate-500 font-medium block sm:inline">Quantity:</span>
+                                <span className="font-bold text-slate-800 block sm:inline mt-0.5 sm:mt-0">
                                   {(analysis?.totalQuantity || tender.totalQuantity || 1).toLocaleString('en-IN')} Units
                                 </span>
                               </div>
-                              <div className="flex justify-between items-center">
-                                <span className="text-slate-500 font-medium">Bid End Date:</span>
-                                <span className="font-bold text-red-600">{formatDisplayDate(tender.endDate)}</span>
+                              <div className="bg-white p-2 rounded border border-slate-200/70 sm:bg-transparent sm:p-0 sm:border-0 sm:flex sm:justify-between sm:items-center">
+                                <span className="text-slate-500 font-medium block sm:inline">End Date:</span>
+                                <span className="font-bold text-red-600 block sm:inline mt-0.5 sm:mt-0">{formatDisplayDate(tender.endDate)}</span>
                               </div>
                             </div>
                           </div>
                         </div>
 
                         {/* Bottom Actions */}
-                        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100">
-                          <div className="flex flex-wrap items-center gap-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2.5 pt-3 border-t border-slate-100">
+                          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                             {(() => {
                               const isJobActive = aiJobs.some(
                                 (j) => j.bidNumber.trim().toUpperCase() === tenderKey && (j.status === 'running' || j.status === 'queued')
@@ -2254,7 +2276,7 @@ export default function OpenTendersPage() {
                                   size="sm"
                                   onClick={() => handleRunAIAnalysis(tender)}
                                   disabled={isJobActive}
-                                  className={`font-semibold text-xs h-8 px-3.5 shadow-sm transition-all ${
+                                  className={`font-semibold text-xs h-8 px-2.5 sm:px-3.5 shadow-xs transition-all ${
                                     analysis
                                       ? 'bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white'
                                       : isJobActive
@@ -2262,14 +2284,16 @@ export default function OpenTendersPage() {
                                       : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white'
                                   }`}
                                 >
-                                  <Sparkles className={`w-3.5 h-3.5 mr-1.5 ${isJobActive ? 'animate-spin' : ''}`} />
-                                  {isJobActive
-                                    ? activeJob?.status === 'running'
-                                      ? 'Analyzing with AI...'
-                                      : 'Queued in AI Worker...'
-                                    : analysis
-                                    ? 'View AI Insights'
-                                    : 'Run Full AI Analysis'}
+                                  <Sparkles className={`w-3.5 h-3.5 mr-1 sm:mr-1.5 ${isJobActive ? 'animate-spin' : ''}`} />
+                                  <span>
+                                    {isJobActive
+                                      ? activeJob?.status === 'running'
+                                        ? 'Analyzing...'
+                                        : 'Queued...'
+                                      : analysis
+                                      ? 'AI Insights'
+                                      : 'AI Analysis'}
+                                  </span>
                                 </Button>
                               );
                             })()}
@@ -2278,10 +2302,10 @@ export default function OpenTendersPage() {
                               href={tender.pdfUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition-colors"
+                              className="inline-flex items-center text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition-colors h-8"
                             >
-                              <Download className="w-3.5 h-3.5 mr-1.5 text-blue-600" />
-                              GeM PDF
+                              <Download className="w-3.5 h-3.5 mr-1 text-blue-600" />
+                              <span>PDF</span>
                             </a>
                           </div>
 
@@ -2291,10 +2315,10 @@ export default function OpenTendersPage() {
                               <Button
                                 size="sm"
                                 onClick={() => handleImportTender(tender, analysis)}
-                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs h-8 px-4 shadow-sm"
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs h-8 px-3 sm:px-4 shadow-xs"
                               >
-                                <Sparkles className="w-3.5 h-3.5 mr-1.5" />
-                                Import to Tender Panel
+                                <Sparkles className="w-3.5 h-3.5 mr-1" />
+                                <span><span className="hidden xs:inline">Import to</span> Panel</span>
                               </Button>
                             </div>
                           )}
@@ -2328,23 +2352,39 @@ export default function OpenTendersPage() {
 
       {/* Corrigendum Modal */}
       {corrigendumModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[85vh] shadow-2xl border border-slate-200 flex flex-col overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
+        <div
+          className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-950/75 backdrop-blur-sm transition-opacity duration-200 ${
+            corrigendumClosing ? 'opacity-0' : 'opacity-100 animate-fadeIn'
+          }`}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) handleCloseCorrigendum();
+          }}
+        >
+          <div
+            className={`bg-white rounded-t-2xl sm:rounded-2xl max-w-2xl w-full max-h-[92vh] sm:max-h-[85vh] shadow-2xl border border-slate-200 flex flex-col overflow-hidden ${
+              corrigendumClosing
+                ? 'animate-slide-down-mobile sm:animate-modal-out'
+                : 'animate-slide-up-mobile sm:animate-modal-in'
+            }`}
+          >
+            {/* Mobile drag handle */}
+            <div className="w-12 h-1.5 bg-slate-400/40 rounded-full mx-auto mt-2 sm:hidden shrink-0" />
+
+            <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/80 shrink-0">
               <div>
-                <h3 className="text-base font-bold text-slate-800">Corrigendum Details</h3>
-                <p className="text-xs text-slate-500 font-mono mt-0.5">{selectedBidForCorrigendum?.bidNumber}</p>
+                <h3 className="text-sm sm:text-base font-bold text-slate-800">Corrigendum Details</h3>
+                <p className="text-xs text-slate-500 font-mono mt-0.5 truncate max-w-[240px] sm:max-w-none">{selectedBidForCorrigendum?.bidNumber}</p>
               </div>
               <button
                 type="button"
-                onClick={() => setCorrigendumModalOpen(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                onClick={handleCloseCorrigendum}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors shrink-0"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="p-6 overflow-y-auto max-h-[60vh]">
+            <div className="p-4 sm:p-6 overflow-y-auto max-h-[60vh] overflow-x-auto">
               {corrigendumLoading ? (
                 <div className="py-12 text-center">
                   <RefreshCw className="w-8 h-8 text-blue-600 animate-spin mx-auto mb-2" />
@@ -2352,14 +2392,14 @@ export default function OpenTendersPage() {
                 </div>
               ) : (
                 <div
-                  className="prose prose-sm max-w-none text-slate-700"
+                  className="prose prose-sm max-w-none text-slate-700 break-words"
                   dangerouslySetInnerHTML={{ __html: corrigendumHtml }}
                 />
               )}
             </div>
 
-            <div className="px-6 py-3 border-t border-slate-100 bg-slate-50 flex justify-end">
-              <Button variant="outline" size="sm" onClick={() => setCorrigendumModalOpen(false)} className="text-xs">
+            <div className="px-4 sm:px-6 py-3 border-t border-slate-100 bg-slate-50 flex justify-end shrink-0">
+              <Button variant="outline" size="sm" onClick={handleCloseCorrigendum} className="text-xs h-8 px-3">
                 Close
               </Button>
             </div>

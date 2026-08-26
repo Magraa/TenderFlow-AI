@@ -18,3 +18,15 @@ export async function GET(req: NextRequest) {
     );
   }
 }
+
+export async function DELETE() {
+  try {
+    await db.clearGeMScanLogs();
+    return NextResponse.json({ success: true, message: 'Scan logs cleared successfully' });
+  } catch (err: any) {
+    return NextResponse.json(
+      { success: false, error: err?.message || 'Failed to clear scan logs' },
+      { status: 500 }
+    );
+  }
+}

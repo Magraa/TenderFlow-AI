@@ -1,7 +1,7 @@
 {
-  "name": "Tender Automation Panel",
-  "short_name": "Tender Panel",
-  "description": "Local-first government tender and bill automation management system",
+  "name": "TenderFlow AI",
+  "short_name": "TenderFlow AI",
+  "description": "AI-powered government tender and bill automation management system",
   "start_url": "/",
   "id": "/",
   "display": "standalone",

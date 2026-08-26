@@ -3,6 +3,7 @@
  */
 'use client'
 import * as React from "react"
+import { useScrollLock } from "./useScrollLock"
 
 interface DialogContextValue {
   open: boolean
@@ -25,6 +26,8 @@ const Dialog = ({ open: controlledOpen, onOpenChange, children }: DialogProps) =
     if (controlledOpen === undefined) setOpenState(newOpen)
     onOpenChange?.(newOpen)
   }
+
+  useScrollLock(open)
 
   return (
     <DialogContext.Provider value={{ open, setOpen }}>

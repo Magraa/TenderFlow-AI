@@ -479,12 +479,12 @@ export function QuickCustomizerToolbar({
         <button
           type="button"
           onClick={() => setIsOpen(true)}
-          className="fixed right-4 bottom-6 z-40 flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-xl hover:bg-blue-700 transition-all hover:scale-105 active:scale-95 border border-blue-400/30"
+          className="fixed right-3 bottom-4 sm:right-4 sm:bottom-6 z-40 flex items-center gap-2 rounded-full bg-blue-600 px-3.5 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-semibold text-white shadow-xl hover:bg-blue-700 transition-all hover:scale-105 active:scale-95 border border-blue-400/30"
           title="Open Quick Customizer"
         >
-          <Sparkles className="h-4 w-4 animate-pulse text-amber-300" />
-          <span>Quick Customizer</span>
-          <span className="rounded-full bg-blue-500/80 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wider text-blue-100">
+          <Sparkles className="h-4 w-4 animate-pulse text-amber-300 shrink-0" />
+          <span><span className="hidden xs:inline">Quick</span> Customizer</span>
+          <span className="rounded-full bg-blue-500/80 px-2 py-0.5 text-[10px] sm:text-[11px] font-medium uppercase tracking-wider text-blue-100 truncate max-w-[100px]">
             {docTypeLabel}
           </span>
         </button>
@@ -492,7 +492,7 @@ export function QuickCustomizerToolbar({
 
       {/* Slide-out Customizer Drawer */}
       {isOpen && (
-        <div className="fixed right-4 top-20 bottom-6 z-50 flex w-[430px] max-w-[94vw] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl ring-1 ring-black/5 animate-in slide-in-from-right-8 duration-200">
+        <div className="fixed inset-x-3 bottom-3 top-16 sm:inset-x-auto sm:right-4 sm:top-20 sm:bottom-6 z-50 flex sm:w-[430px] max-w-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl ring-1 ring-black/5 animate-in slide-in-from-right-8 duration-200">
           {/* Header */}
           <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/80 px-4 py-3">
             <div className="flex items-center gap-2">

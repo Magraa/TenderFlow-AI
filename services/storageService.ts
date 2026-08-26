@@ -1594,6 +1594,12 @@ class LocalStorageDB {
       .sort((a, b) => new Date(b.runAt || 0).getTime() - new Date(a.runAt || 0).getTime())
       .slice(0, limitCount);
   }
+
+  clearGeMScanLogs(): void {
+    this.db = this.loadDatabase();
+    this.db.gemScanLogs = [];
+    this.saveToStorage(this.db);
+  }
 }
 
 

@@ -200,15 +200,24 @@ export async function runProfileScan(profile: GeMScanProfile): Promise<ScanExecu
     });
 
     // 7. Save Scan Log
+    const scanMessage = newBidsToProcess.length > 0
+      ? `Found ${allBids.length} total bids in ${targetCities.join(', ')} (${newBidsToProcess.length} brand-new, ${analyzedCount} AI-analyzed).`
+      : `Scanned ${targetCities.join(', ')} — no new bids since last check (${allBids.length} total active).`;
+
     await db.saveGeMScanLog({
       profileId: profile.id,
       profileName: profile.name,
+      type: 'scan_success',
       runAt: new Date().toISOString(),
       durationMs,
       status: 'success',
       totalBidsFound: allBids.length,
       newBidsCount: newBidsToProcess.length,
+      newBidNumbers,
       analyzedCount,
+      scannedCities: targetCities,
+      scannedState: profile.consigneeState,
+      message: scanMessage,
     });
 
     return {
@@ -239,6 +248,7 @@ export async function runProfileScan(profile: GeMScanProfile): Promise<ScanExecu
     await db.saveGeMScanLog({
       profileId: profile.id,
       profileName: profile.name,
+      type: 'scan_failed',
       runAt: new Date().toISOString(),
       durationMs,
       status: 'failed',
@@ -246,6 +256,7 @@ export async function runProfileScan(profile: GeMScanProfile): Promise<ScanExecu
       newBidsCount: 0,
       analyzedCount: 0,
       error: errorMsg,
+      message: `Scan failed: ${errorMsg}`,
     });
 
     return {
@@ -280,6 +291,34 @@ export async function runAllDueProfiles(forceAll = false): Promise<ScanExecution
   });
 
   console.log(`[Auto-Scanner] Found ${allProfiles.length} total profiles, ${enabledProfiles.length} enabled, ${dueProfiles.length} due for run.`);
+
+  // If no profiles are due, write a Cron Pulse heartbeat so the user can verify the 30m cron is working
+  if (dueProfiles.length === 0) {
+    const nextDueDescriptions = enabledProfiles.map((p) => {
+      if (!p.lastRunAt) return `${p.name}: due now`;
+      const elapsedMins = Math.round((now - new Date(p.lastRunAt).getTime()) / 60000);
+      const remainingMins = Math.max(0, (p.intervalMinutes || 60) - elapsedMins);
+      const hours = Math.floor(remainingMins / 60);
+      const mins = remainingMins % 60;
+      const timeLeft = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+      return `${p.name} (next scan in ${timeLeft})`;
+    });
+
+    await db.saveGeMScanLog({
+      profileName: 'Cron Health Check (30m Pulse)',
+      type: 'cron_pulse',
+      status: 'info',
+      runAt: new Date().toISOString(),
+      durationMs: Date.now() - now,
+      totalBidsFound: 0,
+      newBidsCount: 0,
+      analyzedCount: 0,
+      message: enabledProfiles.length === 0
+        ? 'Cron ran: No active scan rules enabled currently.'
+        : `Cron ran: Checked ${enabledProfiles.length} active rule(s). All waiting for scheduled interval (${nextDueDescriptions.join(', ')}).`,
+      details: nextDueDescriptions.join(' | '),
+    });
+  }
 
   const results: ScanExecutionResult[] = [];
   for (const profile of dueProfiles) {

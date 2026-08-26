@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Download, X, Smartphone, Share } from 'lucide-react'
+import Image from 'next/image'
+import { Download, X, Share } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 interface BeforeInstallPromptEvent extends Event {
@@ -87,11 +88,17 @@ export function PWAInstallPrompt() {
       <div className="flex flex-col rounded-xl border border-blue-200 bg-white p-4 shadow-xl shadow-blue-900/10">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white shadow-sm">
-              <Smartphone className="h-5 w-5" />
+            <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-slate-50 border border-slate-200/80 p-1 shadow-sm">
+              <Image
+                src="/icons/icon-192x192.png"
+                alt="TenderFlow AI"
+                width={36}
+                height={36}
+                className="h-9 w-9 object-contain"
+              />
             </div>
             <div>
-              <h4 className="text-sm font-semibold text-slate-900">Install Tender Panel</h4>
+              <h4 className="text-sm font-semibold text-slate-900">Install TenderFlow AI</h4>
               <p className="text-xs text-slate-500">
                 Install as an app for fast offline access &amp; smoother experience
               </p>

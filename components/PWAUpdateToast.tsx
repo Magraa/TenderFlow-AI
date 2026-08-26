@@ -71,7 +71,7 @@ export function PWAUpdateToast() {
           </div>
           <div>
             <p className="text-xs font-semibold text-slate-900">Update Available</p>
-            <p className="text-[11px] text-slate-500">A new version of Tender Panel is ready</p>
+            <p className="text-[11px] text-slate-500">A new version of TenderFlow AI is ready</p>
           </div>
         </div>
         <div className="flex items-center gap-1.5">

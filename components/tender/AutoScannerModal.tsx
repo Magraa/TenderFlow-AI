@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   X,
   Bot,
@@ -20,6 +20,10 @@ import {
   ShieldCheck,
   HelpCircle,
   Tag,
+  Search,
+  Copy,
+  Activity,
+  Zap,
 } from 'lucide-react';
 import { GeMScanProfile, GeMScanLog } from '@/types/gem';
 import { Button } from '@/components/ui/button';
@@ -88,6 +92,9 @@ const INTERVAL_OPTIONS = [
   { value: 1440, label: 'Once Daily (24 Hours)' },
 ];
 
+import { useScrollLock } from '@/components/ui/useScrollLock';
+import { CustomDropdown } from '@/components/ui/customDropdown';
+
 interface AutoScannerModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -101,6 +108,31 @@ export function AutoScannerModal({ isOpen, onClose, onRefreshData }: AutoScanner
   const [loading, setLoading] = useState(false);
   const [runningProfileId, setRunningProfileId] = useState<string | null>(null);
   const [scanMessage, setScanMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [isClosing, setIsClosing] = useState(false);
+
+  // Lock background scroll when open on PC and Phone
+  useScrollLock(isOpen);
+
+  // Smooth exit animation
+  const handleSmoothClose = () => {
+    if (isClosing) return;
+    setIsClosing(true);
+    setTimeout(() => {
+      setIsClosing(false);
+      onClose();
+    }, 220);
+  };
+
+  // Close on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen && !isClosing) {
+        handleSmoothClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, isClosing]);
 
   // States & Cities dropdown lists
   const [stateList, setStateList] = useState<{ value: string; label: string }[]>(DEFAULT_INDIAN_STATES);
@@ -121,6 +153,12 @@ export function AutoScannerModal({ isOpen, onClose, onRefreshData }: AutoScanner
   const [formAutoAnalyze, setFormAutoAnalyze] = useState(true);
   const [formEnabled, setFormEnabled] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  // Logs Filter State
+  const [logFilterType, setLogFilterType] = useState<'all' | 'new_bids' | 'scans' | 'pulses' | 'failed'>('all');
+  const [logSearchTerm, setLogSearchTerm] = useState('');
+  const [copiedBid, setCopiedBid] = useState<string | null>(null);
+  const [clearingLogs, setClearingLogs] = useState(false);
 
   // Fetch States from GeM API (merged with default fallback)
   useEffect(() => {
@@ -164,16 +202,28 @@ export function AutoScannerModal({ isOpen, onClose, onRefreshData }: AutoScanner
     fetchCities();
   }, [formState]);
 
-  // Load Profiles & Logs
+  // Load Profiles & Logs (Fetches top 50 logs from Firestore API)
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [profileList, logList] = await Promise.all([
-        db.listGeMScanProfiles(),
-        db.listGeMScanLogs(undefined, 30),
-      ]);
+      // 1. Fetch scan profiles
+      const profileList = await db.listGeMScanProfiles();
       setProfiles(profileList || []);
-      setLogs(logList || []);
+
+      // 2. Fetch first 50 logs directly from server API (Firebase Firestore)
+      try {
+        const res = await fetch('/api/gem/profiles/logs?limit=50');
+        const data = await res.json();
+        if (data.success && Array.isArray(data.logs)) {
+          setLogs(data.logs);
+        } else {
+          const fallbackLogs = await db.listGeMScanLogs(undefined, 50);
+          setLogs(fallbackLogs || []);
+        }
+      } catch {
+        const fallbackLogs = await db.listGeMScanLogs(undefined, 50);
+        setLogs(fallbackLogs || []);
+      }
     } catch (err) {
       console.error('Error loading scanner data:', err);
     } finally {
@@ -186,8 +236,6 @@ export function AutoScannerModal({ isOpen, onClose, onRefreshData }: AutoScanner
       loadData();
     }
   }, [isOpen, loadData]);
-
-  if (!isOpen) return null;
 
   const resetForm = () => {
     setEditingId(null);
@@ -401,79 +449,144 @@ export function AutoScannerModal({ isOpen, onClose, onRefreshData }: AutoScanner
     }
   };
 
+  const handleClearLogs = async () => {
+    if (!window.confirm('Are you sure you want to clear all server scan logs?')) return;
+    setClearingLogs(true);
+    try {
+      await fetch('/api/gem/profiles/logs', { method: 'DELETE' }).catch(() => {});
+      await db.clearGeMScanLogs().catch(() => {});
+      setLogs([]);
+      setScanMessage({ type: 'success', text: 'Server scan logs cleared successfully.' });
+    } catch (err: any) {
+      setScanMessage({ type: 'error', text: err?.message || 'Failed to clear logs' });
+    } finally {
+      setClearingLogs(false);
+    }
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedBid(text);
+    setTimeout(() => setCopiedBid(null), 2000);
+  };
+
+  // Filtered Logs list
+  const filteredLogs = useMemo(() => {
+    return logs.filter((log) => {
+      // Filter Type
+      if (logFilterType === 'new_bids' && log.newBidsCount <= 0) return false;
+      if (logFilterType === 'scans' && (log.type === 'cron_pulse' || log.status === 'info')) return false;
+      if (logFilterType === 'pulses' && log.type !== 'cron_pulse' && log.status !== 'info') return false;
+      if (logFilterType === 'failed' && log.status !== 'failed') return false;
+
+      // Search Filter
+      if (logSearchTerm.trim()) {
+        const query = logSearchTerm.toLowerCase();
+        const ruleName = (log.profileName || '').toLowerCase();
+        const msg = (log.message || '').toLowerCase();
+        const details = (log.details || '').toLowerCase();
+        const bids = (log.newBidNumbers || []).join(' ').toLowerCase();
+        const cities = (log.scannedCities || []).join(' ').toLowerCase();
+        if (!ruleName.includes(query) && !msg.includes(query) && !details.includes(query) && !bids.includes(query) && !cities.includes(query)) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [logs, logFilterType, logSearchTerm]);
+
+  if (!isOpen) return null;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col border border-gray-200 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+    <div
+      className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/75 backdrop-blur-sm p-0 sm:p-4 overflow-hidden transition-opacity duration-200 ${
+        isClosing ? 'opacity-0' : 'opacity-100 animate-fadeIn'
+      }`}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) handleSmoothClose();
+      }}
+    >
+      <div
+        className={`bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-4xl max-h-[94vh] sm:max-h-[90vh] flex flex-col border border-gray-200 overflow-hidden ${
+          isClosing
+            ? 'animate-slide-down-mobile sm:animate-modal-out'
+            : 'animate-slide-up-mobile sm:animate-modal-in'
+        }`}
+      >
         
+        {/* Mobile Drag Indicator Bar */}
+        <div className="w-12 h-1.5 bg-slate-400/40 rounded-full mx-auto mt-2 sm:hidden shrink-0" />
+
         {/* Header */}
-        <div className="px-6 py-4 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex items-center justify-between border-b border-indigo-800/40">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-indigo-500/20 border border-indigo-400/30 rounded-xl text-indigo-400">
-              <Bot className="w-6 h-6 animate-pulse" />
+        <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex items-center justify-between border-b border-indigo-800/40 shrink-0">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+            <div className="p-1.5 sm:p-2 bg-indigo-500/20 border border-indigo-400/30 rounded-xl text-indigo-400 shrink-0">
+              <Bot className="w-5 h-5 sm:w-6 sm:h-6 animate-pulse" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-lg font-bold tracking-tight text-white">24/7 Server-Side Auto-Scanner</h2>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  <Server className="w-3 h-3" /> Runs 100% Offline
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                <h2 className="text-fluid-base font-bold tracking-tight text-white truncate">24/7 Auto-Scanner</h2>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shrink-0">
+                  <Server className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Runs 100% Offline
                 </span>
               </div>
-              <p className="text-xs text-indigo-200/80">
-                Autonomously monitors State, Multiple Cities, Multiple Departments, stars new tenders & executes AI deep analysis
+              <p className="text-[11px] sm:text-xs text-indigo-200/80 truncate">
+                Monitors State, Cities & Depts, stars new tenders & auto-analyzes
               </p>
             </div>
           </div>
 
           <button
-            onClick={onClose}
-            className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors"
+            onClick={handleSmoothClose}
+            className="p-1.5 sm:p-2 text-gray-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors shrink-0"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Navigation Tabs */}
-        <div className="flex items-center justify-between px-6 bg-slate-50 border-b border-gray-200">
-          <div className="flex gap-2">
+        <div className="flex items-center justify-between px-3 sm:px-6 bg-slate-50 border-b border-gray-200 shrink-0">
+          <div className="flex items-center overflow-x-auto no-scrollbar flex-nowrap gap-1">
             <button
               onClick={() => setActiveTab('profiles')}
-              className={`px-4 py-3 text-xs font-semibold border-b-2 transition-all flex items-center gap-1.5 ${
+              className={`px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold border-b-2 whitespace-nowrap transition-all flex items-center gap-1.5 shrink-0 ${
                 activeTab === 'profiles'
-                  ? 'border-indigo-600 text-indigo-600 bg-white shadow-sm'
+                  ? 'border-indigo-600 text-indigo-600 bg-white shadow-xs'
                   : 'border-transparent text-gray-600 hover:text-gray-900'
               }`}
             >
-              <Bot className="w-3.5 h-3.5" /> Active Rules ({profiles.length})
+              <Bot className="w-3.5 h-3.5" /> <span>Rules ({profiles.length})</span>
             </button>
             <button
               onClick={handleOpenCreate}
-              className={`px-4 py-3 text-xs font-semibold border-b-2 transition-all flex items-center gap-1.5 ${
+              className={`px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold border-b-2 whitespace-nowrap transition-all flex items-center gap-1.5 shrink-0 ${
                 activeTab === 'editor'
-                  ? 'border-indigo-600 text-indigo-600 bg-white shadow-sm'
+                  ? 'border-indigo-600 text-indigo-600 bg-white shadow-xs'
                   : 'border-transparent text-gray-600 hover:text-gray-900'
               }`}
             >
-              <Plus className="w-3.5 h-3.5" /> {editingId ? 'Edit Rule' : 'Create New Rule'}
+              <Plus className="w-3.5 h-3.5" /> <span>{editingId ? 'Edit Rule' : 'New Rule'}</span>
             </button>
             <button
               onClick={() => setActiveTab('logs')}
-              className={`px-4 py-3 text-xs font-semibold border-b-2 transition-all flex items-center gap-1.5 ${
+              className={`px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold border-b-2 whitespace-nowrap transition-all flex items-center gap-1.5 shrink-0 ${
                 activeTab === 'logs'
-                  ? 'border-indigo-600 text-indigo-600 bg-white shadow-sm'
+                  ? 'border-indigo-600 text-indigo-600 bg-white shadow-xs'
                   : 'border-transparent text-gray-600 hover:text-gray-900'
               }`}
             >
-              <Clock className="w-3.5 h-3.5" /> Server Logs ({logs.length})
+              <Clock className="w-3.5 h-3.5" /> <span>Logs ({logs.length})</span>
             </button>
             <button
               onClick={() => setActiveTab('guide')}
-              className={`px-4 py-3 text-xs font-semibold border-b-2 transition-all flex items-center gap-1.5 ${
+              className={`px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold border-b-2 whitespace-nowrap transition-all flex items-center gap-1.5 shrink-0 ${
                 activeTab === 'guide'
-                  ? 'border-indigo-600 text-indigo-600 bg-white shadow-sm'
+                  ? 'border-indigo-600 text-indigo-600 bg-white shadow-xs'
                   : 'border-transparent text-gray-600 hover:text-gray-900'
               }`}
             >
-              <HelpCircle className="w-3.5 h-3.5" /> 24/7 Cloud Setup
+              <HelpCircle className="w-3.5 h-3.5" /> <span>Guide</span>
             </button>
           </div>
 
@@ -482,9 +595,10 @@ export function AutoScannerModal({ isOpen, onClose, onRefreshData }: AutoScanner
             variant="outline"
             onClick={loadData}
             disabled={loading}
-            className="h-7 text-xs gap-1.5 text-gray-600"
+            className="h-7 text-xs gap-1 text-gray-600 px-2 sm:px-3 shrink-0 ml-2"
           >
-            <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} /> Refresh
+            <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
+            <span className="hidden xs:inline">Refresh</span>
           </Button>
         </div>
 
@@ -551,10 +665,10 @@ export function AutoScannerModal({ isOpen, onClose, onRefreshData }: AutoScanner
                           p.enabled ? 'border-indigo-100 hover:border-indigo-300' : 'border-gray-200 opacity-70'
                         }`}
                       >
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-2">
-                              <h4 className="font-bold text-gray-900 text-sm">{p.name}</h4>
+                        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                          <div className="space-y-2 min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                              <h4 className="font-bold text-gray-900 text-sm truncate">{p.name}</h4>
                               <span
                                 className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                                   p.enabled ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-600'
@@ -574,30 +688,30 @@ export function AutoScannerModal({ isOpen, onClose, onRefreshData }: AutoScanner
                               )}
                             </div>
 
-                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-gray-600">
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600">
                               <div className="flex items-center gap-1 text-gray-700 font-semibold">
-                                <MapPin className="w-3.5 h-3.5 text-indigo-600" />
+                                <MapPin className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
                                 <span>{p.consigneeState}</span>
                               </div>
 
                               <div className="flex items-center gap-1 text-gray-500">
-                                <Clock className="w-3.5 h-3.5 text-gray-400" />
-                                <span>Interval: Every {p.intervalMinutes}m</span>
+                                <Clock className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                                <span>Every {p.intervalMinutes}m</span>
                               </div>
 
                               {p.autoAnalyze && (
                                 <div className="flex items-center gap-1 text-emerald-700 font-medium bg-emerald-50 px-1.5 py-0.5 rounded text-[10px]">
-                                  <Sparkles className="w-3 h-3 text-emerald-600" /> Auto-AI Analysis
+                                  <Sparkles className="w-3 h-3 text-emerald-600 shrink-0" /> Auto-AI
                                 </div>
                               )}
                             </div>
 
                             {/* Cities badges in card */}
                             {citiesList.length > 0 && (
-                              <div className="flex flex-wrap items-center gap-1.5">
+                              <div className="flex flex-wrap items-center gap-1">
                                 <span className="text-[10px] font-semibold text-gray-500">Cities:</span>
                                 {citiesList.map((c, i) => (
-                                  <span key={i} className="px-2 py-0.5 rounded-md text-[10px] bg-indigo-50 text-indigo-800 border border-indigo-200 font-bold uppercase">
+                                  <span key={i} className="px-1.5 py-0.5 rounded text-[10px] bg-indigo-50 text-indigo-800 border border-indigo-200 font-bold uppercase">
                                     {c}
                                   </span>
                                 ))}
@@ -606,10 +720,10 @@ export function AutoScannerModal({ isOpen, onClose, onRefreshData }: AutoScanner
 
                             {/* Departments chips in card */}
                             {deptsList.length > 0 && (
-                              <div className="flex flex-wrap items-center gap-1.5">
+                              <div className="flex flex-wrap items-center gap-1">
                                 <span className="text-[10px] font-semibold text-gray-500">Depts:</span>
                                 {deptsList.map((d, i) => (
-                                  <span key={i} className="px-2 py-0.5 rounded-full text-[10px] bg-amber-50 text-amber-800 border border-amber-200 font-medium">
+                                  <span key={i} className="px-2 py-0.5 rounded-full text-[10px] bg-amber-50 text-amber-800 border border-amber-200 font-medium truncate max-w-[200px]">
                                     {d}
                                   </span>
                                 ))}
@@ -618,21 +732,21 @@ export function AutoScannerModal({ isOpen, onClose, onRefreshData }: AutoScanner
                           </div>
 
                           {/* Actions */}
-                          <div className="flex items-center gap-1.5 shrink-0">
+                          <div className="flex flex-wrap items-center gap-1.5 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 shrink-0">
                             <Button
                               size="sm"
                               disabled={isRunning}
                               onClick={() => handleRunScanNow(p.id)}
-                              className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs h-8 gap-1.5 shadow-sm"
+                              className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs h-8 px-2.5 gap-1.5 shadow-xs"
                             >
                               <Play className={`w-3.5 h-3.5 ${isRunning ? 'animate-spin' : ''}`} />
-                              {isRunning ? 'Scanning...' : 'Scan Now'}
+                              <span>{isRunning ? 'Scanning...' : 'Scan Now'}</span>
                             </Button>
 
                             <button
                               onClick={() => handleToggleEnabled(p)}
                               title={p.enabled ? 'Pause Rule' : 'Resume Rule'}
-                              className={`p-2 rounded-lg border text-xs font-semibold transition-colors ${
+                              className={`px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition-colors ${
                                 p.enabled
                                   ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
                                   : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
@@ -644,7 +758,7 @@ export function AutoScannerModal({ isOpen, onClose, onRefreshData }: AutoScanner
                             <button
                               onClick={() => handleOpenEdit(p)}
                               title="Edit Rule"
-                              className="p-2 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 border border-gray-200 rounded-lg transition-colors"
+                              className="p-1.5 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 border border-gray-200 rounded-lg transition-colors"
                             >
                               <Edit2 className="w-3.5 h-3.5" />
                             </button>
@@ -652,7 +766,7 @@ export function AutoScannerModal({ isOpen, onClose, onRefreshData }: AutoScanner
                             <button
                               onClick={() => handleDeleteProfile(p.id, p.name)}
                               title="Delete Rule"
-                              className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 border border-gray-200 rounded-lg transition-colors"
+                              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 border border-gray-200 rounded-lg transition-colors"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -694,22 +808,20 @@ export function AutoScannerModal({ isOpen, onClose, onRefreshData }: AutoScanner
                 {/* State */}
                 <div className="md:col-span-2 space-y-1">
                   <label className="text-xs font-semibold text-gray-700">Consignee State *</label>
-                  <select
+                  <CustomDropdown
                     value={formState}
-                    onChange={(e) => {
-                      setFormState(e.target.value);
+                    onChange={(val) => {
+                      setFormState(val);
                       setFormCities([]);
                     }}
-                    required
-                    className="w-full h-9 rounded-md border border-input bg-background px-3 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
-                  >
-                    <option value="">-- Select State --</option>
-                    {stateList.map((s) => (
-                      <option key={s.value} value={s.value}>
-                        {s.label}
-                      </option>
-                    ))}
-                  </select>
+                    options={[
+                      { value: '', label: '-- Select State --' },
+                      ...stateList.map((s) => ({ value: s.value, label: s.label })),
+                    ]}
+                    searchable
+                    placeholder="-- Select State --"
+                    buttonClassName="h-9 text-xs"
+                  />
                 </div>
 
                 {/* Multi-City Selection Section */}
@@ -762,23 +874,23 @@ export function AutoScannerModal({ isOpen, onClose, onRefreshData }: AutoScanner
                       <span className="text-[10px] text-gray-500 font-semibold block">
                         Pick from {formState || 'State'} city list {loadingCities && '(Loading...)'}:
                       </span>
-                      <select
-                        onChange={(e) => {
-                          if (e.target.value) {
-                            handleAddCity(e.target.value);
-                            e.target.value = '';
-                          }
+                      <CustomDropdown
+                        value=""
+                        onChange={(val) => {
+                          if (val) handleAddCity(val);
                         }}
                         disabled={!formState || loadingCities}
-                        className="w-full h-9 rounded-md border border-input bg-white px-3 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
-                      >
-                        <option value="">-- Click to Add City from List --</option>
-                        {cityList.map((c) => (
-                          <option key={c.value} value={c.value} disabled={formCities.includes(c.value.toUpperCase())}>
-                            {formCities.includes(c.value.toUpperCase()) ? `✓ ${c.label}` : c.label}
-                          </option>
-                        ))}
-                      </select>
+                        options={[
+                          { value: '', label: '-- Click to Add City --' },
+                          ...cityList.map((c) => ({
+                            value: c.value,
+                            label: formCities.includes(c.value.toUpperCase()) ? `✓ ${c.label}` : c.label,
+                          })),
+                        ]}
+                        searchable
+                        placeholder="-- Click to Add City --"
+                        buttonClassName="h-9 text-xs"
+                      />
                     </div>
 
                     <div className="space-y-1">
@@ -933,17 +1045,15 @@ export function AutoScannerModal({ isOpen, onClose, onRefreshData }: AutoScanner
                 {/* Scan Interval */}
                 <div className="space-y-1">
                   <label className="text-xs font-semibold text-gray-700">Scan Frequency / Interval</label>
-                  <select
-                    value={formInterval}
-                    onChange={(e) => setFormInterval(Number(e.target.value))}
-                    className="w-full h-9 rounded-md border border-input bg-background px-3 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
-                  >
-                    {INTERVAL_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
+                  <CustomDropdown
+                    value={String(formInterval)}
+                    onChange={(val) => setFormInterval(Number(val))}
+                    options={INTERVAL_OPTIONS.map((opt) => ({
+                      value: String(opt.value),
+                      label: opt.label,
+                    }))}
+                    buttonClassName="h-9 text-xs"
+                  />
                 </div>
               </div>
 
@@ -1003,66 +1113,248 @@ export function AutoScannerModal({ isOpen, onClose, onRefreshData }: AutoScanner
             </form>
           )}
 
-          {/* 3. LOGS TAB */}
+          {/* 3. SERVER LOGS TAB */}
           {activeTab === 'logs' && (
-            <div className="space-y-3">
-              {logs.length === 0 ? (
+            <div className="space-y-4">
+              {/* Filter Controls & Search */}
+              <div className="bg-white p-3.5 rounded-xl border border-gray-200 shadow-xs space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                  {/* Log Filter Pills */}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <button
+                      onClick={() => setLogFilterType('all')}
+                      className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                        logFilterType === 'all'
+                          ? 'bg-slate-900 text-white'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      All Logs ({logs.length})
+                    </button>
+
+                    <button
+                      onClick={() => setLogFilterType('new_bids')}
+                      className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 ${
+                        logFilterType === 'new_bids'
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                      }`}
+                    >
+                      <Sparkles className="w-3 h-3" />
+                      New Bids Found ({logs.filter((l) => l.newBidsCount > 0).length})
+                    </button>
+
+                    <button
+                      onClick={() => setLogFilterType('scans')}
+                      className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 ${
+                        logFilterType === 'scans'
+                          ? 'bg-indigo-600 text-white'
+                          : 'bg-indigo-50 text-indigo-800 hover:bg-indigo-100'
+                      }`}
+                    >
+                      <Zap className="w-3 h-3" />
+                      Full Scans Only ({logs.filter((l) => l.type !== 'cron_pulse' && l.status !== 'info').length})
+                    </button>
+
+                    <button
+                      onClick={() => setLogFilterType('pulses')}
+                      className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 ${
+                        logFilterType === 'pulses'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-blue-50 text-blue-800 hover:bg-blue-100'
+                      }`}
+                    >
+                      <Activity className="w-3 h-3" />
+                      Cron 30m Pulses ({logs.filter((l) => l.type === 'cron_pulse' || l.status === 'info').length})
+                    </button>
+
+                    {logs.some((l) => l.status === 'failed') && (
+                      <button
+                        onClick={() => setLogFilterType('failed')}
+                        className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 ${
+                          logFilterType === 'failed'
+                            ? 'bg-red-600 text-white'
+                            : 'bg-red-50 text-red-800 hover:bg-red-100'
+                        }`}
+                      >
+                        <AlertCircle className="w-3 h-3" />
+                        Errors ({logs.filter((l) => l.status === 'failed').length})
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Clear Logs Button */}
+                  {logs.length > 0 && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={clearingLogs}
+                      onClick={handleClearLogs}
+                      className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 gap-1 shrink-0"
+                    >
+                      <Trash2 className="w-3 h-3" /> {clearingLogs ? 'Clearing...' : 'Clear All Logs'}
+                    </Button>
+                  )}
+                </div>
+
+                {/* Search in logs */}
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <Input
+                    placeholder="Search logs by rule name, message, city, or bid number..."
+                    value={logSearchTerm}
+                    onChange={(e) => setLogSearchTerm(e.target.value)}
+                    className="pl-8 text-xs h-8 bg-gray-50 border-gray-200"
+                  />
+                  {logSearchTerm && (
+                    <button
+                      onClick={() => setLogSearchTerm('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Logs List */}
+              {filteredLogs.length === 0 ? (
                 <div className="text-center py-12 bg-white rounded-xl border border-dashed border-gray-300 p-8">
                   <Clock className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-                  <p className="text-xs text-gray-500">No server scan history recorded yet. Run a scan to see live logs.</p>
+                  <h4 className="text-xs font-bold text-gray-700">No matching server logs found</h4>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {logs.length === 0
+                      ? 'Server logs will appear here automatically when the 30-minute cron job runs or when you click "Scan Now".'
+                      : 'Try switching the filter pill above or clearing your search term.'}
+                  </p>
                 </div>
               ) : (
-                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead>
-                      <tr className="bg-gray-100/80 border-b border-gray-200 text-gray-600 font-semibold">
-                        <th className="py-2.5 px-4">Time</th>
-                        <th className="py-2.5 px-4">Scan Rule</th>
-                        <th className="py-2.5 px-4">Status</th>
-                        <th className="py-2.5 px-4">Found / New</th>
-                        <th className="py-2.5 px-4">AI Analyzed</th>
-                        <th className="py-2.5 px-4">Duration</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {logs.map((l) => (
-                        <tr key={l.id} className="hover:bg-gray-50/80 transition-colors">
-                          <td className="py-2.5 px-4 text-gray-500 whitespace-nowrap">
-                            {new Date(l.runAt).toLocaleTimeString('en-IN', {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                              day: '2-digit',
-                              month: 'short',
-                            })}
-                          </td>
-                          <td className="py-2.5 px-4 font-semibold text-gray-900">{l.profileName}</td>
-                          <td className="py-2.5 px-4">
-                            <span
-                              className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                l.status === 'success' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
-                              }`}
-                            >
-                              {l.status.toUpperCase()}
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-4">
-                            <span className="font-semibold text-gray-800">{l.totalBidsFound}</span> total (
-                            <span className="font-bold text-indigo-600">{l.newBidsCount} new</span>)
-                          </td>
-                          <td className="py-2.5 px-4">
-                            {l.analyzedCount > 0 ? (
-                              <span className="inline-flex items-center gap-1 text-emerald-700 font-semibold">
-                                <Sparkles className="w-3 h-3 text-emerald-600" /> {l.analyzedCount}
+                <div className="space-y-2.5">
+                  {filteredLogs.map((log) => {
+                    const isSuccess = log.status === 'success';
+                    const isFailed = log.status === 'failed';
+                    const isPulse = log.type === 'cron_pulse' || log.status === 'info';
+                    const hasNew = log.newBidsCount > 0;
+
+                    const dateObj = new Date(log.runAt);
+                    const formattedDate = !isNaN(dateObj.getTime())
+                      ? dateObj.toLocaleDateString('en-IN', {
+                          day: '2-digit',
+                          month: 'short',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          second: '2-digit',
+                          hour12: true,
+                        })
+                      : log.runAt;
+
+                    return (
+                      <div
+                        key={log.id}
+                        className={`p-3.5 rounded-xl border transition-all text-xs bg-white shadow-xs ${
+                          hasNew
+                            ? 'border-emerald-300 bg-emerald-50/20'
+                            : isFailed
+                            ? 'border-red-200 bg-red-50/20'
+                            : isPulse
+                            ? 'border-blue-100 bg-slate-50/50'
+                            : 'border-gray-200'
+                        }`}
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-2">
+                          <div className="flex items-center gap-2">
+                            {/* Type Icon Badge */}
+                            {hasNew ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                <Sparkles className="w-3 h-3 text-emerald-600" /> +{log.newBidsCount} NEW TENDERS
+                              </span>
+                            ) : isPulse ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
+                                <Activity className="w-3 h-3 text-blue-600" /> CRON PULSE (30m)
+                              </span>
+                            ) : isSuccess ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-600" /> SCAN SUCCESS
                               </span>
                             ) : (
-                              <span className="text-gray-400">0</span>
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-800">
+                                <AlertCircle className="w-3 h-3 text-red-600" /> FAILED
+                              </span>
                             )}
-                          </td>
-                          <td className="py-2.5 px-4 text-gray-500">{(l.durationMs / 1000).toFixed(1)}s</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+
+                            <span className="font-bold text-gray-900 text-xs">{log.profileName}</span>
+                          </div>
+
+                          <div className="flex items-center gap-3 text-[11px] text-gray-500 font-mono">
+                            <span>{formattedDate}</span>
+                            {log.durationMs > 0 && (
+                              <span className="bg-gray-100 px-1.5 py-0.5 rounded text-[10px]">
+                                {(log.durationMs / 1000).toFixed(2)}s
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Log Details & Message */}
+                        <div className="pt-2 space-y-1.5">
+                          <p className="text-gray-700 font-medium leading-relaxed">
+                            {log.message || (isPulse ? 'Cron heartbeat checked rules.' : `Scan executed. Found ${log.totalBidsFound} bids.`)}
+                          </p>
+
+                          {log.details && (
+                            <p className="text-[11px] text-gray-500 font-mono bg-gray-50 p-2 rounded border border-gray-100 break-all">
+                              {log.details}
+                            </p>
+                          )}
+
+                          {log.error && (
+                            <p className="text-[11px] text-red-700 bg-red-50 p-2 rounded border border-red-200 font-mono break-all">
+                              ⚠️ {log.error}
+                            </p>
+                          )}
+
+                          {/* New Bid Numbers Tags */}
+                          {log.newBidNumbers && log.newBidNumbers.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                              <span className="text-[10px] font-bold text-emerald-800">Detected Bids:</span>
+                              {log.newBidNumbers.map((bidNum) => (
+                                <button
+                                  key={bidNum}
+                                  type="button"
+                                  onClick={() => copyToClipboard(bidNum)}
+                                  title="Click to Copy Bid Number"
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-white text-emerald-900 border border-emerald-300 hover:bg-emerald-50 transition-colors"
+                                >
+                                  <span>{bidNum}</span>
+                                  {copiedBid === bidNum ? (
+                                    <Check className="w-2.5 h-2.5 text-emerald-600" />
+                                  ) : (
+                                    <Copy className="w-2.5 h-2.5 text-gray-400" />
+                                  )}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Cities & Stats Footer */}
+                          {!isPulse && (
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-gray-500 pt-1">
+                              {log.scannedCities && log.scannedCities.length > 0 && (
+                                <div className="flex items-center gap-1">
+                                  <MapPin className="w-3 h-3 text-indigo-500" />
+                                  <span>Cities: {log.scannedCities.join(', ')}</span>
+                                </div>
+                              )}
+                              <span>Total Active: {log.totalBidsFound}</span>
+                              <span className="font-semibold text-indigo-600">New: {log.newBidsCount}</span>
+                              <span>AI Analyzed: {log.analyzedCount}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>

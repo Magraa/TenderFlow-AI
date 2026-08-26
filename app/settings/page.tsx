@@ -34,6 +34,7 @@ import { AISettings } from '@/types';
 import { Sparkles, FileText, Languages, Package, ChevronDown, ChevronUp, Search, X, Lock } from 'lucide-react';
 
 import { Textarea } from '@/components/ui/textarea';
+import { CustomDropdown } from '@/components/ui/customDropdown';
 
 type DictionaryType = 'purpose' | 'itemHindi' | 'vendorHindi';
 
@@ -196,6 +197,7 @@ export default function SettingsPage() {
   // Custom template state
   const [customTemplates, setCustomTemplates] = useState<CustomTemplate[]>([]);
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
+  const [templateActiveMobileTab, setTemplateActiveMobileTab] = useState<'editor' | 'preview'>('editor');
   const [templateDialogMode, setTemplateDialogMode] = useState<'add' | 'edit'>('add');
   const [currentTemplate, setCurrentTemplate] = useState<CustomTemplate | null>(null);
   const [templateFormData, setTemplateFormData] = useState({
@@ -1500,12 +1502,17 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <div className="border-b bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-6 sm:px-6 lg:px-8">
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Settings</h1>
+    <div className="min-h-screen bg-slate-50 pb-12">
+      <div className="border-b bg-white shadow-xs">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-3.5 py-4 sm:py-6 sm:px-6 lg:px-8">
+          <div>
+            <h1 className="text-fluid-2xl font-extrabold tracking-tight text-slate-900">Settings & Rules</h1>
+            <p className="mt-0.5 text-xs text-slate-500 font-medium">Organization, security, AI quotas, dictionaries, and custom templates.</p>
+          </div>
           <Link href="/dashboard">
-            <Button variant="outline">Back to Dashboard</Button>
+            <Button variant="outline" size="sm" className="h-8 sm:h-9 text-xs font-semibold px-3 border-slate-300">
+              Dashboard
+            </Button>
           </Link>
         </div>
       </div>
@@ -1705,14 +1712,14 @@ export default function SettingsPage() {
           </CardHeader>
           <CardContent>
             <Tabs defaultValue="phrasepacks" className="w-full">
-              <TabsList className="grid w-full grid-cols-4 gap-1 bg-slate-100 p-1 rounded-xl">
-                <TabsTrigger value="purpose" className="rounded-lg text-xs font-semibold py-1.5">Purpose Library</TabsTrigger>
-                <TabsTrigger value="item" className="rounded-lg text-xs font-semibold py-1.5">Item Mappings</TabsTrigger>
-                <TabsTrigger value="phrasepacks" className="flex items-center gap-1.5 rounded-lg text-xs font-semibold py-1.5">
+              <TabsList className="flex sm:grid w-full sm:grid-cols-4 gap-1 bg-slate-100 p-1 rounded-xl overflow-x-auto no-scrollbar">
+                <TabsTrigger value="purpose" className="rounded-lg text-xs font-semibold py-1.5 shrink-0 sm:shrink">Purpose Library</TabsTrigger>
+                <TabsTrigger value="item" className="rounded-lg text-xs font-semibold py-1.5 shrink-0 sm:shrink">Item Mappings</TabsTrigger>
+                <TabsTrigger value="phrasepacks" className="flex items-center gap-1.5 rounded-lg text-xs font-semibold py-1.5 shrink-0 sm:shrink">
                   <Package className="h-3.5 w-3.5" />
-                  Phrase Packs
+                  <span>Phrase Packs</span>
                 </TabsTrigger>
-                <TabsTrigger value="locations" className="rounded-lg text-xs font-semibold py-1.5">Locations</TabsTrigger>
+                <TabsTrigger value="locations" className="rounded-lg text-xs font-semibold py-1.5 shrink-0 sm:shrink">Locations</TabsTrigger>
               </TabsList>
 
               
@@ -2382,24 +2389,27 @@ export default function SettingsPage() {
 
       {/* Import Dialog */}
       <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
-        <DialogContent className="max-w-md border-0 bg-white/95 backdrop-blur-md shadow-2xl rounded-2xl overflow-hidden transition-all duration-300">
-          <DialogHeader className="bg-slate-50/50 border-b border-slate-100 px-6 py-5">
+        <DialogContent className="max-w-md w-full max-h-[92vh] sm:max-h-[85vh] rounded-t-2xl sm:rounded-2xl p-0 border border-slate-200 bg-white shadow-2xl flex flex-col overflow-hidden animate-slide-up-mobile sm:animate-none">
+          {/* Mobile drag handle */}
+          <div className="w-12 h-1.5 bg-slate-400/40 rounded-full mx-auto mt-2 sm:hidden shrink-0" />
+
+          <DialogHeader className="bg-slate-50/70 border-b border-slate-100 px-4 sm:px-6 py-3.5 sm:py-5 shrink-0">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+              <div className="p-2 bg-blue-50 text-blue-600 rounded-lg shrink-0">
                 <FileText className="h-5 w-5" />
               </div>
               <div>
-                <DialogTitle className="text-xl font-bold text-slate-800">
+                <DialogTitle className="text-base sm:text-lg font-bold text-slate-800">
                   Import {selectedDictionary === 'purpose' ? 'Purpose' : 'Item Hindi'} Mappings
                 </DialogTitle>
-                <p className="text-xs text-slate-500 mt-1">
+                <p className="text-xs text-slate-500 mt-0.5">
                   Upload a JSON file containing mapping records.
                 </p>
               </div>
             </div>
           </DialogHeader>
           
-          <div className="space-y-4 px-6 py-5 bg-white">
+          <div className="space-y-4 px-4 sm:px-6 py-4 sm:py-5 bg-white overflow-y-auto max-h-[60vh]">
             <div className="space-y-1.5">
               <Label htmlFor="importFile" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
                 JSON File
@@ -2408,7 +2418,7 @@ export default function SettingsPage() {
                 id="importFile"
                 type="file"
                 accept=".json"
-                className="focus-visible:ring-blue-500 border-slate-200 rounded-lg shadow-sm"
+                className="focus-visible:ring-blue-500 border-slate-200 rounded-lg shadow-sm text-xs"
                 onChange={handleFileChange}
                 disabled={importing}
               />
@@ -2426,10 +2436,11 @@ export default function SettingsPage() {
             </p>
           </div>
           
-          <DialogFooter className="bg-slate-50/50 border-t border-slate-100 px-6 py-4 flex gap-2">
+          <DialogFooter className="bg-slate-50/70 border-t border-slate-100 px-4 sm:px-6 py-3 sm:py-4 flex gap-2 shrink-0">
             <Button 
               variant="outline" 
-              className="rounded-lg h-10 border-slate-200 hover:bg-slate-100 font-medium"
+              size="sm"
+              className="rounded-lg h-9 border-slate-200 hover:bg-slate-100 font-medium text-xs"
               onClick={() => setImportDialogOpen(false)} 
               disabled={importing}
             >
@@ -2441,31 +2452,34 @@ export default function SettingsPage() {
 
       {/* Export Dialog */}
       <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
-        <DialogContent className="max-w-md border-0 bg-white/95 backdrop-blur-md shadow-2xl rounded-2xl overflow-hidden transition-all duration-300">
-          <DialogHeader className="bg-slate-50/50 border-b border-slate-100 px-6 py-5">
+        <DialogContent className="max-w-md w-full max-h-[92vh] sm:max-h-[85vh] rounded-t-2xl sm:rounded-2xl p-0 border border-slate-200 bg-white shadow-2xl flex flex-col overflow-hidden animate-slide-up-mobile sm:animate-none">
+          {/* Mobile drag handle */}
+          <div className="w-12 h-1.5 bg-slate-400/40 rounded-full mx-auto mt-2 sm:hidden shrink-0" />
+
+          <DialogHeader className="bg-slate-50/70 border-b border-slate-100 px-4 sm:px-6 py-3.5 sm:py-5 shrink-0">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+              <div className="p-2 bg-blue-50 text-blue-600 rounded-lg shrink-0">
                 <FileText className="h-5 w-5" />
               </div>
               <div>
-                <DialogTitle className="text-xl font-bold text-slate-800">
+                <DialogTitle className="text-base sm:text-lg font-bold text-slate-800">
                   Export {selectedDictionary === 'purpose' ? 'Purpose' : 'Item Hindi'} Mappings
                 </DialogTitle>
-                <p className="text-xs text-slate-500 mt-1">
+                <p className="text-xs text-slate-500 mt-0.5">
                   Download mappings as a JSON file.
                 </p>
               </div>
             </div>
           </DialogHeader>
           
-          <div className="px-6 py-5 bg-white">
-            <p className="text-sm text-slate-600">
+          <div className="px-4 sm:px-6 py-4 sm:py-5 bg-white overflow-y-auto max-h-[60vh]">
+            <p className="text-xs sm:text-sm text-slate-600">
               Are you sure you want to export the {selectedDictionary === 'purpose' ? 'purpose' : 'item Hindi'} mappings?
             </p>
             
-            <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50/80 p-4 text-sm shadow-inner">
+            <div className="mt-3.5 rounded-xl border border-slate-100 bg-slate-50/80 p-3.5 text-xs shadow-inner">
               <p className="font-semibold text-slate-700">Export Details:</p>
-              <ul className="mt-2 list-inside list-disc space-y-1.5 text-slate-600">
+              <ul className="mt-1.5 list-inside list-disc space-y-1 text-slate-600">
                 <li>Type: {selectedDictionary === 'purpose' ? 'Purpose Mappings' : 'Item Hindi Mappings'}</li>
                 <li>
                   Count: {selectedDictionary === 'purpose' ? purposeMappings.length : itemHindiMappings.length}
@@ -2475,17 +2489,19 @@ export default function SettingsPage() {
             </div>
           </div>
           
-          <DialogFooter className="bg-slate-50/50 border-t border-slate-100 px-6 py-4 flex gap-2">
+          <DialogFooter className="bg-slate-50/70 border-t border-slate-100 px-4 sm:px-6 py-3 sm:py-4 flex gap-2 shrink-0">
             <Button 
               variant="outline" 
-              className="rounded-lg h-10 border-slate-200 hover:bg-slate-100 font-medium"
+              size="sm"
+              className="rounded-lg h-9 border-slate-200 hover:bg-slate-100 font-medium text-xs"
               onClick={() => setExportDialogOpen(false)} 
               disabled={exporting}
             >
               Cancel
             </Button>
             <Button 
-              className="rounded-lg h-10 bg-blue-600 hover:bg-blue-700 font-medium"
+              size="sm"
+              className="rounded-lg h-9 bg-blue-600 hover:bg-blue-700 font-medium text-xs"
               onClick={handleExport} 
               loading={exporting} 
               disabled={exporting}
@@ -2498,10 +2514,13 @@ export default function SettingsPage() {
 
       {/* Add/Edit Mapping Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className={`${dialogType === 'purpose' ? 'max-w-md' : 'max-w-5xl'} w-[95vw] border-0 bg-white/95 backdrop-blur-md shadow-2xl rounded-2xl overflow-hidden transition-all duration-300`}>
-          <DialogHeader className="bg-slate-50/50 border-b border-slate-100 px-6 py-5">
+        <DialogContent className={`${dialogType === 'purpose' ? 'max-w-md' : 'max-w-5xl'} w-full max-h-[94vh] sm:max-h-[88vh] rounded-t-2xl sm:rounded-2xl p-0 border border-slate-200 bg-white shadow-2xl flex flex-col overflow-hidden animate-slide-up-mobile sm:animate-none`}>
+          {/* Mobile drag handle */}
+          <div className="w-12 h-1.5 bg-slate-400/40 rounded-full mx-auto mt-2 sm:hidden shrink-0" />
+
+          <DialogHeader className="bg-slate-50/70 border-b border-slate-100 px-4 sm:px-6 py-3.5 sm:py-5 shrink-0">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+              <div className="p-2 bg-blue-50 text-blue-600 rounded-lg shrink-0">
                 {dialogType === 'purpose' ? (
                   <FileText className="h-5 w-5" />
                 ) : (
@@ -2509,10 +2528,10 @@ export default function SettingsPage() {
                 )}
               </div>
               <div>
-                <DialogTitle className="text-xl font-bold text-slate-800">
+                <DialogTitle className="text-base sm:text-lg font-bold text-slate-800">
                   {dialogMode === 'add' ? 'Add New' : 'Edit'} {dialogType === 'purpose' ? 'Purpose Mapping' : 'Item Hindi Mapping'}
                 </DialogTitle>
-                <p className="text-xs text-slate-500 mt-1">
+                <p className="text-xs text-slate-500 mt-0.5">
                   {dialogType === 'purpose' 
                     ? 'Map categories to professional Hindi/English purpose statements.' 
                     : 'Transliterate English item names to Hindi script for automatic translation.'}
@@ -2942,24 +2961,27 @@ export default function SettingsPage() {
 
       {/* ─── Phrase Pack Add / Edit Dialog ──────────────────────────────── */}
       <Dialog open={phraseDialogOpen} onOpenChange={setPhraseDialogOpen}>
-        <DialogContent className="max-w-2xl border-0 bg-white/95 backdrop-blur-md shadow-2xl rounded-2xl overflow-hidden">
-          <DialogHeader className="bg-slate-50/50 border-b border-slate-100 px-6 py-5">
+        <DialogContent className="max-w-2xl w-full max-h-[92vh] sm:max-h-[85vh] rounded-t-2xl sm:rounded-2xl p-0 border border-slate-200 bg-white shadow-2xl flex flex-col overflow-hidden animate-slide-up-mobile sm:animate-none">
+          {/* Mobile drag handle */}
+          <div className="w-12 h-1.5 bg-slate-400/40 rounded-full mx-auto mt-2 sm:hidden shrink-0" />
+
+          <DialogHeader className="bg-slate-50/70 border-b border-slate-100 px-4 sm:px-6 py-3.5 sm:py-5 shrink-0">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+              <div className="p-2 bg-blue-50 text-blue-600 rounded-lg shrink-0">
                 <Package className="h-5 w-5" />
               </div>
               <div>
-                <DialogTitle className="text-xl font-bold text-slate-800">
+                <DialogTitle className="text-base sm:text-lg font-bold text-slate-800">
                   {phraseDialogMode === 'add' ? 'Add' : 'Edit'} Phrase Pack
                 </DialogTitle>
-                <p className="text-xs text-slate-500 mt-1">
+                <p className="text-xs text-slate-500 mt-0.5">
                   Define reusable Hindi phrases for all tender document types in this category.
                 </p>
               </div>
             </div>
           </DialogHeader>
 
-          <div className="space-y-4 px-6 py-5 bg-white overflow-y-auto max-h-[70vh]">
+          <div className="space-y-4 px-4 sm:px-6 py-4 sm:py-5 bg-white overflow-y-auto max-h-[60vh]">
             {/* Category + AI Generate */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5 col-span-1">
@@ -3205,33 +3227,64 @@ export default function SettingsPage() {
 
       {/* Custom Template Dialog */}
       <Dialog open={templateDialogOpen} onOpenChange={setTemplateDialogOpen}>
-        <DialogContent className="sm:max-w-[1240px] w-[95vw] p-0 overflow-hidden bg-slate-50/95 backdrop-blur-xl border border-white/20 rounded-2xl shadow-2xl">
-          <DialogHeader className="bg-white/80 border-b border-slate-100 px-6 py-4">
+        <DialogContent className="max-w-[1240px] w-full max-h-[95vh] sm:max-h-[90vh] rounded-t-2xl sm:rounded-2xl p-0 border border-slate-200 bg-white shadow-2xl flex flex-col overflow-hidden animate-slide-up-mobile sm:animate-none">
+          {/* Mobile drag handle */}
+          <div className="w-12 h-1.5 bg-slate-400/40 rounded-full mx-auto mt-2 sm:hidden shrink-0" />
+
+          <DialogHeader className="bg-slate-50/70 border-b border-slate-100 px-4 sm:px-6 py-3.5 sm:py-4 shrink-0">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-50 rounded-xl">
+              <div className="p-2 bg-blue-50 rounded-xl shrink-0">
                 <FileText className="h-5 w-5 text-blue-600" />
               </div>
               <div>
-                <DialogTitle className="text-lg font-bold text-slate-800">
+                <DialogTitle className="text-base sm:text-lg font-bold text-slate-800">
                   {templateDialogMode === 'add' ? 'Create Custom Template' : 'Edit Custom Template'}
                 </DialogTitle>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Design layouts for quotation and bidding documents. Code HTML on the left and see the rendered results live on the right.
+                  Design layouts for quotation and bidding documents. Code HTML and see the rendered results live.
                 </p>
               </div>
             </div>
           </DialogHeader>
 
+          {/* Mobile Tab Switcher (Visible only on < lg screens) */}
+          <div className="flex items-center justify-center p-2 bg-slate-100/80 border-b border-slate-200 lg:hidden shrink-0">
+            <div className="grid grid-cols-2 bg-white rounded-lg p-0.5 border border-slate-200 w-full max-w-xs text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => setTemplateActiveMobileTab('editor')}
+                className={`py-1.5 rounded-md transition-all ${
+                  templateActiveMobileTab === 'editor'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Code Editor
+              </button>
+              <button
+                type="button"
+                onClick={() => setTemplateActiveMobileTab('preview')}
+                className={`py-1.5 rounded-md transition-all ${
+                  templateActiveMobileTab === 'preview'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Live Preview
+              </button>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 lg:grid-cols-2 bg-white max-h-[72vh] overflow-hidden">
             {/* Left Side: Editor Form */}
-            <div className="p-6 space-y-4 overflow-y-auto border-r border-slate-100 max-h-[72vh]">
+            <div className={`p-4 sm:p-6 space-y-4 overflow-y-auto border-r border-slate-100 max-h-[70vh] ${templateActiveMobileTab === 'editor' ? 'block' : 'hidden lg:block'}`}>
               <div className="space-y-1.5">
                 <Label htmlFor="tplName" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
                   Template Name <span className="text-red-500">*</span>
                 </Label>
                 <Input
                   id="tplName"
-                  className="focus-visible:ring-blue-500 border-slate-200 h-9 rounded-lg bg-white shadow-sm"
+                  className="focus-visible:ring-blue-500 border-slate-200 h-9 rounded-lg bg-white shadow-sm text-xs"
                   value={templateFormData.name}
                   onChange={(e) => setTemplateFormData({ ...templateFormData, name: e.target.value })}
                   placeholder="e.g., Nagar Parishad Standard Quotation Layout"
@@ -3241,17 +3294,14 @@ export default function SettingsPage() {
                 )}
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 <div className="space-y-1.5">
                   <Label htmlFor="tplDocType" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
                     Document Type
                   </Label>
-                  <select
-                    id="tplDocType"
-                    className="w-full focus-visible:ring-blue-500 border border-slate-200 h-9 rounded-lg bg-white px-3 shadow-sm text-sm"
+                  <CustomDropdown
                     value={templateFormData.docType}
-                    onChange={(e) => {
-                      const newDocType = e.target.value as any;
+                    onChange={(newDocType) => {
                       const isTargetBill = newDocType === 'firm_bill';
                       const isPrevBill = templateFormData.docType === 'firm_bill';
                       
@@ -3267,86 +3317,88 @@ export default function SettingsPage() {
 
                       setTemplateFormData({
                         ...templateFormData,
-                        docType: newDocType,
+                        docType: newDocType as any,
                         content: newContent,
                         textColor: newColor,
                       });
                     }}
-                  >
-                    <option value="quotation_main">Quotation - Main</option>
-                    <option value="quotation_alt_1">Quotation - Alt A</option>
-                    <option value="quotation_alt_2">Quotation - Alt B</option>
-                    <option value="firm_bill">Bill / Invoice</option>
-                  </select>
+                    options={[
+                      { value: 'quotation_main', label: 'Quotation - Main' },
+                      { value: 'quotation_alt_1', label: 'Quotation - Alt A' },
+                      { value: 'quotation_alt_2', label: 'Quotation - Alt B' },
+                      { value: 'firm_bill', label: 'Bill / Invoice' },
+                    ]}
+                    buttonClassName="h-9 text-xs"
+                  />
                 </div>
 
                 <div className="space-y-1.5">
                   <Label htmlFor="tplLanguage" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
                     Language
                   </Label>
-                  <select
-                    id="tplLanguage"
-                    className="w-full focus-visible:ring-blue-500 border border-slate-200 h-9 rounded-lg bg-white px-3 shadow-sm text-sm"
+                  <CustomDropdown
                     value={templateFormData.language}
-                    onChange={(e) => {
-                      const newLang = e.target.value as any;
+                    onChange={(newLang) => {
                       const prevLang = templateFormData.language;
                       const isBill = templateFormData.docType === 'firm_bill';
                       const prevDefault = isBill ? getSampleBillTemplate() : getSampleQuotationTemplate(prevLang);
                       const shouldAutoSwitch = !templateFormData.content?.trim() || templateFormData.content.trim() === prevDefault.trim();
                       
-                      // Auto-switch default font based on language choice too
                       const targetFont = newLang === 'hindi' ? 'Noto Sans Devanagari' : 'Inter';
                       const targetColor = newLang === 'hindi' ? '#1e293b' : '#000000';
-                      
+
+                      let newContent = templateFormData.content;
+                      if (shouldAutoSwitch) {
+                        newContent = isBill ? getSampleBillTemplate() : getSampleQuotationTemplate(newLang as any);
+                      }
+
                       setTemplateFormData({
                         ...templateFormData,
-                        language: newLang,
-                        content: shouldAutoSwitch ? (isBill ? getSampleBillTemplate() : getSampleQuotationTemplate(newLang)) : templateFormData.content,
-                        fontFamily: targetFont,
+                        language: newLang as any,
+                        fontFamily: shouldAutoSwitch ? targetFont : templateFormData.fontFamily,
                         textColor: shouldAutoSwitch ? targetColor : templateFormData.textColor,
+                        content: newContent,
                       });
                     }}
-                  >
-                    <option value="hindi">Hindi</option>
-                    <option value="english">English</option>
-                  </select>
+                    options={[
+                      { value: 'hindi', label: 'Hindi' },
+                      { value: 'english', label: 'English' },
+                    ]}
+                    buttonClassName="h-9 text-xs"
+                  />
                 </div>
 
                 <div className="space-y-1.5">
                   <Label htmlFor="tplFontFamily" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
                     Font Family
                   </Label>
-                  <select
-                    id="tplFontFamily"
-                    className="w-full focus-visible:ring-blue-500 border border-slate-200 h-9 rounded-lg bg-white px-3 shadow-sm text-sm"
-                    value={templateFormData.fontFamily}
-                    onChange={(e) => setTemplateFormData({ ...templateFormData, fontFamily: e.target.value })}
-                  >
-                    <optgroup label="Hindi Professional Fonts">
-                      <option value="Noto Sans Devanagari">Noto Sans Devanagari</option>
-                      <option value="Poppins">Poppins</option>
-                      <option value="Montserrat">Montserrat</option>
-                      <option value="Kruti Dev 010">Kruti Dev 010</option>
-                    </optgroup>
-                    <optgroup label="English Professional Fonts">
-                      <option value="Inter">Inter</option>
-                      <option value="Arial">Arial</option>
-                      <option value="Georgia">Georgia</option>
-                      <option value="Times New Roman">Times New Roman</option>
-                    </optgroup>
-                    <optgroup label="Handwriting Style">
-                      <option value="Kalam">Kalam (Hindi + English handwriting)</option>
-                      <option value="Caveat">Caveat (English handwriting)</option>
-                    </optgroup>
-                  </select>
+                  <CustomDropdown
+                    value={templateFormData.fontFamily || (templateFormData.language === 'hindi' ? 'Noto Sans Devanagari' : 'Inter')}
+                    onChange={(newFont) => {
+                      setTemplateFormData({
+                        ...templateFormData,
+                        fontFamily: newFont,
+                      });
+                    }}
+                    options={[
+                      { value: 'Noto Sans Devanagari', label: 'Noto Sans Devanagari' },
+                      { value: 'Rozha One', label: 'Rozha One' },
+                      { value: 'Yatra One', label: 'Yatra One' },
+                      { value: 'Tiro Devanagari Hindi', label: 'Tiro Devanagari' },
+                      { value: 'Kalam', label: 'Kalam' },
+                      { value: 'Inter', label: 'Inter' },
+                      { value: 'Roboto', label: 'Roboto' },
+                      { value: 'Open Sans', label: 'Open Sans' },
+                    ]}
+                    buttonClassName="h-9 text-xs"
+                  />
                 </div>
 
                 <div className="space-y-1.5">
                   <Label htmlFor="tplTextColor" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                    Text Color
+                    Text Theme Color
                   </Label>
-                  <div className="flex gap-2 items-center">
+                  <div className="flex items-center gap-2">
                     <input
                       id="tplTextColor"
                       type="color"
@@ -3432,7 +3484,7 @@ export default function SettingsPage() {
                 </Label>
                 <Textarea
                   id="tplContent"
-                  className="font-mono text-xs border-slate-200 rounded-lg bg-slate-900 text-slate-100 shadow-sm min-h-[260px] focus-visible:ring-blue-500 focus-visible:border-slate-800"
+                  className="font-mono text-xs border-slate-200 rounded-lg bg-slate-900 text-slate-100 shadow-sm min-h-[220px] focus-visible:ring-blue-500 focus-visible:border-slate-800"
                   value={templateFormData.content}
                   onChange={(e) => {
                     const newContent = e.target.value;

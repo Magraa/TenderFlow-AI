@@ -1185,5 +1185,14 @@ export class FirestoreDB {
       .sort((a, b) => new Date(b.runAt || 0).getTime() - new Date(a.runAt || 0).getTime())
       .slice(0, limitCount);
   }
+
+  async clearGeMScanLogs(): Promise<void> {
+    const list = (await this.listEntities('gemScanLogs' as any)) as GeMScanLog[];
+    for (const item of list || []) {
+      if (item.id) {
+        await deleteDoc(this.docRef('gemScanLogs' as any, item.id)).catch(() => {});
+      }
+    }
+  }
 }
 

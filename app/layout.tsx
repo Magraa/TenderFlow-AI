@@ -3,14 +3,14 @@ import { Providers } from "./providers";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Tender Automation Panel",
-  description: "Professional government tender generation and management system",
+  title: "TenderFlow AI",
+  description: "AI-powered government tender and bill automation system",
   manifest: "/manifest.json",
-  applicationName: "Tender Automation Panel",
+  applicationName: "TenderFlow AI",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Tender Panel",
+    title: "TenderFlow AI",
   },
   formatDetection: {
     telephone: false,

@@ -10,6 +10,7 @@ import {
   TenderDocument,
   CustomTemplate,
   Bill,
+  GeMStarredTender,
 } from '@/types';
 import { defaultVersioningSettings } from '@/services/versioningSettings';
 
@@ -29,6 +30,8 @@ export interface Database {
   documentPhraseMappings: DocumentPhraseMapping[];
   customTemplates: CustomTemplate[];
   bills: Bill[];
+  starredTenders: GeMStarredTender[];
+  gemTenderAnalyses: { id: string; bidNumber: string; gemBidId?: number; aiAnalysis: any; updatedAt: string }[];
 }
 
 
@@ -132,6 +135,8 @@ export const defaultDatabase: Database = {
   documentPhraseMappings: [],
   customTemplates: [],
   bills: [],
+  starredTenders: [],
+  gemTenderAnalyses: [],
 };
 
 

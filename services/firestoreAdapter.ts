@@ -30,6 +30,9 @@ import {
   TenderItem,
   CustomTemplate,
   Bill,
+  GeMStarredTender,
+  GeMTender,
+  GeMAIAnalysis,
 } from '@/types';
 
 import { getFirebaseFirestore } from '@/services/firebase/firebaseClient';
@@ -69,6 +72,7 @@ type Collections = {
   documentPhraseMappings: DocumentPhraseMapping;
   customTemplates: CustomTemplate;
   bills: Bill;
+  starredTenders: GeMStarredTender;
 };
 
 
@@ -903,5 +907,197 @@ export class FirestoreDB {
 
   async deleteBill(id: string): Promise<boolean> {
     return this.deleteEntity('bills', id);
+  }
+
+  // ─── Starred GeM Tenders ───────────────────────────────────────────────────
+
+  async starGeMTender(
+    tender: GeMTender,
+    aiAnalysis?: GeMAIAnalysis,
+    notes?: string
+  ): Promise<GeMStarredTender> {
+    const numericBidId = typeof tender.id === 'number'
+      ? tender.id
+      : Number(String(tender.id).replace('gem_', '')) || ('gemBidId' in tender ? Number((tender as any).gemBidId) : 0);
+
+    const docId = `gem_${numericBidId}`;
+    const existing = await this.getEntity('starredTenders', docId);
+
+    const now = nowIso();
+    const effectiveAnalysis = aiAnalysis || existing?.aiAnalysis;
+    const townName = effectiveAnalysis?.townName || existing?.townName || ('townName' in tender ? (tender as any).townName : '');
+    const districtName = effectiveAnalysis?.districtName || existing?.districtName || ('districtName' in tender ? (tender as any).districtName : '');
+    const placeDisplay = effectiveAnalysis?.placeDisplay || existing?.placeDisplay || ('placeDisplay' in tender ? (tender as any).placeDisplay : '');
+
+    const data: GeMStarredTender = {
+      id: docId,
+      gemBidId: numericBidId,
+      bidNumber: tender.bidNumber,
+      categoryName: tender.categoryName || '',
+      items: tender.items || [],
+      totalQuantity: tender.totalQuantity || 1,
+      startDate: tender.startDate || '',
+      endDate: tender.endDate || '',
+      ministryName: effectiveAnalysis?.ministryName || tender.ministryName || '',
+      departmentName: effectiveAnalysis?.departmentName || tender.departmentName || '',
+      townName: townName || undefined,
+      districtName: districtName || undefined,
+      placeDisplay: placeDisplay || undefined,
+      buyerStatus: tender.buyerStatus || '',
+      bidType: tender.bidType || 1,
+      isRA: Boolean(tender.isRA),
+      isBunch: Boolean(tender.isBunch),
+      isHighValue: Boolean(tender.isHighValue),
+      isCustomItem: Boolean(tender.isCustomItem),
+      isSinglePacket: Boolean(tender.isSinglePacket),
+      isGlobalTendering: Boolean(tender.isGlobalTendering),
+      pdfUrl: tender.pdfUrl,
+      corrigendumUrl: tender.corrigendumUrl || '',
+      starredAt: existing?.starredAt || now,
+      aiAnalysis: effectiveAnalysis,
+      aiAnalysisStatus: effectiveAnalysis ? 'completed' : existing?.aiAnalysisStatus || 'idle',
+      notes: notes !== undefined ? notes : existing?.notes,
+      createdAt: existing?.createdAt || now,
+      updatedAt: now,
+    };
+
+    const cleanData = removeUndefinedValues(data);
+    await setDoc(this.docRef('starredTenders', docId), {
+      ...cleanData,
+      _serverUpdatedAt: serverTimestamp(),
+      _serverCreatedAt: serverTimestamp(),
+    });
+
+    return data;
+  }
+
+  async unstarGeMTender(gemBidIdOrBidNumber: number | string): Promise<boolean> {
+    const inputStr = String(gemBidIdOrBidNumber).trim();
+    const digitsOnly = inputStr.replace(/[^0-9]/g, '');
+    const canonicalDocId = digitsOnly ? `gem_${digitsOnly}` : inputStr.startsWith('gem_') ? inputStr : `gem_${inputStr}`;
+
+    // 1. Try direct delete by canonical docId
+    let deleted = await this.deleteEntity('starredTenders', canonicalDocId).catch(() => false);
+
+    // 2. Try direct delete by raw input string
+    if (!deleted && inputStr !== canonicalDocId) {
+      deleted = await this.deleteEntity('starredTenders', inputStr).catch(() => false);
+    }
+
+    // 3. Resilient fallback query across all items by bidNumber or numeric ID
+    if (!deleted) {
+      try {
+        const all = await this.listEntities('starredTenders');
+        const match = all.find(
+          (t) =>
+            t.id === inputStr ||
+            t.id === canonicalDocId ||
+            (t.bidNumber && t.bidNumber.trim().toUpperCase() === inputStr.toUpperCase()) ||
+            String(t.gemBidId) === inputStr ||
+            (digitsOnly && String(t.gemBidId) === digitsOnly)
+        );
+        if (match) {
+          deleted = await this.deleteEntity('starredTenders', match.id);
+        }
+      } catch (err) {
+        console.error('Error during fallback unstar:', err);
+      }
+    }
+
+    return deleted;
+  }
+
+  async getStarredGeMTender(gemBidIdOrBidNumber: number | string): Promise<GeMStarredTender | undefined> {
+    const inputStr = String(gemBidIdOrBidNumber).trim();
+    const digitsOnly = inputStr.replace(/[^0-9]/g, '');
+    const canonicalDocId = digitsOnly ? `gem_${digitsOnly}` : inputStr.startsWith('gem_') ? inputStr : `gem_${inputStr}`;
+
+    const direct = await this.getEntity('starredTenders', canonicalDocId);
+    if (direct) return direct;
+
+    const all = await this.listEntities('starredTenders');
+    return all.find(
+      (t) =>
+        t.id === inputStr ||
+        t.id === canonicalDocId ||
+        (t.bidNumber && t.bidNumber.trim().toUpperCase() === inputStr.toUpperCase()) ||
+        String(t.gemBidId) === inputStr ||
+        (digitsOnly && String(t.gemBidId) === digitsOnly)
+    );
+  }
+
+  async listStarredGeMTenders(): Promise<GeMStarredTender[]> {
+    return this.listEntities('starredTenders');
+  }
+
+  async updateStarredGeMTenderAnalysis(
+    gemBidId: number | string,
+    aiAnalysis: GeMAIAnalysis,
+    status: 'completed' | 'failed' = 'completed',
+    error?: string
+  ): Promise<GeMStarredTender | undefined> {
+    const docId = String(gemBidId).startsWith('gem_') ? String(gemBidId) : `gem_${gemBidId}`;
+    return this.updateEntity('starredTenders', docId, {
+      aiAnalysis,
+      aiAnalysisStatus: status,
+      aiAnalysisError: error || '',
+    } as any);
+  }
+
+  // ─── Global Permanent AI Analysis Repository ─────────────────────────
+
+  async saveGeMAIAnalysis(
+    bidNumber: string,
+    gemBidId: number | string | undefined,
+    aiAnalysis: GeMAIAnalysis
+  ): Promise<void> {
+    const cleanBid = (bidNumber || String(gemBidId || '')).trim().replace(/[^a-zA-Z0-9]/g, '_');
+    const docId = `analysis_${cleanBid}`;
+    const numId = Number(String(gemBidId || '').replace(/[^0-9]/g, '')) || undefined;
+
+    const data = removeUndefinedValues({
+      id: docId,
+      bidNumber: bidNumber || '',
+      gemBidId: numId,
+      aiAnalysis,
+      updatedAt: nowIso(),
+    });
+
+    await setDoc(this.docRef('gemTenderAnalyses' as any, docId), {
+      ...data,
+      _serverUpdatedAt: serverTimestamp(),
+    });
+  }
+
+  async getGeMAIAnalysis(bidNumberOrId: string | number): Promise<GeMAIAnalysis | undefined> {
+    const inputStr = String(bidNumberOrId).trim();
+    const cleanBid = inputStr.replace(/[^a-zA-Z0-9]/g, '_');
+    const docId = `analysis_${cleanBid}`;
+
+    const direct = await this.getEntity('gemTenderAnalyses' as any, docId);
+    if (direct?.aiAnalysis) return direct.aiAnalysis;
+
+    const all = await this.listEntities('gemTenderAnalyses' as any);
+    const match = (all as any[]).find(
+      (r) =>
+        r.id === docId ||
+        r.id === inputStr ||
+        (r.bidNumber && r.bidNumber.trim().toUpperCase() === inputStr.toUpperCase()) ||
+        String(r.gemBidId) === inputStr
+    );
+    return match?.aiAnalysis;
+  }
+
+  async listGeMAIAnalyses(): Promise<Record<string, GeMAIAnalysis>> {
+    const all = await this.listEntities('gemTenderAnalyses' as any);
+    const result: Record<string, GeMAIAnalysis> = {};
+    (all as any[]).forEach((item) => {
+      if (item?.aiAnalysis) {
+        if (item.bidNumber) result[item.bidNumber.trim().toUpperCase()] = item.aiAnalysis;
+        if (item.gemBidId) result[String(item.gemBidId)] = item.aiAnalysis;
+        if (item.id) result[item.id] = item.aiAnalysis;
+      }
+    });
+    return result;
   }
 }

@@ -115,7 +115,15 @@ type ExposedKeys =
   | 'getBill'
   | 'listBills'
   | 'updateBill'
-  | 'deleteBill';
+  | 'deleteBill'
+  | 'starGeMTender'
+  | 'unstarGeMTender'
+  | 'getStarredGeMTender'
+  | 'listStarredGeMTenders'
+  | 'updateStarredGeMTenderAnalysis'
+  | 'saveGeMAIAnalysis'
+  | 'getGeMAIAnalysis'
+  | 'listGeMAIAnalyses';
 
 
 type DbAdapter = {
@@ -237,5 +245,17 @@ export const db: DbAdapter = {
   listBills: async (...args) => (isCollectionSynced('bills') ? (await getSyncedAdapters()).syncedBillsAdapter.list(...args) : (await getAdapter()).listBills(...args)),
   updateBill: async (...args) => (isCollectionSynced('bills') ? (await getSyncedAdapters()).syncedBillsAdapter.update(...args) : (await getAdapter()).updateBill(...args)),
   deleteBill: async (...args) => (isCollectionSynced('bills') ? (await getSyncedAdapters()).syncedBillsAdapter.delete(...args) : (await getAdapter()).deleteBill(...args)),
+
+  // Starred GeM Tenders
+  starGeMTender: async (...args) => (await getAdapter()).starGeMTender(...args),
+  unstarGeMTender: async (...args) => (await getAdapter()).unstarGeMTender(...args),
+  getStarredGeMTender: async (...args) => (await getAdapter()).getStarredGeMTender(...args),
+  listStarredGeMTenders: async (...args) => (await getAdapter()).listStarredGeMTenders(...args),
+  updateStarredGeMTenderAnalysis: async (...args) => (await getAdapter()).updateStarredGeMTenderAnalysis(...args),
+
+  // Global AI Analysis Repository
+  saveGeMAIAnalysis: async (...args: any[]) => (await getAdapter()).saveGeMAIAnalysis(...(args as [any, any, any])),
+  getGeMAIAnalysis: async (...args: any[]) => (await getAdapter()).getGeMAIAnalysis(...(args as [any])),
+  listGeMAIAnalyses: async () => (await getAdapter()).listGeMAIAnalyses(),
 };
 

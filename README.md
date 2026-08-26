@@ -16,13 +16,15 @@
 
 <p align="center">
   <b>Transform 4 hours of tedious government tender paperwork into a 60-second automated workflow.</b><br />
-  Live GeM Tender Explorer & 1-Click Import • Multi-Document Generation • Firm Letterhead Engine • Bilingual Hindi-English Transliteration • AI Procurement Drafting • Print-Ready A4 PDF Engine • 100% Offline-First (IndexedDB) + Cloud Sync (Firestore)
+  Live GeM Tender Explorer • Deep AI Bid Analysis • Real-Time AI Quota Tracking • One-Click Multi-Document Generation • Firm Letterhead Engine • Bilingual Hindi-English Transliteration • Print-Ready A4 PDF Engine • 100% Offline-First (IndexedDB) + Cloud Sync (Firestore)
 </p>
 
 <p align="center">
   <a href="#-key-features">Key Features</a> •
   <a href="#-system-workflow">System Workflow</a> •
   <a href="#-gem-tender-explorer">GeM Explorer</a> •
+  <a href="#-ai-tender-deep-analysis">AI Analysis</a> •
+  <a href="#-real-time-ai-quota-hud">AI Quota HUD</a> •
   <a href="#-document-pipeline">Document Pipeline</a> •
   <a href="#-architecture--tech-stack">Architecture</a> •
   <a href="#-bilingual--ai-intelligence">AI Engine</a> •
@@ -40,7 +42,7 @@
 
 **TenderFlow AI** is an enterprise-grade procurement automation platform engineered specifically for government contractors, vendors, and administrative departments.
 
-Whether importing live published bids from India's official **GeM (Government e-Marketplace)** portal or entering custom tender specifications, TenderFlow instantly orchestrates, drafts, and renders an entire synchronized package of official documents — complete with firm-specific letterheads, custom legal conditions, localized Hindi transliterations, dynamic GST calculations, and pixel-perfect A4 print-ready layouts.
+Whether importing live published bids from India's official **GeM (Government e-Marketplace)** portal or entering custom tender specifications, TenderFlow provides **instant AI deep-analysis of complex tender clauses (ATC)**, tracks live **AI API quotas in real-time**, and orchestrates, drafts, and renders an entire synchronized package of official documents — complete with firm-specific letterheads, custom legal conditions, localized Hindi transliterations, dynamic GST calculations, and pixel-perfect A4 print-ready layouts.
 
 ---
 
@@ -53,8 +55,12 @@ flowchart TD
         M["<b>Manual / Custom Entry</b><br/>Tender ID • Budget • Quantities • Rates • GST %"]
     end
 
+    subgraph ANALYSIS ["🧠 AI Deep Analysis & Intelligence"]
+        A["<b>Tender AI Deep-Parser</b><br/>Buyer Terms (ATC) • Technical Specs • EMD / EPBG • Mandatory Docs"]
+    end
+
     subgraph ENGINE ["⚡ TenderFlow Automation Core"]
-        O["<b>Orchestration Engine</b><br/>gemScraperService • AI Prompt Stacks • Purpose Dictionary • A4 Layout"]
+        O["<b>Orchestration Engine</b><br/>AI Prompt Stacks • Purpose Dictionary • A4 Layout System • Quota Tracker"]
     end
 
     subgraph OUTPUTS ["📑 Synchronized Document Generation"]
@@ -69,7 +75,9 @@ flowchart TD
         P["<b>A4 Print-Ready PDF with Margins & Signatures</b>"]
     end
 
-    G -->|1-Click Auto-Import| O
+    G -->|1-Click Analyze| A
+    A -->|1-Click Auto-Import| O
+    G -->|Direct Import| O
     M --> O
     O --> D1
     O --> D2
@@ -84,6 +92,24 @@ flowchart TD
 ## 🚀 Key Features
 
 <table>
+  <tr>
+    <td width="50%" valign="top">
+      <h3>🧠 AI Tender Deep-Analysis Modal</h3>
+      <ul>
+        <li>Instantly parses and decodes complex government tenders into structured, digestible intelligence.</li>
+        <li><b>Extracts Buyer Terms (ATC):</b> Searchable Buyer-Added Bid Specific Terms & Conditions.</li>
+        <li><b>Key Insights:</b> Exact EMD amounts, EPBG, technical item specs, turnover/experience criteria, and mandatory checklist documents.</li>
+      </ul>
+    </td>
+    <td width="50%" valign="top">
+      <h3>📊 Real-Time AI Quota HUD & Tracker</h3>
+      <ul>
+        <li><b>Floating Live HUD:</b> Visual pill showing real-time daily requests remaining & tokens used.</li>
+        <li><b>UTC Reset Countdown:</b> Exact countdown timer to midnight UTC quota resets.</li>
+        <li><b>Usage Logs & Alerts:</b> Feature-by-feature breakdown (Drafts, Transliteration, Analysis) with automated threshold warning states.</li>
+      </ul>
+    </td>
+  </tr>
   <tr>
     <td width="50%" valign="top">
       <h3>🌐 GeM Live Tender Explorer & Auto-Import</h3>
@@ -152,6 +178,45 @@ flowchart TD
 
 ---
 
+## 🧠 AI Tender Deep Analysis
+
+Transform dense 50-page government tender documents into actionable intelligence within seconds:
+
+```mermaid
+flowchart LR
+    DOC["📑 <b>Raw Tender / GeM Bid</b><br/>PDF & Portal Data"] --> LLM["🤖 <b>Deep Analysis Engine</b><br/>Multi-Prompt Intelligence"]
+    LLM --> T1["📋 <b>Buyer Added Terms (ATC)</b><br/>Extracted Legal Clauses"]
+    LLM --> T2["⚙️ <b>Item Specifications</b><br/>Quantities & Detailed Specs"]
+    LLM --> T3["💰 <b>Financial Terms</b><br/>EMD, EPBG & Estimated Values"]
+    LLM --> T4["📜 <b>Compliance Checklist</b><br/>Turnover, Experience & Mandatory Docs"]
+    
+    T1 & T2 & T3 & T4 --> IMP["📥 <b>1-Click Import to Draft</b>"]
+```
+
+* **Interactive ATC Clause Search**: Filter and search through complex buyer-added conditions in real time.
+* **Instant Risk & Requirement Detection**: Highlights critical EMD figures, submission timelines, and eligibility criteria before bidding.
+* **Direct Import to Document Generator**: One click transfers the analyzed item list and buyer requirements directly into the tender drafting suite.
+
+---
+
+## 📊 Real-Time AI Quota HUD & Usage Tracking
+
+Never hit unexpected rate limits during urgent bid submissions:
+
+```mermaid
+flowchart LR
+    CALL["🤖 <b>AI API Invocation</b><br/>Drafting • Transliteration • Analysis"] --> TRACK["⚙️ <b>aiUsageService</b><br/>Token & Request Counter"]
+    TRACK --> PILL["🟢 <b>Floating Quota HUD</b><br/>Live remaining requests • Token count • UTC Reset timer"]
+    TRACK --> DASH["📊 <b>Settings Dashboard</b><br/>Feature-by-feature breakdown • Audit logs • Warning thresholds"]
+```
+
+* **Live Floating Pill**: Sits unobtrusively on the screen with real-time request counts and color-coded health indicators (`Green` → `Amber` at 80% → `Red` at 95%).
+* **Pre-Configured Provider Quotas**: Native tracking for **Google Gemini** (1,500 req/day), **Groq** (14,400 req/day), **OpenAI**, and **NVIDIA NIM**.
+* **Feature Analytics**: Detailed usage logs broken down by feature (Document Drafting, Transliteration, GeM Analysis, Phrase Packs, Location Search).
+* **Live Health Diagnostics**: Dedicated `/api/ai/health` endpoint for instant provider status checks.
+
+---
+
 ## 🌐 GeM Open Tender Explorer
 
 Search, filter, and import active government bids in real time without leaving TenderFlow:
@@ -203,26 +268,30 @@ graph TB
         P1["Next.js 15 App Router"]
         P2["Tailwind CSS + Lucide Icons"]
         P3["GeM Open Tenders Explorer (/tenders/open)"]
-        P4["TipTap WYSIWYG Rich Editor"]
-        P5["QuickCustomizer™ Floating Drawer"]
-        P6["Live A4 Canvas & Layout Engine"]
+        P4["TenderAIAnalysisModal (Deep ATC Parser)"]
+        P5["AIQuotaPill (Real-Time Floating HUD)"]
+        P6["TipTap WYSIWYG Rich Editor"]
+        P7["QuickCustomizer™ Floating Drawer"]
+        P8["Live A4 Canvas & Layout Engine"]
     end
 
     subgraph SERVICES ["⚙️ BUSINESS SERVICE LAYER"]
         S1["<b>gemScraperService</b><br/>GeM Session, CSRF & Solr Client"]
-        S2["<b>documentService</b><br/>Generation & Version Snapshots"]
-        S3["<b>aiDraftService</b><br/>Prompt Stacks & LLM Orchestration"]
-        S4["<b>layoutEngine</b><br/>A4 Margins, Bleeds & Letterhead"]
-        S5["<b>mappingService</b><br/>4-Variant Dictionaries & Transliteration"]
-        S6["<b>governmentTemplates</b><br/>Standardized Legal Layouts"]
+        S2["<b>aiUsageService</b><br/>Daily Quota, Token Tracking & Alerts"]
+        S3["<b>documentService</b><br/>Generation & Version Snapshots"]
+        S4["<b>aiDraftService</b><br/>Prompt Stacks & LLM Orchestration"]
+        S5["<b>layoutEngine</b><br/>A4 Margins, Bleeds & Letterhead"]
+        S6["<b>mappingService</b><br/>4-Variant Dictionaries & Transliteration"]
+        S7["<b>governmentTemplates</b><br/>Standardized Legal Layouts"]
     end
 
     subgraph AI_LAYER ["🤖 MULTI-LLM AI ENGINE"]
-        A1["Google Gemini 1.5"]
+        A1["Google Gemini 1.5/2.0"]
         A2["Groq Llama 3"]
         A3["OpenAI GPT-4o"]
         A4["NVIDIA NIM"]
-        A5["Micro-Regenerator API"]
+        A5["Deep Analysis API (/api/gem/analyze)"]
+        A6["Micro-Regenerator & Health Diagnostics"]
     end
 
     subgraph STORAGE ["🗄️ DUAL-ENGINE STORAGE LAYER"]

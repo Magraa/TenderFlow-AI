@@ -68,3 +68,129 @@ export interface GeMDropdownOption {
   value: string;
   label: string;
 }
+
+export interface GeMItemDetail {
+  name: string;
+  category?: string;
+  quantity: number;
+  unit?: string;
+  specifications?: Record<string, string> | string;
+  consignees?: Array<{
+    name?: string;
+    address?: string;
+    city?: string;
+    state?: string;
+    pincode?: string;
+    quantity?: number;
+    deliveryDays?: number;
+  }>;
+  deliveryDays?: number;
+}
+
+export interface GeMEMDDetail {
+  required: boolean;
+  amount: number;
+  currency?: string;
+  exemptionAllowed?: boolean;
+  exemptionCriteria?: string;
+  pbgPercentage?: number;
+  pbgAmount?: number;
+  advisory?: string;
+}
+
+export interface GeMEstimatedValue {
+  amount?: number;
+  currency?: string;
+  isEstimatedProvided?: boolean;
+  rawText?: string;
+}
+
+export interface GeMEligibilityCriteria {
+  turnover?: string;
+  experienceYears?: number;
+  pastPerformancePercent?: number;
+  certificatesRequired?: string[];
+  oemAuthorizationRequired?: boolean;
+  msePreference?: string;
+  miiPreference?: string;
+}
+
+export interface GeMLinkedDoc {
+  title: string;
+  url: string;
+  docType?: string;
+  extractedSummary?: string;
+}
+
+export interface GeMAIAnalysis {
+  ministryName?: string;
+  departmentName?: string;
+  organisationName?: string;
+  officeName?: string;
+  townName?: string;
+  districtName?: string;
+  stateName?: string;
+  placeDisplay?: string; // e.g. "Porsa (Morena)"
+  buyerName?: string;
+  buyerAddress?: string;
+  bidNumber?: string;
+  itemTitle?: string;
+  totalQuantity?: number;
+  items: GeMItemDetail[];
+  emdAmount?: GeMEMDDetail;
+  estimatedBidValue?: GeMEstimatedValue;
+  buyerAddedTerms?: string[];
+  eligibilityCriteria?: GeMEligibilityCriteria;
+  importantDates?: {
+    publishDate?: string;
+    bidEndDate?: string;
+    bidOpeningDate?: string;
+    raDate?: string;
+  };
+  linkedDocuments?: GeMLinkedDoc[];
+  summaryHindi?: string;
+  summaryEnglish?: string;
+  analyzedAt: string;
+  modelUsed?: string;
+}
+
+export interface GeMStarredTender {
+  id: string; // "gem_starred_" + id/bidNumber
+  gemBidId: number;
+  bidNumber: string;
+  categoryName: string;
+  items: string[];
+  totalQuantity: number;
+  startDate: string;
+  endDate: string;
+  ministryName?: string;
+  departmentName?: string;
+  townName?: string;
+  districtName?: string;
+  placeDisplay?: string;
+  buyerStatus?: string;
+  bidType: number;
+  isRA: boolean;
+  isBunch: boolean;
+  isHighValue: boolean;
+  isCustomItem: boolean;
+  isSinglePacket: boolean;
+  isGlobalTendering: boolean;
+  pdfUrl: string;
+  corrigendumUrl: string;
+  starredAt: string;
+  aiAnalysis?: GeMAIAnalysis;
+  aiAnalysisStatus?: 'idle' | 'analyzing' | 'completed' | 'failed';
+  aiAnalysisError?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GeMTenderAnalysisRecord {
+  id: string; // bidNumber or docId
+  bidNumber: string;
+  gemBidId?: number;
+  aiAnalysis: GeMAIAnalysis;
+  updatedAt: string;
+}

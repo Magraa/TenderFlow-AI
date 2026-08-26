@@ -307,6 +307,64 @@ export interface Settings extends BaseEntity {
   enableLocationAIAutofill: boolean;
   versioningSettings: VersioningSettings;
   passwordAuth?: PasswordAuthSettings;
+  aiSettings?: AISettings;
+}
+
+export type AIUsageFeature =
+  | 'draft'
+  | 'transliterate'
+  | 'gem_analyze'
+  | 'alternates'
+  | 'phrase_pack'
+  | 'location'
+  | 'test'
+  | 'other';
+
+export interface AISettings {
+  showQuotaPill: boolean;
+  pillPosition?: 'header' | 'bottom-right' | 'bottom-left';
+  warningThresholdPercent?: number; // e.g. 20 (warn when < 20% quota left)
+  customDailyLimit?: number;
+  autoFallbackToMock?: boolean;
+}
+
+export interface AIUsageLog {
+  id: string;
+  timestamp: string;
+  feature: AIUsageFeature;
+  provider: string;
+  model: string;
+  tokensUsed?: number;
+  success: boolean;
+  durationMs?: number;
+  error?: string;
+}
+
+export interface AIDailyUsage {
+  date: string; // YYYY-MM-DD (UTC)
+  requestsCount: number;
+  tokensCount: number;
+  byFeature: Record<AIUsageFeature, number>;
+  lastRequestAt?: string;
+  logs?: AIUsageLog[];
+}
+
+export interface AIQuotaInfo {
+  provider: string;
+  model: string;
+  dailyLimit: number;
+  requestsUsedToday: number;
+  requestsRemaining: number;
+  percentRemaining: number;
+  tokensUsedToday: number;
+  requestsPerMinuteLimit: number;
+  tokensPerMinuteLimit: number;
+  recentRpm: number;
+  timeUntilResetMs: number;
+  resetTimeFormatted: string;
+  status: 'healthy' | 'warning' | 'exhausted' | 'unconfigured';
+  byFeature: Record<AIUsageFeature, number>;
+  lastRequestAt?: string;
 }
 
 export interface VersioningSettings {
@@ -341,3 +399,5 @@ export interface CustomTemplate extends BaseEntity {
   fontFamily?: string;
   textColor?: string;
 }
+
+export * from './gem';

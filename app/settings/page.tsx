@@ -29,6 +29,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AddPlaceDialog } from '@/components/forms/Location/AddPlaceDialog';
 import { PdfDownloadFolderCard } from '@/components/settings/pdfDownloadFolderCard';
+import { AIQuotaDashboardCard } from '@/components/settings/AIQuotaDashboardCard';
+import { AISettings } from '@/types';
 import { Sparkles, FileText, Languages, Package, ChevronDown, ChevronUp, Search, X, Lock } from 'lucide-react';
 
 import { Textarea } from '@/components/ui/textarea';
@@ -463,11 +465,29 @@ export default function SettingsPage() {
       tenderNumberPrefix: settings.tenderNumberPrefix,
       enableLocationAIAutofill: settings.enableLocationAIAutofill,
       versioningSettings: settings.versioningSettings,
+      aiSettings: settings.aiSettings,
     });
     setSettings(updated);
     setSaving(false);
     setSuccess('Settings saved.');
     setTimeout(() => setSuccess(''), 2500);
+  };
+
+  const handleUpdateAISettings = async (newAiSettings: AISettings) => {
+    if (!settings) return;
+    setSaving(true);
+    try {
+      const updated = await dataService.settings.update({
+        aiSettings: newAiSettings,
+      });
+      setSettings(updated);
+      setSuccess('AI preferences saved.');
+      setTimeout(() => setSuccess(''), 2500);
+    } catch (err: any) {
+      alert('Failed to save AI preferences: ' + (err?.message || err));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handlePasswordChange = async () => {
@@ -1671,6 +1691,12 @@ export default function SettingsPage() {
 
           <PdfDownloadFolderCard />
         </div>
+
+        <AIQuotaDashboardCard
+          settings={settings}
+          onUpdateSettings={handleUpdateAISettings}
+          saving={saving}
+        />
 
         <Card>
           <CardHeader>

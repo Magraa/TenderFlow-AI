@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { OpenAI } from 'openai';
 import { Groq } from 'groq-sdk';
+import { aiUsageService } from './aiUsageService';
 
 export type AIProvider = 'gemini' | 'openai' | 'groq' | 'nvidia' | 'mock';
 
@@ -160,18 +161,49 @@ async function nvidiaAIDraft(request: AIDraftRequest, apiKey: string, model: str
  * Generate AI draft using configured provider
  */
 export async function generateAIDraft(config: AIConfig, request: AIDraftRequest): Promise<AIDraftResponse> {
-  switch (config.provider) {
-    case 'gemini':
-      return geminiAIDraft(request, config.apiKey, config.model);
-    case 'openai':
-      return openAIDraft(request, config.apiKey, config.model);
-    case 'groq':
-      return groqAIDraft(request, config.apiKey, config.model);
-    case 'nvidia':
-      return nvidiaAIDraft(request, config.apiKey, config.model);
-    case 'mock':
-    default:
-      return mockAIDraft(request);
+  const startTime = Date.now();
+  let response: AIDraftResponse;
+
+  try {
+    switch (config.provider) {
+      case 'gemini':
+        response = await geminiAIDraft(request, config.apiKey, config.model);
+        break;
+      case 'openai':
+        response = await openAIDraft(request, config.apiKey, config.model);
+        break;
+      case 'groq':
+        response = await groqAIDraft(request, config.apiKey, config.model);
+        break;
+      case 'nvidia':
+        response = await nvidiaAIDraft(request, config.apiKey, config.model);
+        break;
+      case 'mock':
+      default:
+        response = await mockAIDraft(request);
+        break;
+    }
+
+    aiUsageService.recordUsage({
+      feature: 'draft',
+      provider: response.provider,
+      model: response.model,
+      tokensUsed: response.tokensUsed,
+      success: true,
+      durationMs: Date.now() - startTime,
+    });
+
+    return response;
+  } catch (err: any) {
+    aiUsageService.recordUsage({
+      feature: 'draft',
+      provider: config.provider,
+      model: config.model,
+      success: false,
+      durationMs: Date.now() - startTime,
+      error: err?.message || String(err),
+    });
+    throw err;
   }
 }
 
@@ -363,18 +395,48 @@ CRITICAL RULES:
  * Transliterate text using configured AI provider
  */
 export async function transliterate(config: AIConfig, request: AITransliterateRequest): Promise<AITransliterateResponse> {
-  switch (config.provider) {
-    case 'gemini':
-      return geminiTransliterate(request, config.apiKey, config.model);
-    case 'openai':
-      return openaiTransliterate(request, config.apiKey, config.model);
-    case 'groq':
-      return groqTransliterate(request, config.apiKey, config.model);
-    case 'nvidia':
-      // Use OpenAI-compatible API for NVIDIA
-      return openaiTransliterate(request, config.apiKey, config.model);
-    case 'mock':
-    default:
-      return mockTransliterate(request);
+  const startTime = Date.now();
+  let response: AITransliterateResponse;
+
+  try {
+    switch (config.provider) {
+      case 'gemini':
+        response = await geminiTransliterate(request, config.apiKey, config.model);
+        break;
+      case 'openai':
+        response = await openaiTransliterate(request, config.apiKey, config.model);
+        break;
+      case 'groq':
+        response = await groqTransliterate(request, config.apiKey, config.model);
+        break;
+      case 'nvidia':
+        // Use OpenAI-compatible API for NVIDIA
+        response = await openaiTransliterate(request, config.apiKey, config.model);
+        break;
+      case 'mock':
+      default:
+        response = await mockTransliterate(request);
+        break;
+    }
+
+    aiUsageService.recordUsage({
+      feature: 'transliterate',
+      provider: response.provider,
+      model: response.model,
+      success: true,
+      durationMs: Date.now() - startTime,
+    });
+
+    return response;
+  } catch (err: any) {
+    aiUsageService.recordUsage({
+      feature: 'transliterate',
+      provider: config.provider,
+      model: config.model,
+      success: false,
+      durationMs: Date.now() - startTime,
+      error: err?.message || String(err),
+    });
+    throw err;
   }
 }

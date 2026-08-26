@@ -39,6 +39,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { AIQuotaPill } from '@/components/ai/AIQuotaPill';
 
 function getTenderGrandTotal(tender: Tender): number {
   const subtotal = tender.items.reduce((sum, item) => sum + item.quantity * item.rate, 0);
@@ -542,6 +543,9 @@ export default function DashboardPage() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2.5">
+            {/* AI Free Limit & Quota Live Pill */}
+            <AIQuotaPill inline />
+
             {/* Open Tenders (GeM) Explorer Button */}
             <Link href="/tenders/open">
               <Button

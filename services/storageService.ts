@@ -17,6 +17,9 @@ import {
   TenderItem,
   CustomTemplate,
   Bill,
+  GeMStarredTender,
+  GeMTender,
+  GeMAIAnalysis,
 } from '@/types';
 import {
   Database,
@@ -522,6 +525,8 @@ function normalizeDatabase(raw: unknown): Database {
       : [],
     customTemplates,
     bills: Array.isArray(parsed.bills) ? parsed.bills.map((b: any) => normalizeBill(b)) : [],
+    starredTenders: Array.isArray(parsed.starredTenders) ? parsed.starredTenders : [],
+    gemTenderAnalyses: Array.isArray(parsed.gemTenderAnalyses) ? parsed.gemTenderAnalyses : [],
   };
 }
 
@@ -1294,6 +1299,205 @@ class LocalStorageDB {
     this.db.bills = arr;
     this.saveToStorage(this.db);
     return true;
+  }
+
+  // ─── Starred GeM Tenders ──────────────────────────────────────────
+
+  starGeMTender(tender: GeMTender, aiAnalysis?: GeMAIAnalysis, notes?: string): GeMStarredTender {
+    const numericBidId = typeof tender.id === 'number'
+      ? tender.id
+      : Number(String(tender.id).replace('gem_', '')) || ('gemBidId' in tender ? Number((tender as any).gemBidId) : 0);
+
+    const docId = `gem_${numericBidId}`;
+    if (!this.db.starredTenders) this.db.starredTenders = [];
+
+    const existingIndex = this.db.starredTenders.findIndex(
+      (t) => t.id === docId || t.gemBidId === numericBidId || Number(String(t.id).replace('gem_', '')) === numericBidId
+    );
+    const existing = existingIndex !== -1 ? this.db.starredTenders[existingIndex] : undefined;
+
+    const now = nowIso();
+    const effectiveAnalysis = aiAnalysis || existing?.aiAnalysis;
+    const townName = effectiveAnalysis?.townName || existing?.townName || ('townName' in tender ? (tender as any).townName : '');
+    const districtName = effectiveAnalysis?.districtName || existing?.districtName || ('districtName' in tender ? (tender as any).districtName : '');
+    const placeDisplay = effectiveAnalysis?.placeDisplay || existing?.placeDisplay || ('placeDisplay' in tender ? (tender as any).placeDisplay : '');
+
+    const starred: GeMStarredTender = {
+      id: docId,
+      gemBidId: numericBidId,
+      bidNumber: tender.bidNumber,
+      categoryName: tender.categoryName || '',
+      items: tender.items || [],
+      totalQuantity: tender.totalQuantity || 1,
+      startDate: tender.startDate || '',
+      endDate: tender.endDate || '',
+      ministryName: effectiveAnalysis?.ministryName || tender.ministryName || '',
+      departmentName: effectiveAnalysis?.departmentName || tender.departmentName || '',
+      townName: townName || undefined,
+      districtName: districtName || undefined,
+      placeDisplay: placeDisplay || undefined,
+      buyerStatus: tender.buyerStatus || '',
+      bidType: tender.bidType || 1,
+      isRA: Boolean(tender.isRA),
+      isBunch: Boolean(tender.isBunch),
+      isHighValue: Boolean(tender.isHighValue),
+      isCustomItem: Boolean(tender.isCustomItem),
+      isSinglePacket: Boolean(tender.isSinglePacket),
+      isGlobalTendering: Boolean(tender.isGlobalTendering),
+      pdfUrl: tender.pdfUrl,
+      corrigendumUrl: tender.corrigendumUrl || '',
+      starredAt: existing?.starredAt || now,
+      aiAnalysis: effectiveAnalysis,
+      aiAnalysisStatus: effectiveAnalysis ? 'completed' : existing?.aiAnalysisStatus || 'idle',
+      notes: notes !== undefined ? notes : existing?.notes,
+      createdAt: existing?.createdAt || now,
+      updatedAt: now,
+    };
+
+    if (existingIndex !== -1) {
+      this.db.starredTenders[existingIndex] = starred;
+    } else {
+      this.db.starredTenders.unshift(starred);
+    }
+
+    this.saveToStorage(this.db);
+    return starred;
+  }
+
+  unstarGeMTender(gemBidIdOrBidNumber: number | string): boolean {
+    if (!this.db.starredTenders) return false;
+    const inputStr = String(gemBidIdOrBidNumber).trim();
+    const digitsOnly = inputStr.replace(/[^0-9]/g, '');
+    const canonicalDocId = digitsOnly ? `gem_${digitsOnly}` : inputStr.startsWith('gem_') ? inputStr : `gem_${inputStr}`;
+
+    const initialLen = this.db.starredTenders.length;
+    this.db.starredTenders = this.db.starredTenders.filter((t) => {
+      const matchId = t.id === inputStr || t.id === canonicalDocId;
+      const matchBidNumber = t.bidNumber && t.bidNumber.trim().toUpperCase() === inputStr.toUpperCase();
+      const matchNumeric = digitsOnly && (String(t.gemBidId) === digitsOnly || String(t.id).includes(digitsOnly));
+      return !matchId && !matchBidNumber && !matchNumeric;
+    });
+
+    if (this.db.starredTenders.length !== initialLen) {
+      this.saveToStorage(this.db);
+      return true;
+    }
+    return false;
+  }
+
+  getStarredGeMTender(gemBidIdOrBidNumber: number | string): GeMStarredTender | undefined {
+    if (!this.db.starredTenders) return undefined;
+    const inputStr = String(gemBidIdOrBidNumber).trim();
+    const digitsOnly = inputStr.replace(/[^0-9]/g, '');
+    const canonicalDocId = digitsOnly ? `gem_${digitsOnly}` : inputStr.startsWith('gem_') ? inputStr : `gem_${inputStr}`;
+
+    return this.db.starredTenders.find((t) => {
+      return (
+        t.id === inputStr ||
+        t.id === canonicalDocId ||
+        (t.bidNumber && t.bidNumber.trim().toUpperCase() === inputStr.toUpperCase()) ||
+        String(t.gemBidId) === inputStr ||
+        (digitsOnly && String(t.gemBidId) === digitsOnly)
+      );
+    });
+  }
+
+  listStarredGeMTenders(): GeMStarredTender[] {
+    this.db = this.loadDatabase();
+    return [...(this.db.starredTenders || [])];
+  }
+
+  updateStarredGeMTenderAnalysis(
+    gemBidId: number | string,
+    aiAnalysis: GeMAIAnalysis,
+    status: 'completed' | 'failed' = 'completed',
+    error?: string
+  ): GeMStarredTender | undefined {
+    if (!this.db.starredTenders) return undefined;
+    const docId = String(gemBidId).startsWith('gem_') ? String(gemBidId) : `gem_${gemBidId}`;
+    const numId = Number(String(gemBidId).replace('gem_', ''));
+
+    const index = this.db.starredTenders.findIndex((t) => t.id === docId || t.gemBidId === numId);
+    if (index === -1) return undefined;
+
+    const existing = this.db.starredTenders[index];
+    const updated: GeMStarredTender = {
+      ...existing,
+      aiAnalysis,
+      aiAnalysisStatus: status,
+      aiAnalysisError: error || '',
+      updatedAt: nowIso(),
+    };
+
+    this.db.starredTenders[index] = updated;
+    this.saveToStorage(this.db);
+    return updated;
+  }
+
+  // ─── Global Permanent AI Analysis Repository ─────────────────────────
+
+  saveGeMAIAnalysis(
+    bidNumber: string,
+    gemBidId: number | string | undefined,
+    aiAnalysis: GeMAIAnalysis
+  ): void {
+    if (!this.db.gemTenderAnalyses) this.db.gemTenderAnalyses = [];
+    const cleanBid = (bidNumber || String(gemBidId || '')).trim().replace(/[^a-zA-Z0-9]/g, '_');
+    const docId = `analysis_${cleanBid}`;
+    const numId = Number(String(gemBidId || '').replace(/[^0-9]/g, '')) || undefined;
+
+    const record = {
+      id: docId,
+      bidNumber: bidNumber || '',
+      gemBidId: numId,
+      aiAnalysis,
+      updatedAt: nowIso(),
+    };
+
+    const existingIndex = this.db.gemTenderAnalyses.findIndex(
+      (r) =>
+        r.id === docId ||
+        (bidNumber && r.bidNumber && r.bidNumber.trim().toUpperCase() === bidNumber.trim().toUpperCase()) ||
+        (numId && r.gemBidId === numId)
+    );
+
+    if (existingIndex !== -1) {
+      this.db.gemTenderAnalyses[existingIndex] = record;
+    } else {
+      this.db.gemTenderAnalyses.unshift(record);
+    }
+
+    this.saveToStorage(this.db);
+  }
+
+  getGeMAIAnalysis(bidNumberOrId: string | number): GeMAIAnalysis | undefined {
+    if (!this.db.gemTenderAnalyses) return undefined;
+    const inputStr = String(bidNumberOrId).trim();
+    const cleanBid = inputStr.replace(/[^a-zA-Z0-9]/g, '_');
+    const docId = `analysis_${cleanBid}`;
+
+    const match = this.db.gemTenderAnalyses.find(
+      (r) =>
+        r.id === docId ||
+        r.id === inputStr ||
+        (r.bidNumber && r.bidNumber.trim().toUpperCase() === inputStr.toUpperCase()) ||
+        String(r.gemBidId) === inputStr
+    );
+
+    return match?.aiAnalysis;
+  }
+
+  listGeMAIAnalyses(): Record<string, GeMAIAnalysis> {
+    this.db = this.loadDatabase();
+    const result: Record<string, GeMAIAnalysis> = {};
+    (this.db.gemTenderAnalyses || []).forEach((item) => {
+      if (item?.aiAnalysis) {
+        if (item.bidNumber) result[item.bidNumber.trim().toUpperCase()] = item.aiAnalysis;
+        if (item.gemBidId) result[String(item.gemBidId)] = item.aiAnalysis;
+        if (item.id) result[item.id] = item.aiAnalysis;
+      }
+    });
+    return result;
   }
 }
 

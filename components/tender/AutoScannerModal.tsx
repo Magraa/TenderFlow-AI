@@ -364,6 +364,21 @@ export function AutoScannerModal({ isOpen, onClose, onRefreshData }: AutoScanner
       const data = await res.json();
       if (data.success) {
         const result = data.result;
+        if (result?.processedBids && Array.isArray(result.processedBids)) {
+          for (const item of result.processedBids) {
+            if (targetProfile?.autoStar !== false) {
+              await db.starGeMTender(
+                item.tender,
+                item.analysis,
+                `Auto-scanned by profile: ${targetProfile?.name || 'Auto-Scanner'}`
+              ).catch(() => {});
+            }
+            if (item.analysis) {
+              await db.saveGeMAIAnalysis(item.tender.bidNumber, item.tender.id, item.analysis).catch(() => {});
+            }
+          }
+        }
+
         setScanMessage({
           type: 'success',
           text: `Scan finished! Found ${result?.totalFound || 0} matching bids (${result?.newBidsCount || 0} brand-new, ${result?.analyzedCount || 0} AI-analyzed).`,

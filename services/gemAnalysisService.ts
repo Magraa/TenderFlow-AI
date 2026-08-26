@@ -2,7 +2,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { OpenAI } from 'openai';
 import { Groq } from 'groq-sdk';
 import { GeMAIAnalysis, GeMTender, GeMLinkedDoc } from '@/types/gem';
-import { getGeMSession } from '@/services/gemScraperService';
+import { getGeMSession, searchGeMBids } from '@/services/gemScraperService';
 
 const DEFAULT_HEADERS: Record<string, string> = {
   'User-Agent':
@@ -12,40 +12,70 @@ const DEFAULT_HEADERS: Record<string, string> = {
   Referer: 'https://bidplus.gem.gov.in/advance-search',
 };
 
-async function downloadGeMPdf(pdfUrl: string): Promise<Buffer> {
+async function downloadGeMPdf(pdfUrl: string, bidNumber?: string): Promise<Buffer> {
   let targetUrl = pdfUrl.trim();
   if (targetUrl.startsWith('/')) {
     targetUrl = `https://bidplus.gem.gov.in${targetUrl}`;
   }
 
-  // First try direct fetch
-  let res = await fetch(targetUrl, {
-    headers: DEFAULT_HEADERS,
-    signal: AbortSignal.timeout(30000),
-  }).catch(() => null);
+  let buffer: Buffer | null = null;
+  let isPdf = false;
 
-  // If failed, try with GeM session cookie
-  if (!res || !res.ok) {
-    try {
-      const session = await getGeMSession();
-      res = await fetch(targetUrl, {
-        headers: {
-          ...DEFAULT_HEADERS,
-          Cookie: session.cookieStr,
-        },
-        signal: AbortSignal.timeout(30000),
-      });
-    } catch {
-      // Ignore session failure and check response
+  // Try direct fetch if targetUrl looks valid
+  if (targetUrl.startsWith('http')) {
+    let res = await fetch(targetUrl, {
+      headers: DEFAULT_HEADERS,
+      signal: AbortSignal.timeout(30000),
+    }).catch(() => null);
+
+    if (!res || !res.ok) {
+      try {
+        const session = await getGeMSession();
+        res = await fetch(targetUrl, {
+          headers: {
+            ...DEFAULT_HEADERS,
+            Cookie: session.cookieStr,
+          },
+          signal: AbortSignal.timeout(30000),
+        });
+      } catch {
+        // Ignore session failure and check response
+      }
+    }
+
+    if (res && res.ok) {
+      const arrayBuffer = await res.arrayBuffer();
+      buffer = Buffer.from(arrayBuffer);
+      isPdf = buffer.length > 50 && buffer.slice(0, 4).toString('ascii') === '%PDF';
     }
   }
 
-  if (!res || !res.ok) {
-    throw new Error(`Failed to download GeM PDF from ${targetUrl} (Status: ${res?.status || 'Network Error'})`);
+  // If buffer is NOT a valid PDF and we have a bidNumber, search GeM to find the real PDF URL!
+  if (!isPdf && bidNumber) {
+    try {
+      console.log(`[GeM AI Analysis] Target ${targetUrl} did not yield valid PDF, searching GeM for ${bidNumber}...`);
+      const searchRes = await searchGeMBids({
+        searchType: 'bidNumber',
+        bidNumber: bidNumber,
+      });
+
+      if (searchRes.bids && searchRes.bids.length > 0 && searchRes.bids[0].pdfUrl) {
+        const realPdfUrl = searchRes.bids[0].pdfUrl;
+        console.log(`[GeM AI Analysis] Found real PDF URL via search: ${realPdfUrl}`);
+        if (realPdfUrl !== targetUrl) {
+          return await downloadGeMPdf(realPdfUrl);
+        }
+      }
+    } catch (searchErr) {
+      console.warn(`[GeM AI Analysis] GeM search fallback failed:`, searchErr);
+    }
   }
 
-  const arrayBuffer = await res.arrayBuffer();
-  return Buffer.from(arrayBuffer);
+  if (!buffer || !isPdf) {
+    throw new Error(`Failed to download valid GeM PDF for ${bidNumber || targetUrl}. The document was not accessible or returned invalid content.`);
+  }
+
+  return buffer;
 }
 
 /**
@@ -287,20 +317,20 @@ export async function analyzeGeMTenderDirectly(
       );
     }
 
-    // Step 1: Download Main GeM PDF
-    const mainPdfBuffer = await downloadGeMPdf(targetPdfUrl);
+    // Step 1: Download Main GeM PDF (with bidNumber fallback search)
+    const mainPdfBuffer = await downloadGeMPdf(targetPdfUrl, bidNumber);
 
     // Step 2: Extract Relevant Buyer Uploaded ATC Document URLs from main PDF
     const secondaryDocs = extractRelevantPdfLinks(mainPdfBuffer);
     console.log(`[GeM AI Analysis] Found ${secondaryDocs.length} relevant secondary documents in ${targetPdfUrl}:`, secondaryDocs);
 
-    // Step 3: Fetch secondary attachment PDFs in parallel
+    // Step 3: Fetch secondary attachment PDFs in parallel (strictly ensuring valid PDF magic header)
     const attachedBuffers: { title: string; url: string; buffer: Buffer }[] = [];
     await Promise.all(
       secondaryDocs.map(async (doc) => {
         try {
           const buf = await downloadGeMPdf(doc.url);
-          if (buf && buf.length > 100) {
+          if (buf && buf.length > 50 && buf.slice(0, 4).toString('ascii') === '%PDF') {
             attachedBuffers.push({
               title: doc.title,
               url: doc.url,
@@ -319,10 +349,10 @@ export async function analyzeGeMTenderDirectly(
     // Step 4: Call Multimodal Gemini AI with Main PDF + all attached Buyer ATC PDFs
     if (provider === 'gemini' || !provider || provider === 'google') {
       const genAI = new GoogleGenerativeAI(apiKey);
-      const resolvedModel = modelName.includes('gemini') ? modelName : 'gemini-2.5-flash';
-      usedModel = resolvedModel;
+      usedModel = modelName;
+
       const model = genAI.getGenerativeModel({
-        model: resolvedModel,
+        model: modelName,
         generationConfig: {
           temperature: 0.1,
           responseMimeType: 'application/json',
@@ -339,12 +369,14 @@ export async function analyzeGeMTenderDirectly(
       ];
 
       attachedBuffers.forEach((att) => {
-        promptParts.push({
-          inlineData: {
-            mimeType: 'application/pdf',
-            data: att.buffer.toString('base64'),
-          },
-        });
+        if (att.buffer && att.buffer.slice(0, 4).toString('ascii') === '%PDF') {
+          promptParts.push({
+            inlineData: {
+              mimeType: 'application/pdf',
+              data: att.buffer.toString('base64'),
+            },
+          });
+        }
       });
 
       const attachedNotes = attachedBuffers.length > 0

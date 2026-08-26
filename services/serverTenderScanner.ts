@@ -11,6 +11,10 @@ export interface ScanExecutionResult {
   newBidsCount: number;
   analyzedCount: number;
   newBids: string[];
+  processedBids?: Array<{
+    tender: GeMTender;
+    analysis?: GeMAIAnalysis;
+  }>;
   error?: string;
   durationMs: number;
 }
@@ -126,6 +130,7 @@ export async function runProfileScan(profile: GeMScanProfile): Promise<ScanExecu
 
     let analyzedCount = 0;
     const newBidNumbers: string[] = [];
+    const processedBids: Array<{ tender: GeMTender; analysis?: GeMAIAnalysis }> = [];
 
     // Max AI analyses per single scan run to protect API quota and avoid serverless timeouts
     const MAX_AI_ANALYSES_PER_RUN = 10;
@@ -163,6 +168,11 @@ export async function runProfileScan(profile: GeMScanProfile): Promise<ScanExecu
           }
         }
       }
+
+      processedBids.push({
+        tender: bid,
+        analysis: tenderAnalysis,
+      });
 
       // Auto-Star to Dashboard (All bids are saved safely even if pending analysis)
       if (profile.autoStar) {
@@ -209,6 +219,7 @@ export async function runProfileScan(profile: GeMScanProfile): Promise<ScanExecu
       newBidsCount: newBidsToProcess.length,
       analyzedCount,
       newBids: newBidNumbers,
+      processedBids,
       durationMs,
     };
   } catch (error: any) {

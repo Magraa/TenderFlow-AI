@@ -102,6 +102,14 @@ flowchart TD
 <table>
   <tr>
     <td width="50%" valign="top">
+      <h3>⚡ Inline AI Analysis & Job Queue Drawer</h3>
+      <ul>
+        <li><b>Zero New Tabs:</b> Run deep AI analysis directly in-place on tender cards with live state transitions.</li>
+        <li><b>Floating Background Worker:</b> Bottom-right Job Queue drawer tracks queued, running, completed, and failed tasks with an animated progress bar.</li>
+        <li><b>"Analyze All" Batch Processor:</b> 1-Click batch enqueuing of all unanalyzed page tenders for background processing.</li>
+      </ul>
+    </td>
+    <td width="50%" valign="top">
       <h3>🤖 24/7 Autonomous Server Auto-Scanner</h3>
       <ul>
         <li><b>Zero-Touch Tender Monitoring:</b> Vercel Cron runs every 30 mins from Mumbai (bom1) serverless nodes.</li>
@@ -109,6 +117,8 @@ flowchart TD
         <li><b>Automated Background AI Analysis:</b> Discovered bids are pre-analyzed with ATC extraction and saved to your database automatically.</li>
       </ul>
     </td>
+  </tr>
+  <tr>
     <td width="50%" valign="top">
       <h3>🧠 AI Tender Deep-Analysis Modal</h3>
       <ul>
@@ -117,8 +127,6 @@ flowchart TD
         <li><b>Key Insights:</b> Exact EMD amounts, EPBG, technical item specs, turnover/experience criteria, and mandatory checklist documents.</li>
       </ul>
     </td>
-  </tr>
-  <tr>
     <td width="50%" valign="top">
       <h3>📊 Real-Time AI Quota HUD & Tracker</h3>
       <ul>
@@ -127,6 +135,8 @@ flowchart TD
         <li><b>Usage Logs & Alerts:</b> Feature-by-feature breakdown (Drafts, Transliteration, Analysis) with automated threshold warning states.</li>
       </ul>
     </td>
+  </tr>
+  <tr>
     <td width="50%" valign="top">
       <h3>🌐 GeM Live Tender Explorer & Auto-Import</h3>
       <ul>
@@ -135,8 +145,6 @@ flowchart TD
         <li><b>1-Click Import:</b> Auto-populates line items, quantities, and deadlines into the tender drafting suite.</li>
       </ul>
     </td>
-  </tr>
-  <tr>
     <td width="50%" valign="top">
       <h3>🏛️ 1-Click Multi-Document Generation</h3>
       <ul>
@@ -145,6 +153,8 @@ flowchart TD
         <li>Instant document versioning snapshot engine with rollback support.</li>
       </ul>
     </td>
+  </tr>
+  <tr>
     <td width="50%" valign="top">
       <h3>⚡ QuickCustomizer™ Floating Drawer</h3>
       <ul>
@@ -153,8 +163,6 @@ flowchart TD
         <li><b>Per-Clause AI Micro-Regenerator:</b> Inline rephrasing with custom prompt instructions.</li>
       </ul>
     </td>
-  </tr>
-  <tr>
     <td width="50%" valign="top">
       <h3>🔍 Smart Product Autocomplete Portal</h3>
       <ul>
@@ -163,6 +171,8 @@ flowchart TD
         <li>Auto-fills product descriptions, units, rates, and GST tax slabs with 1-click.</li>
       </ul>
     </td>
+  </tr>
+  <tr>
     <td width="50%" valign="top">
       <h3>🎨 Precision A4 Letterhead Engine</h3>
       <ul>
@@ -171,10 +181,8 @@ flowchart TD
         <li>Drag-and-drop firm digital signatures and official seals.</li>
       </ul>
     </td>
-  </tr>
-  <tr>
-    <td width="50%" valign="top" colspan="2">
-      <h3>⚡ Local-First + Cloud-Ready Hybrid Architecture</h3>
+    <td width="50%" valign="top">
+      <h3>⚡ Local-First + Cloud-Ready Hybrid</h3>
       <ul>
         <li><b>100% Offline Capable:</b> Instant client-side IndexedDB database.</li>
         <li><b>Cloud Sync:</b> Real-time Firestore synchronization with namespace isolation.</li>
@@ -205,23 +213,27 @@ flowchart LR
 
 ---
 
-## 🧠 AI Tender Deep Analysis & Executive PDF Export
+## 🧠 AI Tender Deep Analysis, Inline Worker & Executive PDF Export
 
 Transform dense 50-page government tender documents into actionable intelligence and print-ready executive briefing reports within seconds:
 
 ```mermaid
 flowchart LR
-    DOC["📑 <b>Raw Tender / GeM Bid</b><br/>PDF & Portal Data"] --> LLM["🤖 <b>Deep Analysis Engine</b><br/>Multi-Prompt Intelligence"]
+    DOC["📑 <b>Raw Tender / GeM Bid</b><br/>PDF & Portal Data"] --> QUEUE["🤖 <b>Background AI Job Queue</b><br/>Sequential Worker & 'Analyze All'"]
+    QUEUE --> LLM["⚡ <b>Deep Analysis Engine</b><br/>Multi-Prompt Intelligence"]
     LLM --> T1["📋 <b>Buyer Added Terms (ATC)</b><br/>Extracted Legal Clauses"]
     LLM --> T2["⚙️ <b>Item Specifications</b><br/>Quantities & Detailed Specs"]
     LLM --> T3["💰 <b>Financial Terms</b><br/>EMD, EPBG & Calculated Budget"]
     LLM --> T4["📜 <b>Compliance Checklist</b><br/>Turnover, Experience & Mandatory Docs"]
     
-    T1 & T2 & T3 & T4 --> SUITE["🌐 <b>Full-Screen Analysis Suite</b><br/>/tenders/open/analysis"]
-    SUITE --> PDF["📄 <b>Multi-Page Executive PDF Report</b><br/>Intelligent ATC Pagination Engine"]
-    SUITE --> IMP["📥 <b>1-Click Import to Draft</b>"]
+    T1 & T2 & T3 & T4 --> MODAL["⚡ <b>Inline Intelligence Modal</b><br/>Zero Context Switch / Same Page"]
+    MODAL --> PDF["📄 <b>Multi-Page Executive PDF Report</b><br/>Intelligent ATC Pagination Engine"]
+    MODAL --> IMP["📥 <b>1-Click Import to Draft</b>"]
 ```
 
+* **Inline AI Analysis (No New Tab)**: Click to analyze any tender in-place. Button states dynamically switch (*Analyzing with AI...* → *View AI Insights*), and extracted specs & ATC render directly on the card.
+* **Floating Background Job Queue (`AiJobQueueDrawer`)**: Bottom-right floating drawer tracks real-time progress across queued bids, with minimizable floating pill state (`⚡ AI Worker: 1 running (3 queued)`).
+* **1-Click "Analyze All" Batch Processor**: Enqueue all unanalyzed tenders on the current page into the background queue with a single click.
 * **Dedicated Full-Screen Analysis Suite (`/tenders/open/analysis`)**: Dedicated landing page featuring interactive tabbed views for Overview, ATC Clause search, Specifications, Financials, Eligibility, and Mandatory Document checklists.
 * **Intelligent Executive PDF Generator (`gemAnalysisPdfService`)**: Generates print-ready multi-page briefing reports with smart ATC height balancing across pages (Page 1 summary + Page 2/3 seamless continuation).
 * **Smart Budget Estimator**: Automatically derives estimated tender valuation from 1% EMD figures when undisclosed by the buyer department.
@@ -298,13 +310,14 @@ graph TB
         P1["Next.js 15 App Router"]
         P2["Tailwind CSS + Lucide Icons"]
         P3["GeM Open Tenders Explorer (/tenders/open)"]
-        P4["AutoScannerModal (Profile & Cron Manager)"]
-        P5["Full-Screen Analysis Suite (/tenders/open/analysis)"]
-        P6["TenderAIAnalysisModal (Deep ATC Parser)"]
-        P7["AIQuotaPill & SyncStatusPill (Live HUDs)"]
-        P8["TipTap WYSIWYG Rich Editor"]
-        P9["QuickCustomizer™ Floating Drawer"]
-        P10["Live A4 Canvas & Layout Engine"]
+        P4["AiJobQueueDrawer (Floating Background Worker)"]
+        P5["AutoScannerModal (Profile & Cron Manager)"]
+        P6["Full-Screen Analysis Suite (/tenders/open/analysis)"]
+        P7["TenderAIAnalysisModal (Deep ATC Parser)"]
+        P8["AIQuotaPill & SyncStatusPill (Live HUDs)"]
+        P9["TipTap WYSIWYG Rich Editor"]
+        P10["QuickCustomizer™ Floating Drawer"]
+        P11["Live A4 Canvas & Layout Engine"]
     end
 
     subgraph SERVICES ["⚙️ BUSINESS SERVICE LAYER"]

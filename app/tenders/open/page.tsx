@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -38,6 +38,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { TenderAIAnalysisModal } from '@/components/tender/TenderAIAnalysisModal';
 import { AutoScannerModal } from '@/components/tender/AutoScannerModal';
+import { AiJobQueueDrawer, AiAnalysisJob } from '@/components/tender/AiJobQueueDrawer';
 
 // Helper to compute default dates (1 month previous to current date & 1 month after current date)
 function getDefaultDates() {
@@ -189,7 +190,6 @@ export default function OpenTendersPage() {
   const [selectedTenderForAnalysis, setSelectedTenderForAnalysis] = useState<GeMTender | GeMStarredTender | null>(null);
   const [currentAnalysis, setCurrentAnalysis] = useState<GeMAIAnalysis | null>(null);
   const [aiAnalysisLoading, setAiAnalysisLoading] = useState(false);
-  const [analyzingKey, setAnalyzingKey] = useState<string | null>(null);
 
   // Corrigendum Modal State
   const [corrigendumModalOpen, setCorrigendumModalOpen] = useState(false);
@@ -450,30 +450,192 @@ export default function OpenTendersPage() {
     }));
   };
 
-  // Trigger Deep AI Analysis & Open in New Tab
+  // AI Background Job Queue State
+  const [aiJobs, setAiJobs] = useState<AiAnalysisJob[]>([]);
+  const isProcessingQueueRef = useRef(false);
+
+  // Enqueue a tender into the background worker queue
+  const enqueueAiJob = useCallback((tender: GeMTender | GeMStarredTender) => {
+    const existingAnalysis = getTenderAnalysisData(tender);
+    if (existingAnalysis) return; // Already analyzed
+
+    const tenderKey = (tender.bidNumber || String(tender.id)).trim().toUpperCase();
+
+    setAiJobs((prev) => {
+      if (prev.some((j) => j.bidNumber.trim().toUpperCase() === tenderKey)) {
+        return prev; // Already in queue
+      }
+      const newJob: AiAnalysisJob = {
+        id: tenderKey,
+        bidNumber: tender.bidNumber,
+        title: tender.categoryName || `Tender ${tender.bidNumber}`,
+        categoryName: tender.categoryName,
+        pdfUrl: tender.pdfUrl,
+        status: 'queued',
+        stepMessage: 'Queued for background analysis...',
+        enqueuedAt: Date.now(),
+      };
+      return [...prev, newJob];
+    });
+  }, [analysesMap, starredTenders]);
+
+  // Background AI Queue Worker (Processes jobs sequentially with safety delays)
+  useEffect(() => {
+    const processNextJob = async () => {
+      if (isProcessingQueueRef.current) return;
+
+      const nextJob = aiJobs.find((j) => j.status === 'queued');
+      if (!nextJob) return;
+
+      isProcessingQueueRef.current = true;
+
+      // Update job state to running
+      setAiJobs((prev) =>
+        prev.map((j) =>
+          j.id === nextJob.id
+            ? { ...j, status: 'running', stepMessage: '🤖 Extracting PDF & ATC documents with AI...' }
+            : j
+        )
+      );
+
+      try {
+        const allKnownTenders = [...(searchResponse?.bids || []), ...starredTenders];
+        const tenderObj = allKnownTenders.find(
+          (t) => (t.bidNumber || String(t.id)).trim().toUpperCase() === nextJob.bidNumber.trim().toUpperCase()
+        );
+
+        const res = await fetch('/api/gem/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            pdfUrl: nextJob.pdfUrl || tenderObj?.pdfUrl,
+            bidNumber: nextJob.bidNumber,
+            tender: tenderObj,
+          }),
+        });
+
+        const data = await res.json();
+        if (data.success && data.analysis) {
+          aiUsageService.recordUsage({ feature: 'gem_analyze', success: true });
+
+          // 1. Save to Global Permanent AI Analysis Repository
+          await db.saveGeMAIAnalysis(
+            nextJob.bidNumber,
+            tenderObj?.id || 0,
+            data.analysis
+          ).catch(() => {});
+
+          // 2. Update local state & cache
+          const key = nextJob.bidNumber.trim().toUpperCase();
+          setAnalysesMap((prev) => ({ ...prev, [key]: data.analysis }));
+          if (typeof window !== 'undefined') {
+            try {
+              localStorage.setItem(`gem_ai_cache_${key}`, JSON.stringify(data.analysis));
+            } catch {}
+          }
+
+          // If tender is starred, update its aiAnalysis in starredTenders state
+          setStarredTenders((prev) =>
+            prev.map((st) =>
+              (st.bidNumber || String(st.id)).trim().toUpperCase() === key
+                ? { ...st, aiAnalysis: data.analysis }
+                : st
+            )
+          );
+
+          // Update job to completed
+          setAiJobs((prev) =>
+            prev.map((j) =>
+              j.id === nextJob.id
+                ? {
+                    ...j,
+                    status: 'completed',
+                    stepMessage: '✅ Analysis completed successfully!',
+                    completedAt: Date.now(),
+                  }
+                : j
+            )
+          );
+        } else {
+          throw new Error(data.error || 'AI Analysis returned unsuccessful');
+        }
+      } catch (err: any) {
+        setAiJobs((prev) =>
+          prev.map((j) =>
+            j.id === nextJob.id
+              ? {
+                  ...j,
+                  status: 'failed',
+                  error: err?.message || 'Failed to analyze tender',
+                  completedAt: Date.now(),
+                }
+              : j
+          )
+        );
+      } finally {
+        // 2-second safety delay between calls to respect 15 RPM free tier limits
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        isProcessingQueueRef.current = false;
+      }
+    };
+
+    processNextJob();
+  }, [aiJobs, searchResponse, starredTenders]);
+
+  // Handle single AI analysis button click (Inline execution without opening new tab)
   const handleRunAIAnalysis = (tender: GeMTender | GeMStarredTender) => {
     const existingAnalysis = getTenderAnalysisData(tender);
 
-    // Save tender & cached analysis in session storage for instant zero-latency load
-    if (typeof window !== 'undefined') {
-      try {
-        sessionStorage.setItem(
-          'current_gem_tender_for_analysis',
-          JSON.stringify({ tender, analysis: existingAnalysis || null })
-        );
-      } catch {}
+    if (existingAnalysis) {
+      // If already analyzed, open the detailed AI insights modal right on the page!
+      setSelectedTenderForAnalysis(tender);
+      setCurrentAnalysis(existingAnalysis);
+      setAiModalOpen(true);
+      return;
+    }
 
-      const targetUrl = `/tenders/open/analysis?id=${encodeURIComponent(tender.bidNumber || String(tender.id))}`;
-      window.open(targetUrl, '_blank');
+    // If not yet analyzed, enqueue it into the background worker queue
+    enqueueAiJob(tender);
+  };
+
+  // Analyze All Unanalyzed Visible Bids
+  const handleAnalyzeAllVisible = () => {
+    const visibleList = viewMode === 'live' ? (searchResponse?.bids || []) : filteredStarredTenders;
+    const unanalyzed = visibleList.filter((t) => !getTenderAnalysisData(t));
+    if (unanalyzed.length === 0) {
+      alert('All visible tenders already have AI Analysis completed!');
+      return;
+    }
+
+    unanalyzed.forEach((t) => enqueueAiJob(t));
+  };
+
+  const handleClearCompletedJobs = () => {
+    setAiJobs((prev) => prev.filter((j) => j.status === 'running' || j.status === 'queued'));
+  };
+
+  const handleCancelJob = (jobId: string) => {
+    setAiJobs((prev) => prev.filter((j) => j.id !== jobId));
+  };
+
+  const handleViewJobAnalysis = (bidNumber: string) => {
+    const allKnownTenders = [...(searchResponse?.bids || []), ...starredTenders];
+    const tenderObj = allKnownTenders.find(
+      (t) => (t.bidNumber || String(t.id)).trim().toUpperCase() === bidNumber.trim().toUpperCase()
+    );
+    if (!tenderObj) return;
+    const analysis = getTenderAnalysisData(tenderObj);
+    if (analysis) {
+      setSelectedTenderForAnalysis(tenderObj);
+      setCurrentAnalysis(analysis);
+      setAiModalOpen(true);
     }
   };
 
   // Re-run AI Analysis
   const handleReanalyzeCurrent = async () => {
     if (!selectedTenderForAnalysis) return;
-    const tenderKey = selectedTenderForAnalysis.bidNumber || String(selectedTenderForAnalysis.id);
     setAiAnalysisLoading(true);
-    setAnalyzingKey(tenderKey);
 
     try {
       const res = await fetch('/api/gem/analyze', {
@@ -526,7 +688,6 @@ export default function OpenTendersPage() {
       alert(err?.message || 'Error running re-analysis.');
     } finally {
       setAiAnalysisLoading(false);
-      setAnalyzingKey(null);
     }
   };
 
@@ -858,10 +1019,16 @@ export default function OpenTendersPage() {
     starredSortBy,
   ]);
 
-  // Total analyzed count in archive
+  // Total accurately analyzed count (accounting for global cache & map)
   const totalAnalyzedCount = useMemo(() => {
-    return starredTenders.filter((t) => Boolean(t.aiAnalysis)).length;
-  }, [starredTenders]);
+    return starredTenders.filter((t) => Boolean(getTenderAnalysisData(t))).length;
+  }, [starredTenders, analysesMap]);
+
+  // Unanalyzed bids currently visible
+  const unanalyzedVisibleBids = useMemo(() => {
+    const list = viewMode === 'live' ? (searchResponse?.bids || []) : filteredStarredTenders;
+    return list.filter((t) => !getTenderAnalysisData(t));
+  }, [viewMode, searchResponse?.bids, filteredStarredTenders, analysesMap]);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 pb-16">
@@ -893,6 +1060,16 @@ export default function OpenTendersPage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2.5">
+              {unanalyzedVisibleBids.length > 0 && (
+                <Button
+                  onClick={handleAnalyzeAllVisible}
+                  className="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white border border-indigo-300/30 text-xs sm:text-sm font-bold shadow-md gap-1.5"
+                >
+                  <Sparkles className="w-4 h-4 animate-pulse text-indigo-200" />
+                  Analyze All ({unanalyzedVisibleBids.length})
+                </Button>
+              )}
+
               <Button
                 variant="outline"
                 onClick={() => fetchBids(currentPage)}
@@ -1596,23 +1773,36 @@ export default function OpenTendersPage() {
                         <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100">
                           <div className="flex flex-wrap items-center gap-2">
                             {/* AI Deep Analysis Button */}
-                            <Button
-                              size="sm"
-                              onClick={() => handleRunAIAnalysis(tender)}
-                              disabled={analyzingKey === tenderKey && aiAnalysisLoading}
-                              className={`text-xs font-semibold h-8 px-3 transition-all shadow-sm ${
-                                hasAiAnalysis
-                                  ? 'bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white'
-                                  : 'bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white'
-                              }`}
-                            >
-                              <Sparkles className={`w-3.5 h-3.5 mr-1.5 ${analyzingKey === tenderKey ? 'animate-spin' : ''}`} />
-                              {analyzingKey === tenderKey
-                                ? 'Analyzing with AI...'
-                                : hasAiAnalysis
-                                ? 'View AI Insights'
-                                : 'AI Full Analysis'}
-                            </Button>
+                            {(() => {
+                              const isJobActive = aiJobs.some(
+                                (j) => j.bidNumber.trim().toUpperCase() === tenderKey && (j.status === 'running' || j.status === 'queued')
+                              );
+                              const activeJob = aiJobs.find((j) => j.bidNumber.trim().toUpperCase() === tenderKey);
+
+                              return (
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleRunAIAnalysis(tender)}
+                                  disabled={isJobActive}
+                                  className={`text-xs font-semibold h-8 px-3 transition-all shadow-sm ${
+                                    hasAiAnalysis
+                                      ? 'bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white'
+                                      : isJobActive
+                                      ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white cursor-wait'
+                                      : 'bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white'
+                                  }`}
+                                >
+                                  <Sparkles className={`w-3.5 h-3.5 mr-1.5 ${isJobActive ? 'animate-spin' : ''}`} />
+                                  {isJobActive
+                                    ? activeJob?.status === 'running'
+                                      ? 'Analyzing with AI...'
+                                      : 'Queued in AI Worker...'
+                                    : hasAiAnalysis
+                                    ? 'View AI Insights'
+                                    : 'AI Full Analysis'}
+                                </Button>
+                              );
+                            })()}
 
                             <a
                               href={tender.pdfUrl}
@@ -2042,14 +2232,36 @@ export default function OpenTendersPage() {
                         {/* Bottom Actions */}
                         <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100">
                           <div className="flex flex-wrap items-center gap-2">
-                            <Button
-                              size="sm"
-                              onClick={() => handleRunAIAnalysis(tender)}
-                              className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold text-xs h-8 px-3.5 shadow-sm"
-                            >
-                              <Sparkles className="w-3.5 h-3.5 mr-1.5" />
-                              {analysis ? 'View Full AI Intelligence' : 'Run Full AI Analysis'}
-                            </Button>
+                            {(() => {
+                              const isJobActive = aiJobs.some(
+                                (j) => j.bidNumber.trim().toUpperCase() === tenderKey && (j.status === 'running' || j.status === 'queued')
+                              );
+                              const activeJob = aiJobs.find((j) => j.bidNumber.trim().toUpperCase() === tenderKey);
+
+                              return (
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleRunAIAnalysis(tender)}
+                                  disabled={isJobActive}
+                                  className={`font-semibold text-xs h-8 px-3.5 shadow-sm transition-all ${
+                                    analysis
+                                      ? 'bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white'
+                                      : isJobActive
+                                      ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white cursor-wait'
+                                      : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white'
+                                  }`}
+                                >
+                                  <Sparkles className={`w-3.5 h-3.5 mr-1.5 ${isJobActive ? 'animate-spin' : ''}`} />
+                                  {isJobActive
+                                    ? activeJob?.status === 'running'
+                                      ? 'Analyzing with AI...'
+                                      : 'Queued in AI Worker...'
+                                    : analysis
+                                    ? 'View AI Insights'
+                                    : 'Run Full AI Analysis'}
+                                </Button>
+                              );
+                            })()}
 
                             <a
                               href={tender.pdfUrl}
@@ -2152,6 +2364,14 @@ export default function OpenTendersPage() {
           loadStarredTenders();
           loadGlobalAnalyses();
         }}
+      />
+
+      {/* Background AI Analysis Job Queue Drawer */}
+      <AiJobQueueDrawer
+        jobs={aiJobs}
+        onClearCompleted={handleClearCompletedJobs}
+        onViewAnalysis={handleViewJobAnalysis}
+        onCancelJob={handleCancelJob}
       />
     </div>
   );

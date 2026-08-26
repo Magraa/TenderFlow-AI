@@ -13,15 +13,15 @@ export async function POST(request: NextRequest) {
       tender?: GeMTender;
     };
 
-    const targetPdfUrl = pdfUrl || tender?.pdfUrl;
-    if (!targetPdfUrl) {
+    const targetPdfUrl = pdfUrl || tender?.pdfUrl || '';
+    if (!targetPdfUrl && !bidNumber && !tender?.bidNumber) {
       return NextResponse.json(
-        { success: false, error: 'pdfUrl or tender is required' },
+        { success: false, error: 'pdfUrl, bidNumber, or tender is required' },
         { status: 400 }
       );
     }
 
-    const analysis = await analyzeGeMTenderDirectly(targetPdfUrl, tender, bidNumber);
+    const analysis = await analyzeGeMTenderDirectly(targetPdfUrl, tender, bidNumber || tender?.bidNumber);
 
     return NextResponse.json({
       success: true,

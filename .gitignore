@@ -52,6 +52,10 @@ Thumbs.db
 scratch*
 *.html
 
+# Assets
+public/Assets/*.png
+public/Assets/**/*.png
+
 # Documentation
 *.md
 !README.md

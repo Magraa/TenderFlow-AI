@@ -91,8 +91,8 @@ function TenderAnalysisContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  const rawId = searchParams.get('id') || searchParams.get('bidNumber') || searchParams.get('bid') || '';
-  const queryPdfUrl = searchParams.get('pdfUrl') || '';
+  const rawId = searchParams?.get('id') || searchParams?.get('bidNumber') || searchParams?.get('bid') || '';
+  const queryPdfUrl = searchParams?.get('pdfUrl') || '';
 
   // Extract clean bid number or ID (supports raw bidNumber, analysis_GEM_..., gem_...)
   const targetId = decodeURIComponent(rawId).trim();

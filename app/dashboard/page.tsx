@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo, useRef } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
@@ -548,12 +549,18 @@ export default function DashboardPage() {
       <div className="border-b bg-white shadow-xs">
         <div className="mx-auto flex max-w-screen-xl flex-col gap-3.5 sm:gap-4 sm:flex-row sm:items-center sm:justify-between px-3.5 py-4 sm:py-6 sm:px-6 lg:px-8 bg-gradient-to-r from-slate-50 via-white to-emerald-50/20">
           <div>
-            <h1 className="text-fluid-2xl font-extrabold tracking-tight text-slate-900 flex items-center gap-2">
-              <FileText className="h-6 w-6 sm:h-7 sm:w-7 text-primary shrink-0" />
-              <span>Tender & Bill Automation</span>
-            </h1>
-            <p className="mt-0.5 sm:mt-1 text-xs text-slate-500 font-medium">
-              Offline drafting, firm letterheads, tax bills, & AI item transliterations.
+            <div className="flex items-center">
+              <Image
+                src="/Assets/Tenderflow AI Logo Horizontal on Transparency.webp"
+                alt="TenderFlow AI - Tender & Bill Automation"
+                width={1049}
+                height={375}
+                priority
+                className="w-[clamp(160px,22vw,250px)] h-auto object-contain"
+              />
+            </div>
+            <p className="mt-1 text-xs text-slate-500 font-medium">
+              AI-powered GeM tenders, professional billing, firm letterheads, &amp; smart offline automation.
             </p>
           </div>
 

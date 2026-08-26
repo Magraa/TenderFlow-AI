@@ -123,7 +123,15 @@ export function AIQuotaDashboardCard({
   };
 
   const handleSaveAISettings = async () => {
-    await onUpdateSettings(aiConfig);
+    const cleanConfig: AISettings = {
+      showQuotaPill: aiConfig.showQuotaPill ?? true,
+      pillPosition: aiConfig.pillPosition || 'bottom-right',
+      warningThresholdPercent: aiConfig.warningThresholdPercent || 20,
+    };
+    if (aiConfig.customDailyLimit && Number(aiConfig.customDailyLimit) > 0) {
+      cleanConfig.customDailyLimit = Number(aiConfig.customDailyLimit);
+    }
+    await onUpdateSettings(cleanConfig);
   };
 
   if (!quota) return null;

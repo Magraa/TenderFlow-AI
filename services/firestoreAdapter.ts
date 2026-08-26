@@ -48,16 +48,23 @@ function nowIso(): IsoString {
 }
 
 /**
- * Remove undefined values from an object to make it Firestore-compatible
+ * Recursively remove undefined values from an object or array to make it Firestore-compatible
  */
-function removeUndefinedValues<T extends Record<string, any>>(obj: T): T {
-  const result = {} as T;
-  for (const [key, value] of Object.entries(obj)) {
-    if (value !== undefined) {
-      result[key as keyof T] = value;
-    }
+function removeUndefinedValues<T>(obj: T): T {
+  if (obj === null || obj === undefined) return obj;
+  if (Array.isArray(obj)) {
+    return obj.map((item) => removeUndefinedValues(item)) as unknown as T;
   }
-  return result;
+  if (typeof obj === 'object' && !(obj instanceof Date)) {
+    const result: any = {};
+    for (const [key, value] of Object.entries(obj)) {
+      if (value !== undefined) {
+        result[key] = removeUndefinedValues(value);
+      }
+    }
+    return result;
+  }
+  return obj;
 }
 
 type Collections = {
@@ -345,7 +352,8 @@ export class FirestoreDB {
       const snap = await tx.get(ref);
       const base = snap.exists() ? normalizeSettingsVersioning(snap.data() as Settings) : await this.getSettings();
       const updated: Settings = normalizeSettingsVersioning({ ...base, ...data, id: 'default', updatedAt: nowIso() });
-      tx.set(ref, { ...updated, _serverUpdatedAt: serverTimestamp() }, { merge: true });
+      const cleanData = removeUndefinedValues({ ...updated, _serverUpdatedAt: serverTimestamp() });
+      tx.set(ref, cleanData, { merge: true });
       return updated;
     });
   }

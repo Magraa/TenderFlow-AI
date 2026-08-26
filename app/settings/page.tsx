@@ -239,8 +239,17 @@ export default function SettingsPage() {
     if (!settings) return;
     setSaving(true);
     try {
+      const cleanAiSettings: AISettings = {
+        showQuotaPill: newAiSettings.showQuotaPill ?? true,
+        pillPosition: newAiSettings.pillPosition || 'bottom-right',
+        warningThresholdPercent: newAiSettings.warningThresholdPercent || 20,
+      };
+      if (newAiSettings.customDailyLimit && Number(newAiSettings.customDailyLimit) > 0) {
+        cleanAiSettings.customDailyLimit = Number(newAiSettings.customDailyLimit);
+      }
+
       const updated = await dataService.settings.update({
-        aiSettings: newAiSettings,
+        aiSettings: cleanAiSettings,
       });
       setSettings(updated);
       setSuccess('AI preferences updated.');

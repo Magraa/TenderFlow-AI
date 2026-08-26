@@ -137,12 +137,22 @@ type DbAdapter = {
 };
 
 async function getAdapter(): Promise<LocalAdapter | import('@/services/firestoreAdapter').FirestoreDB> {
-  if (typeof window === 'undefined') return localDb;
-  if (resolveBackend() !== 'firestore') return localDb;
-  if (!firestoreDbPromise) {
-    firestoreDbPromise = import('@/services/firestoreAdapter').then((mod) => new mod.FirestoreDB());
+  const backend = resolveBackend();
+  const hasFirebaseEnv = Boolean(process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID);
+
+  if (backend === 'firestore' || hasFirebaseEnv) {
+    if (!firestoreDbPromise) {
+      firestoreDbPromise = import('@/services/firestoreAdapter')
+        .then((mod) => new mod.FirestoreDB())
+        .catch((err) => {
+          console.warn('Firestore adapter initialization failed, falling back to localDb:', err);
+          return localDb;
+        });
+    }
+    return firestoreDbPromise;
   }
-  return firestoreDbPromise;
+
+  return localDb;
 }
 
 // Promise-first facade. Keep firebase out of the local-only bundle path via dynamic import.

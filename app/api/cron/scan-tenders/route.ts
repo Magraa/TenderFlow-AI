@@ -55,6 +55,17 @@ async function handleCronScan(req: NextRequest) {
       bodyData = await req.json().catch(() => ({}));
     }
 
+    const targetProfilePayload = bodyData?.profile;
+    if (targetProfilePayload && targetProfilePayload.consigneeState) {
+      const result = await runProfileScan(targetProfilePayload);
+      return NextResponse.json({
+        success: result.success,
+        mode: 'direct-profile-payload',
+        profileId: targetProfilePayload.id || 'payload',
+        result,
+      });
+    }
+
     const targetProfileId = profileId || bodyData?.profileId;
     const isForce = force || Boolean(bodyData?.force);
 

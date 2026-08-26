@@ -1116,15 +1116,20 @@ export class FirestoreDB {
     return this.getEntity('gemScanProfiles' as any, id) as Promise<GeMScanProfile | undefined>;
   }
 
-  async saveGeMScanProfile(profile: Partial<GeMScanProfile> & { name: string; consigneeState: string; consigneeCity: string }): Promise<GeMScanProfile> {
+  async saveGeMScanProfile(profile: Partial<GeMScanProfile> & { name: string; consigneeState: string }): Promise<GeMScanProfile> {
     const now = nowIso();
     const id = profile.id || `profile_${uuid()}`;
+    const cleanCities = Array.isArray(profile.consigneeCities) && profile.consigneeCities.length > 0
+      ? profile.consigneeCities.map((c) => c.trim().toUpperCase()).filter(Boolean)
+      : profile.consigneeCity?.trim() ? [profile.consigneeCity.trim().toUpperCase()] : [];
+
     const data: GeMScanProfile = removeUndefinedValues({
       id,
       name: profile.name.trim(),
       enabled: profile.enabled !== undefined ? profile.enabled : true,
-      consigneeState: profile.consigneeState.trim(),
-      consigneeCity: profile.consigneeCity.trim(),
+      consigneeState: profile.consigneeState.trim().toUpperCase(),
+      consigneeCity: cleanCities[0] || undefined,
+      consigneeCities: cleanCities,
       department: profile.department?.trim() || undefined,
       departments: Array.isArray(profile.departments) && profile.departments.length > 0
         ? profile.departments.map((d) => d.trim()).filter(Boolean)

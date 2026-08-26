@@ -202,7 +202,8 @@ export interface GeMScanProfile {
   
   // Search Filters
   consigneeState: string; // e.g., "MADHYA PRADESH"
-  consigneeCity: string;  // e.g., "MORENA"
+  consigneeCity?: string;  // primary/single city
+  consigneeCities?: string[]; // multiple cities support
   department?: string;    // single or primary department
   departments?: string[];  // multiple departments support
   ministry?: string;

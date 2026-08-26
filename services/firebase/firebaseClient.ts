@@ -36,10 +36,6 @@ function readFirebaseClientConfig(): FirebaseClientConfig {
 }
 
 export function getFirebaseApp(): FirebaseApp {
-  if (typeof window === 'undefined') {
-    throw new Error('Firebase client can only be initialized in the browser.');
-  }
-
   if (getApps().length) return getApp();
   return initializeApp(readFirebaseClientConfig());
 }
@@ -64,8 +60,8 @@ export function getFirebaseFirestore(): Firestore {
     }
   }
 
-  // Offline persistence (best-effort; multiple tabs may fail)
-  if (!persistenceEnabled) {
+  // Offline persistence (browser only; best-effort)
+  if (typeof window !== 'undefined' && !persistenceEnabled) {
     persistenceEnabled = true;
     enableIndexedDbPersistence(firestore).catch(() => {
       // Ignore: either multiple tabs, unsupported browser, or already enabled elsewhere.

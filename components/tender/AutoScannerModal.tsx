@@ -26,12 +26,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { db } from '@/services/db';
 
-interface AutoScannerModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onRefreshData?: () => void;
-}
-
 // Fallback Indian States & UTs (Always available immediately)
 const DEFAULT_INDIAN_STATES = [
   { value: 'MADHYA PRADESH', label: 'MADHYA PRADESH' },
@@ -94,6 +88,12 @@ const INTERVAL_OPTIONS = [
   { value: 1440, label: 'Once Daily (24 Hours)' },
 ];
 
+interface AutoScannerModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onRefreshData?: () => void;
+}
+
 export function AutoScannerModal({ isOpen, onClose, onRefreshData }: AutoScannerModalProps) {
   const [activeTab, setActiveTab] = useState<'profiles' | 'editor' | 'logs' | 'guide'>('profiles');
   const [profiles, setProfiles] = useState<GeMScanProfile[]>([]);
@@ -111,7 +111,8 @@ export function AutoScannerModal({ isOpen, onClose, onRefreshData }: AutoScanner
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formName, setFormName] = useState('');
   const [formState, setFormState] = useState('');
-  const [formCity, setFormCity] = useState('');
+  const [formCities, setFormCities] = useState<string[]>([]);
+  const [customCityInput, setCustomCityInput] = useState('');
   const [formDepts, setFormDepts] = useState<string[]>([]);
   const [customDeptInput, setCustomDeptInput] = useState('');
   const [formDaysAhead, setFormDaysAhead] = useState(30);
@@ -192,7 +193,8 @@ export function AutoScannerModal({ isOpen, onClose, onRefreshData }: AutoScanner
     setEditingId(null);
     setFormName('');
     setFormState('');
-    setFormCity('');
+    setFormCities([]);
+    setCustomCityInput('');
     setFormDepts([]);
     setCustomDeptInput('');
     setFormDaysAhead(30);
@@ -211,7 +213,15 @@ export function AutoScannerModal({ isOpen, onClose, onRefreshData }: AutoScanner
     setEditingId(profile.id);
     setFormName(profile.name);
     setFormState(profile.consigneeState);
-    setFormCity(profile.consigneeCity);
+
+    // Populate multiple cities
+    const initialCities = Array.isArray(profile.consigneeCities) && profile.consigneeCities.length > 0
+      ? profile.consigneeCities
+      : profile.consigneeCity
+      ? [profile.consigneeCity]
+      : [];
+    setFormCities(initialCities);
+    setCustomCityInput('');
 
     // Populate multiple departments
     const initialDepts = Array.isArray(profile.departments) && profile.departments.length > 0
@@ -230,6 +240,19 @@ export function AutoScannerModal({ isOpen, onClose, onRefreshData }: AutoScanner
     setActiveTab('editor');
   };
 
+  const handleAddCity = (city: string) => {
+    const trimmed = city.trim().toUpperCase();
+    if (!trimmed) return;
+    if (!formCities.includes(trimmed)) {
+      setFormCities((prev) => [...prev, trimmed]);
+    }
+    setCustomCityInput('');
+  };
+
+  const handleRemoveCity = (cityToRemove: string) => {
+    setFormCities((prev) => prev.filter((c) => c !== cityToRemove));
+  };
+
   const handleAddDepartment = (dept: string) => {
     const trimmed = dept.trim();
     if (!trimmed) return;
@@ -245,19 +268,30 @@ export function AutoScannerModal({ isOpen, onClose, onRefreshData }: AutoScanner
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formName.trim() || !formState.trim() || !formCity.trim()) {
-      setScanMessage({ type: 'error', text: 'Rule Name, State, and City are required!' });
+    const cleanCities = formCities.map((c) => c.trim().toUpperCase()).filter(Boolean);
+
+    if (!formName.trim()) {
+      setScanMessage({ type: 'error', text: 'Scan Rule Name is required!' });
+      return;
+    }
+    if (!formState.trim()) {
+      setScanMessage({ type: 'error', text: 'Consignee State is required!' });
+      return;
+    }
+    if (cleanCities.length === 0) {
+      setScanMessage({ type: 'error', text: 'Please add at least one Consignee City!' });
       return;
     }
 
     setSaving(true);
     try {
       const cleanDepts = formDepts.map((d) => d.trim()).filter(Boolean);
-      const profileToSave: Partial<GeMScanProfile> & { name: string; consigneeState: string; consigneeCity: string } = {
+      const profileToSave: Partial<GeMScanProfile> & { name: string; consigneeState: string } = {
         id: editingId || undefined,
         name: formName.trim(),
-        consigneeState: formState.trim(),
-        consigneeCity: formCity.trim(),
+        consigneeState: formState.trim().toUpperCase(),
+        consigneeCity: cleanCities[0],
+        consigneeCities: cleanCities,
         department: cleanDepts.length === 1 ? cleanDepts[0] : undefined,
         departments: cleanDepts,
         daysAhead: Number(formDaysAhead) || 30,
@@ -267,7 +301,14 @@ export function AutoScannerModal({ isOpen, onClose, onRefreshData }: AutoScanner
         enabled: formEnabled,
       };
 
-      await db.saveGeMScanProfile(profileToSave);
+      const savedProfile = await db.saveGeMScanProfile(profileToSave);
+      // Also sync to server API endpoint for background server jobs
+      await fetch('/api/gem/profiles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(savedProfile),
+      }).catch(() => {});
+
       setScanMessage({ type: 'success', text: `Scan profile "${formName}" saved successfully!` });
       resetForm();
       setActiveTab('profiles');
@@ -283,6 +324,7 @@ export function AutoScannerModal({ isOpen, onClose, onRefreshData }: AutoScanner
     if (!window.confirm(`Are you sure you want to delete scan rule "${name}"?`)) return;
     try {
       await db.deleteGeMScanProfile(id);
+      await fetch(`/api/gem/profiles?id=${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(() => {});
       setProfiles((prev) => prev.filter((p) => p.id !== id));
       setScanMessage({ type: 'success', text: `Scan rule "${name}" deleted.` });
     } catch (err: any) {
@@ -294,6 +336,11 @@ export function AutoScannerModal({ isOpen, onClose, onRefreshData }: AutoScanner
     const updated = { ...profile, enabled: !profile.enabled };
     try {
       await db.saveGeMScanProfile(updated);
+      await fetch('/api/gem/profiles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+      }).catch(() => {});
       setProfiles((prev) => prev.map((p) => (p.id === profile.id ? updated : p)));
     } catch (err: any) {
       console.error('Failed to toggle profile enabled:', err);
@@ -301,11 +348,18 @@ export function AutoScannerModal({ isOpen, onClose, onRefreshData }: AutoScanner
   };
 
   const handleRunScanNow = async (profileId: string) => {
+    const targetProfile = profiles.find((p) => p.id === profileId);
     setRunningProfileId(profileId);
     setScanMessage(null);
     try {
-      const res = await fetch(`/api/cron/scan-tenders?profileId=${encodeURIComponent(profileId)}&secret=local`, {
+      const res = await fetch(`/api/cron/scan-tenders?secret=local`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          profile: targetProfile,
+          profileId,
+          force: true,
+        }),
       });
       const data = await res.json();
       if (data.success) {
@@ -350,7 +404,7 @@ export function AutoScannerModal({ isOpen, onClose, onRefreshData }: AutoScanner
                 </span>
               </div>
               <p className="text-xs text-indigo-200/80">
-                Autonomously monitors State, City, Multiple Departments, stars new tenders & executes AI deep analysis
+                Autonomously monitors State, Multiple Cities, Multiple Departments, stars new tenders & executes AI deep analysis
               </p>
             </div>
           </div>
@@ -453,7 +507,7 @@ export function AutoScannerModal({ isOpen, onClose, onRefreshData }: AutoScanner
                   <Bot className="w-12 h-12 text-indigo-300 mx-auto mb-3" />
                   <h3 className="text-sm font-bold text-gray-800">No Auto-Scan Rules Configured Yet</h3>
                   <p className="text-xs text-gray-500 max-w-md mx-auto mt-1 mb-4">
-                    Create a rule to scan your favorite State, City, and Multiple Departments (e.g. Urban Development & PWD in Morena) at scheduled intervals.
+                    Create a rule to scan your favorite State, Multiple Cities, and Departments (e.g. Morena, Gwalior & Bhopal) at scheduled intervals.
                   </p>
                   <Button onClick={handleOpenCreate} className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs gap-1.5 shadow-sm">
                     <Plus className="w-3.5 h-3.5" /> Add First Scan Rule
@@ -463,6 +517,12 @@ export function AutoScannerModal({ isOpen, onClose, onRefreshData }: AutoScanner
                 <div className="grid grid-cols-1 gap-4">
                   {profiles.map((p) => {
                     const isRunning = runningProfileId === p.id;
+                    const citiesList = Array.isArray(p.consigneeCities) && p.consigneeCities.length > 0
+                      ? p.consigneeCities
+                      : p.consigneeCity
+                      ? [p.consigneeCity]
+                      : [];
+
                     const deptsList = Array.isArray(p.departments) && p.departments.length > 0
                       ? p.departments
                       : p.department
@@ -477,7 +537,7 @@ export function AutoScannerModal({ isOpen, onClose, onRefreshData }: AutoScanner
                         }`}
                       >
                         <div className="flex items-start justify-between gap-4">
-                          <div>
+                          <div className="space-y-2">
                             <div className="flex items-center gap-2">
                               <h4 className="font-bold text-gray-900 text-sm">{p.name}</h4>
                               <span
@@ -499,10 +559,10 @@ export function AutoScannerModal({ isOpen, onClose, onRefreshData }: AutoScanner
                               )}
                             </div>
 
-                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-2.5 text-xs text-gray-600">
-                              <div className="flex items-center gap-1 text-gray-700">
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-gray-600">
+                              <div className="flex items-center gap-1 text-gray-700 font-semibold">
                                 <MapPin className="w-3.5 h-3.5 text-indigo-600" />
-                                <span className="font-semibold">{p.consigneeCity}</span>, {p.consigneeState}
+                                <span>{p.consigneeState}</span>
                               </div>
 
                               <div className="flex items-center gap-1 text-gray-500">
@@ -517,10 +577,22 @@ export function AutoScannerModal({ isOpen, onClose, onRefreshData }: AutoScanner
                               )}
                             </div>
 
+                            {/* Cities badges in card */}
+                            {citiesList.length > 0 && (
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span className="text-[10px] font-semibold text-gray-500">Cities:</span>
+                                {citiesList.map((c, i) => (
+                                  <span key={i} className="px-2 py-0.5 rounded-md text-[10px] bg-indigo-50 text-indigo-800 border border-indigo-200 font-bold uppercase">
+                                    {c}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+
                             {/* Departments chips in card */}
                             {deptsList.length > 0 && (
-                              <div className="flex flex-wrap items-center gap-1 mt-2.5">
-                                <Building2 className="w-3 h-3 text-amber-600 mr-0.5" />
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span className="text-[10px] font-semibold text-gray-500">Depts:</span>
                                 {deptsList.map((d, i) => (
                                   <span key={i} className="px-2 py-0.5 rounded-full text-[10px] bg-amber-50 text-amber-800 border border-amber-200 font-medium">
                                     {d}
@@ -596,7 +668,7 @@ export function AutoScannerModal({ isOpen, onClose, onRefreshData }: AutoScanner
                 <div className="md:col-span-2 space-y-1">
                   <label className="text-xs font-semibold text-gray-700">Scan Rule Name *</label>
                   <Input
-                    placeholder="e.g., Morena - Urban Development & PWD"
+                    placeholder="e.g., Morena & Gwalior - Urban Development & PWD"
                     value={formName}
                     onChange={(e) => setFormName(e.target.value)}
                     required
@@ -605,13 +677,13 @@ export function AutoScannerModal({ isOpen, onClose, onRefreshData }: AutoScanner
                 </div>
 
                 {/* State */}
-                <div className="space-y-1">
+                <div className="md:col-span-2 space-y-1">
                   <label className="text-xs font-semibold text-gray-700">Consignee State *</label>
                   <select
                     value={formState}
                     onChange={(e) => {
                       setFormState(e.target.value);
-                      setFormCity('');
+                      setFormCities([]);
                     }}
                     required
                     className="w-full h-9 rounded-md border border-input bg-background px-3 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
@@ -625,34 +697,103 @@ export function AutoScannerModal({ isOpen, onClose, onRefreshData }: AutoScanner
                   </select>
                 </div>
 
-                {/* City */}
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-gray-700">
-                    Consignee City * {loadingCities && <span className="text-indigo-600 font-normal">(Loading...)</span>}
-                  </label>
-                  {cityList.length > 0 ? (
-                    <select
-                      value={formCity}
-                      onChange={(e) => setFormCity(e.target.value)}
-                      required
-                      className="w-full h-9 rounded-md border border-input bg-background px-3 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
-                    >
-                      <option value="">-- Select City --</option>
-                      {cityList.map((c) => (
-                        <option key={c.value} value={c.value}>
-                          {c.label}
-                        </option>
+                {/* Multi-City Selection Section */}
+                <div className="md:col-span-2 space-y-2 p-3.5 bg-indigo-50/40 border border-indigo-100 rounded-xl">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
+                      <MapPin className="w-3.5 h-3.5 text-indigo-600" />
+                      Consignee Cities * (Add Multiple Cities)
+                    </label>
+                    {formCities.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setFormCities([])}
+                        className="text-[11px] text-red-600 hover:text-red-800 font-medium"
+                      >
+                        Clear All Cities ({formCities.length})
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Active Selected Cities Badges */}
+                  {formCities.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5 p-2 bg-white rounded-lg border border-indigo-200 min-h-[36px] items-center">
+                      {formCities.map((city, index) => (
+                        <span
+                          key={index}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold bg-indigo-600 text-white shadow-xs"
+                        >
+                          <MapPin className="w-3 h-3 text-indigo-200" />
+                          <span>{city}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveCity(city)}
+                            className="text-indigo-200 hover:text-white ml-0.5"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </span>
                       ))}
-                    </select>
+                    </div>
                   ) : (
-                    <Input
-                      placeholder="e.g., MORENA, GWALIOR, BHOPAL"
-                      value={formCity}
-                      onChange={(e) => setFormCity(e.target.value)}
-                      required
-                      className="text-xs h-9 uppercase"
-                    />
+                    <p className="text-[11px] text-amber-700 bg-amber-50 p-2 rounded border border-amber-200">
+                      ⚠️ Please select or type at least one city below to monitor (e.g. <strong>MORENA</strong>, <strong>GWALIOR</strong>).
+                    </p>
                   )}
+
+                  {/* Dropdown to pick and add a city */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                    <div className="space-y-1">
+                      <span className="text-[10px] text-gray-500 font-semibold block">
+                        Pick from {formState || 'State'} city list {loadingCities && '(Loading...)'}:
+                      </span>
+                      <select
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            handleAddCity(e.target.value);
+                            e.target.value = '';
+                          }
+                        }}
+                        disabled={!formState || loadingCities}
+                        className="w-full h-9 rounded-md border border-input bg-white px-3 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                      >
+                        <option value="">-- Click to Add City from List --</option>
+                        {cityList.map((c) => (
+                          <option key={c.value} value={c.value} disabled={formCities.includes(c.value.toUpperCase())}>
+                            {formCities.includes(c.value.toUpperCase()) ? `✓ ${c.label}` : c.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <span className="text-[10px] text-gray-500 font-semibold block">Or type custom city name:</span>
+                      <div className="flex gap-1.5">
+                        <Input
+                          placeholder="e.g., MORENA"
+                          value={customCityInput}
+                          onChange={(e) => setCustomCityInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handleAddCity(customCityInput);
+                            }
+                          }}
+                          className="text-xs h-9 uppercase bg-white"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleAddCity(customCityInput)}
+                          disabled={!customCityInput.trim()}
+                          className="text-xs h-9 gap-1 shrink-0 bg-white"
+                        >
+                          <Plus className="w-3.5 h-3.5" /> Add
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Multi-Department Filter Section */}
@@ -695,7 +836,7 @@ export function AutoScannerModal({ isOpen, onClose, onRefreshData }: AutoScanner
                     </div>
                   ) : (
                     <p className="text-[11px] text-gray-500 italic bg-white/60 p-2 rounded border border-dashed border-gray-200">
-                      No specific departments selected. The scanner will monitor <strong>ALL</strong> departments in this city.
+                      No specific departments selected. The scanner will monitor <strong>ALL</strong> departments in the selected cities.
                     </p>
                   )}
 

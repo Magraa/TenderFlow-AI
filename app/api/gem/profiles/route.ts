@@ -18,9 +18,10 @@ export async function GET(_req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const data = await req.json();
-    if (!data.name || !data.consigneeState || !data.consigneeCity) {
+    const hasCity = Boolean(data.consigneeCity) || (Array.isArray(data.consigneeCities) && data.consigneeCities.length > 0);
+    if (!data.name || !data.consigneeState || !hasCity) {
       return NextResponse.json(
-        { success: false, error: 'name, consigneeState, and consigneeCity are required.' },
+        { success: false, error: 'name, consigneeState, and at least one consigneeCity are required.' },
         { status: 400 }
       );
     }

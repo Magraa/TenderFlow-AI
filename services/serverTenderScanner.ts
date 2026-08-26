@@ -41,37 +41,51 @@ export async function runProfileScan(profile: GeMScanProfile): Promise<ScanExecu
     const fromDateStr = formatDateToGeM(now);
     const toDateStr = formatDateToGeM(futureDate);
 
-    // 2. Prepare GeM search filters
-    // Use location search to fetch city & state bids, then match configured departments
+    // 2. Prepare cities list
+    const targetCities = Array.isArray(profile.consigneeCities) && profile.consigneeCities.length > 0
+      ? profile.consigneeCities.map((c) => c.trim().toUpperCase()).filter(Boolean)
+      : profile.consigneeCity?.trim() ? [profile.consigneeCity.trim().toUpperCase()] : [''];
+
+    // Prepare target departments list
     const targetDepartments = Array.isArray(profile.departments) && profile.departments.length > 0
       ? profile.departments.map((d) => d.trim()).filter(Boolean)
       : profile.department?.trim() ? [profile.department.trim()] : [];
 
-    const searchType = 'location-search';
-    const filters: GeMSearchFilters = {
-      searchType,
-      state_name_con: profile.consigneeState,
-      city_name_con: profile.consigneeCity,
-      department: targetDepartments.length === 1 ? targetDepartments[0] : undefined,
-      ministry: profile.ministry || undefined,
-      buyerState: profile.consigneeState || undefined,
-      category: profile.category || undefined,
-      bidEndFrom: fromDateStr,
-      bidEndTo: toDateStr,
-      bidEndFromCon: fromDateStr,
-      bidEndToCon: toDateStr,
-      bidEndFromMin: fromDateStr,
-      bidEndToMin: toDateStr,
-      page: 1,
-    };
+    const allFetchedBidsMap = new Map<string, GeMTender>();
 
-    // 3. Query GeM API
-    const response = await searchGeMBids(filters);
-    if (!response || !response.success) {
-      throw new Error(response?.error || 'Failed to fetch bids from GeM portal');
+    // 3. Query GeM API for each city configured
+    for (const city of targetCities) {
+      const filters: GeMSearchFilters = {
+        searchType: 'location-search',
+        state_name_con: profile.consigneeState,
+        city_name_con: city || undefined,
+        department: targetDepartments.length === 1 ? targetDepartments[0] : undefined,
+        ministry: profile.ministry || undefined,
+        buyerState: profile.consigneeState || undefined,
+        category: profile.category || undefined,
+        bidEndFrom: fromDateStr,
+        bidEndTo: toDateStr,
+        bidEndFromCon: fromDateStr,
+        bidEndToCon: toDateStr,
+        bidEndFromMin: fromDateStr,
+        bidEndToMin: toDateStr,
+        page: 1,
+      };
+
+      try {
+        const response = await searchGeMBids(filters);
+        if (response && response.success && Array.isArray(response.bids)) {
+          response.bids.forEach((bid) => {
+            const key = (bid.bidNumber || String(bid.id)).trim().toUpperCase();
+            allFetchedBidsMap.set(key, bid);
+          });
+        }
+      } catch (err: any) {
+        console.warn(`[Auto-Scanner] Failed to fetch bids for city "${city}":`, err?.message);
+      }
     }
 
-    let allBids: GeMTender[] = response.bids || [];
+    let allBids: GeMTender[] = Array.from(allFetchedBidsMap.values());
 
     // Filter by departments if one or more departments are specified (OR matching)
     if (targetDepartments.length > 0) {
@@ -113,28 +127,44 @@ export async function runProfileScan(profile: GeMScanProfile): Promise<ScanExecu
     let analyzedCount = 0;
     const newBidNumbers: string[] = [];
 
-    // 5. Process new bids: Auto-star & Auto-Analyze
+    // Max AI analyses per single scan run to protect API quota and avoid serverless timeouts
+    const MAX_AI_ANALYSES_PER_RUN = 10;
+    let aiCallsRemaining = profile.autoAnalyze ? MAX_AI_ANALYSES_PER_RUN : 0;
+    let hitRateLimit = false;
+
+    // 5. Process new bids: Auto-star & Auto-Analyze with Rate Limiting Protection
     for (const bid of newBidsToProcess) {
       newBidNumbers.push(bid.bidNumber);
 
       let tenderAnalysis: GeMAIAnalysis | undefined = undefined;
 
-      // Auto AI Analysis
-      if (profile.autoAnalyze && bid.pdfUrl) {
+      // Auto AI Analysis with Safety Pacing
+      if (profile.autoAnalyze && bid.pdfUrl && aiCallsRemaining > 0 && !hitRateLimit) {
         try {
-          console.log(`[Auto-Scanner] Auto-analyzing bid ${bid.bidNumber}...`);
+          console.log(`[Auto-Scanner] Auto-analyzing bid ${bid.bidNumber} (${analyzedCount + 1}/${Math.min(newBidsToProcess.length, MAX_AI_ANALYSES_PER_RUN)} in batch)...`);
           tenderAnalysis = await analyzeGeMTenderDirectly(bid.pdfUrl, bid, bid.bidNumber);
           if (tenderAnalysis) {
             analyzedCount++;
+            aiCallsRemaining--;
             // Save to global permanent analyses repository
             await db.saveGeMAIAnalysis(bid.bidNumber, bid.id, tenderAnalysis);
           }
+
+          // Safety delay between AI requests to respect 15 RPM free tier limits
+          if (aiCallsRemaining > 0) {
+            await new Promise((resolve) => setTimeout(resolve, 2500));
+          }
         } catch (aiErr: any) {
-          console.warn(`[Auto-Scanner] AI Analysis failed for bid ${bid.bidNumber}:`, aiErr?.message);
+          const errMsg = aiErr?.message || '';
+          console.warn(`[Auto-Scanner] AI Analysis failed for bid ${bid.bidNumber}:`, errMsg);
+          if (errMsg.includes('429') || errMsg.toLowerCase().includes('quota') || errMsg.toLowerCase().includes('rate limit')) {
+            console.warn('[Auto-Scanner] API Rate limit reached. Deferring remaining AI analyses to next interval.');
+            hitRateLimit = true;
+          }
         }
       }
 
-      // Auto-Star to Dashboard
+      // Auto-Star to Dashboard (All bids are saved safely even if pending analysis)
       if (profile.autoStar) {
         try {
           await db.starGeMTender(

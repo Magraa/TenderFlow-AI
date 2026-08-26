@@ -127,6 +127,28 @@ ${analysis.items.map((it) => `- ${it.name} | Qty: ${it.quantity} ${it.unit || ''
               </Button>
             )}
 
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (typeof window !== 'undefined') {
+                  try {
+                    sessionStorage.setItem(
+                      'current_gem_tender_for_analysis',
+                      JSON.stringify({ tender, analysis })
+                    );
+                  } catch {}
+                  const targetUrl = `/tenders/open/analysis?id=${encodeURIComponent(tender.bidNumber || String(tender.id))}`;
+                  window.open(targetUrl, '_blank');
+                }
+              }}
+              className="h-8 px-2.5 bg-blue-600 hover:bg-blue-700 text-white border-blue-500 text-xs shadow-sm"
+              title="Open Full Analysis in New Tab"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline ml-1.5">Open in New Tab</span>
+            </Button>
+
             <button
               type="button"
               onClick={onClose}

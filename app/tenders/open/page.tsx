@@ -445,73 +445,21 @@ export default function OpenTendersPage() {
     }));
   };
 
-  // Trigger Deep AI Analysis
-  const handleRunAIAnalysis = async (tender: GeMTender | GeMStarredTender) => {
-    const tenderKey = tender.bidNumber || String(tender.id);
-    setSelectedTenderForAnalysis(tender);
-    setAiModalOpen(true);
-
-    // If analysis already exists in memory or cache, load and display immediately
+  // Trigger Deep AI Analysis & Open in New Tab
+  const handleRunAIAnalysis = (tender: GeMTender | GeMStarredTender) => {
     const existingAnalysis = getTenderAnalysisData(tender);
-    if (existingAnalysis) {
-      setCurrentAnalysis(existingAnalysis);
-      return;
-    }
 
-    // Otherwise, perform fresh AI analysis via server API
-    setAiAnalysisLoading(true);
-    setAnalyzingKey(tenderKey);
-    setCurrentAnalysis(null);
+    // Save tender & cached analysis in session storage for instant zero-latency load
+    if (typeof window !== 'undefined') {
+      try {
+        sessionStorage.setItem(
+          'current_gem_tender_for_analysis',
+          JSON.stringify({ tender, analysis: existingAnalysis || null })
+        );
+      } catch {}
 
-    try {
-      const res = await fetch('/api/gem/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          pdfUrl: tender.pdfUrl,
-          bidNumber: tender.bidNumber,
-          tender,
-        }),
-      });
-
-      const data = await res.json();
-      if (data.success && data.analysis) {
-        aiUsageService.recordUsage({ feature: 'gem_analyze', success: true });
-        setCurrentAnalysis(data.analysis);
-
-        // 1. Save to Global Permanent AI Analysis Repository (Firestore + Local DB)
-        await db.saveGeMAIAnalysis(tender.bidNumber, tender.id, data.analysis).catch(() => {});
-
-        // 2. Update local state & cache
-        if (tender.bidNumber) {
-          const key = tender.bidNumber.trim().toUpperCase();
-          setAnalysesMap((prev) => ({ ...prev, [key]: data.analysis }));
-          if (typeof window !== 'undefined') {
-            try {
-              localStorage.setItem(`gem_ai_cache_${key}`, JSON.stringify(data.analysis));
-            } catch {}
-          }
-        }
-
-        // 3. Auto-star & save AI analysis to Firebase
-        const savedStarred = await db.starGeMTender(tender as GeMTender, data.analysis);
-        setStarredTenders((prev) => {
-          const filtered = prev.filter(
-            (t) =>
-              t.bidNumber?.trim().toUpperCase() !== tender.bidNumber?.trim().toUpperCase() &&
-              t.gemBidId !== savedStarred.gemBidId
-          );
-          return [savedStarred, ...filtered];
-        });
-      } else {
-        alert(data.error || 'Failed to complete AI analysis on tender PDF.');
-      }
-    } catch (err: any) {
-      console.error('AI Analysis failed:', err);
-      alert(err?.message || 'Network error during AI analysis.');
-    } finally {
-      setAiAnalysisLoading(false);
-      setAnalyzingKey(null);
+      const targetUrl = `/tenders/open/analysis?id=${encodeURIComponent(tender.bidNumber || String(tender.id))}`;
+      window.open(targetUrl, '_blank');
     }
   };
 

@@ -178,24 +178,27 @@ flowchart TD
 
 ---
 
-## 🧠 AI Tender Deep Analysis
+## 🧠 AI Tender Deep Analysis & Executive PDF Export
 
-Transform dense 50-page government tender documents into actionable intelligence within seconds:
+Transform dense 50-page government tender documents into actionable intelligence and print-ready executive briefing reports within seconds:
 
 ```mermaid
 flowchart LR
     DOC["📑 <b>Raw Tender / GeM Bid</b><br/>PDF & Portal Data"] --> LLM["🤖 <b>Deep Analysis Engine</b><br/>Multi-Prompt Intelligence"]
     LLM --> T1["📋 <b>Buyer Added Terms (ATC)</b><br/>Extracted Legal Clauses"]
     LLM --> T2["⚙️ <b>Item Specifications</b><br/>Quantities & Detailed Specs"]
-    LLM --> T3["💰 <b>Financial Terms</b><br/>EMD, EPBG & Estimated Values"]
+    LLM --> T3["💰 <b>Financial Terms</b><br/>EMD, EPBG & Calculated Budget"]
     LLM --> T4["📜 <b>Compliance Checklist</b><br/>Turnover, Experience & Mandatory Docs"]
     
-    T1 & T2 & T3 & T4 --> IMP["📥 <b>1-Click Import to Draft</b>"]
+    T1 & T2 & T3 & T4 --> SUITE["🌐 <b>Full-Screen Analysis Suite</b><br/>/tenders/open/analysis"]
+    SUITE --> PDF["📄 <b>Multi-Page Executive PDF Report</b><br/>Intelligent ATC Pagination Engine"]
+    SUITE --> IMP["📥 <b>1-Click Import to Draft</b>"]
 ```
 
-* **Interactive ATC Clause Search**: Filter and search through complex buyer-added conditions in real time.
-* **Instant Risk & Requirement Detection**: Highlights critical EMD figures, submission timelines, and eligibility criteria before bidding.
-* **Direct Import to Document Generator**: One click transfers the analyzed item list and buyer requirements directly into the tender drafting suite.
+* **Dedicated Full-Screen Analysis Suite (`/tenders/open/analysis`)**: Dedicated landing page featuring interactive tabbed views for Overview, ATC Clause search, Specifications, Financials, Eligibility, and Mandatory Document checklists.
+* **Intelligent Executive PDF Generator (`gemAnalysisPdfService`)**: Generates print-ready multi-page briefing reports with smart ATC height balancing across pages (Page 1 summary + Page 2/3 seamless continuation).
+* **Smart Budget Estimator**: Automatically derives estimated tender valuation from 1% EMD figures when undisclosed by the buyer department.
+* **Direct Import to Document Generator**: One click transfers all parsed specifications, line items, and requirements directly into the tender drafting suite.
 
 ---
 
@@ -268,21 +271,23 @@ graph TB
         P1["Next.js 15 App Router"]
         P2["Tailwind CSS + Lucide Icons"]
         P3["GeM Open Tenders Explorer (/tenders/open)"]
-        P4["TenderAIAnalysisModal (Deep ATC Parser)"]
-        P5["AIQuotaPill (Real-Time Floating HUD)"]
-        P6["TipTap WYSIWYG Rich Editor"]
-        P7["QuickCustomizer™ Floating Drawer"]
-        P8["Live A4 Canvas & Layout Engine"]
+        P4["Full-Screen Analysis Suite (/tenders/open/analysis)"]
+        P5["TenderAIAnalysisModal (Deep ATC Parser)"]
+        P6["AIQuotaPill & SyncStatusPill (Live HUDs)"]
+        P7["TipTap WYSIWYG Rich Editor"]
+        P8["QuickCustomizer™ Floating Drawer"]
+        P9["Live A4 Canvas & Layout Engine"]
     end
 
     subgraph SERVICES ["⚙️ BUSINESS SERVICE LAYER"]
         S1["<b>gemScraperService</b><br/>GeM Session, CSRF & Solr Client"]
-        S2["<b>aiUsageService</b><br/>Daily Quota, Token Tracking & Alerts"]
-        S3["<b>documentService</b><br/>Generation & Version Snapshots"]
-        S4["<b>aiDraftService</b><br/>Prompt Stacks & LLM Orchestration"]
-        S5["<b>layoutEngine</b><br/>A4 Margins, Bleeds & Letterhead"]
-        S6["<b>mappingService</b><br/>4-Variant Dictionaries & Transliteration"]
-        S7["<b>governmentTemplates</b><br/>Standardized Legal Layouts"]
+        S2["<b>gemAnalysisPdfService</b><br/>Multi-Page Executive PDF Engine"]
+        S3["<b>aiUsageService</b><br/>Daily Quota, Token Tracking & Alerts"]
+        S4["<b>documentService</b><br/>Generation & Version Snapshots"]
+        S5["<b>aiDraftService</b><br/>Prompt Stacks & LLM Orchestration"]
+        S6["<b>layoutEngine</b><br/>A4 Margins, Bleeds & Letterhead"]
+        S7["<b>mappingService</b><br/>4-Variant Dictionaries & Transliteration"]
+        S8["<b>governmentTemplates</b><br/>Standardized Legal Layouts"]
     end
 
     subgraph AI_LAYER ["🤖 MULTI-LLM AI ENGINE"]

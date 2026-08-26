@@ -16,7 +16,7 @@ import {
 import { Settings } from '@/types'
 import type { SyncedCollectionName } from '@/services/localDb/indexedDb'
 import { SyncStatusPill } from '@/components/SyncStatusPill'
-import { AIQuotaPill } from '@/components/ai/AIQuotaPill'
+// import { AIQuotaPill } from '@/components/ai/AIQuotaPill'
 import { PWAInstallPrompt } from '@/components/PWAInstallPrompt'
 import { PWAUpdateToast } from '@/components/PWAUpdateToast'
 
@@ -190,7 +190,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <>
       {children}
       <SyncStatusPill />
-      <AIQuotaPill />
+      {/* <AIQuotaPill /> */}
       <PWAInstallPrompt />
       <PWAUpdateToast />
     </>

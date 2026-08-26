@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import type { SyncStatusSnapshot } from '@/services/sync/collectionSync';
 
@@ -24,12 +25,14 @@ function describeStatus(online: boolean, totalPending: number): { label: string;
 }
 
 export function SyncStatusPill() {
+  const pathname = usePathname();
+  const isHomepage = pathname === '/dashboard' || pathname === '/';
   const enabled = Boolean((process.env.NEXT_PUBLIC_SYNC_COLLECTIONS || '').trim());
   const [status, setStatus] = useState<SyncStatusSnapshot | null>(null);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || !isHomepage) return;
     let cancelled = false;
     let unsubStatus: (() => void) | undefined;
     let unsubOnline: (() => void) | undefined;
@@ -54,9 +57,9 @@ export function SyncStatusPill() {
       unsubStatus?.();
       unsubOnline?.();
     };
-  }, [enabled]);
+  }, [enabled, isHomepage]);
 
-  if (!enabled || !status) return null;
+  if (!isHomepage || !enabled || !status) return null;
 
   const { online, totalPending, pendingByCollection } = status;
   const { label, dotClass } = describeStatus(online, totalPending);

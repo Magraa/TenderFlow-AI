@@ -682,7 +682,7 @@ export default function DashboardPage() {
       <div className="mx-auto max-w-screen-xl px-3.5 sm:px-6 lg:px-8 py-4 sm:py-8 space-y-4 sm:space-y-6">
 
         {/* ─── SEARCH & FILTER SECTION ─── */}
-        <Card className="bg-white border border-slate-200 shadow-xs overflow-hidden">
+        <Card className="bg-white border border-slate-200 shadow-xs overflow-visible relative z-20">
           <CardContent className="p-3.5 sm:p-5 pt-3.5 sm:pt-5 space-y-3.5 sm:space-y-4">
             {/* Search Input Bar */}
             <div className="relative flex items-center">

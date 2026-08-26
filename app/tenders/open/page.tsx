@@ -1168,7 +1168,7 @@ export default function OpenTendersPage() {
         {viewMode === 'live' && (
           <>
             {/* Search & Filter Card */}
-            <Card className="shadow-lg border-slate-200 bg-white rounded-xl overflow-hidden mb-6">
+            <Card className="shadow-lg border-slate-200 bg-white rounded-xl overflow-visible mb-6 relative z-20">
               <div className="border-b border-slate-100 bg-slate-50/50 p-2 sm:p-3.5">
                 <div className="flex items-center overflow-x-auto no-scrollbar flex-nowrap gap-1.5 shrink-0">
                   <button
@@ -1908,7 +1908,7 @@ export default function OpenTendersPage() {
         {viewMode === 'starred' && (
           <div className="space-y-6">
             {/* Header, Search, Filter & Sort Control Card */}
-            <Card className="shadow-lg border-slate-200 bg-white rounded-xl overflow-hidden">
+            <Card className="shadow-lg border-slate-200 bg-white rounded-xl overflow-visible relative z-20">
               <div className="p-4 sm:p-6 space-y-4">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div>

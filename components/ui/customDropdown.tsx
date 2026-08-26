@@ -94,7 +94,7 @@ export function CustomDropdown({
     : options;
 
   return (
-    <div ref={containerRef} className={`relative text-left ${className}`} id={id}>
+    <div ref={containerRef} className={`relative text-left ${isOpen ? 'z-[60]' : 'z-auto'} ${className}`} id={id}>
       {label && (
         <label className="block text-xs font-semibold text-slate-700 mb-1">
           {label}
@@ -142,7 +142,7 @@ export function CustomDropdown({
       {/* Dropdown Menu */}
       {isOpen && (
         <div
-          className={`absolute left-0 top-full mt-1.5 z-50 w-full min-w-[200px] bg-white rounded-xl border border-slate-200 shadow-xl overflow-hidden animate-dropdown-in ${menuClassName}`}
+          className={`absolute left-0 top-full mt-1.5 z-[70] w-full min-w-[200px] bg-white rounded-xl border border-slate-200 shadow-2xl overflow-hidden animate-dropdown-in ${menuClassName}`}
           role="listbox"
         >
           {/* Search box within dropdown */}

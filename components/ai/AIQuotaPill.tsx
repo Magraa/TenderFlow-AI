@@ -40,6 +40,14 @@ export function AIQuotaPill({ forceShow = false, inline = false, className = '' 
     let cancelled = false;
 
     const refreshData = async () => {
+      let localAiConfig = null;
+      if (typeof window !== 'undefined') {
+        try {
+          const raw = localStorage.getItem('tender_app_ai_settings');
+          if (raw) localAiConfig = JSON.parse(raw);
+        } catch {}
+      }
+
       try {
         const loadedSettings = await dataService.settings.get().catch(() => null);
         if (!cancelled && loadedSettings) {
@@ -49,8 +57,8 @@ export function AIQuotaPill({ forceShow = false, inline = false, className = '' 
 
       if (!cancelled) {
         const currentQuota = aiUsageService.getQuotaInfo(
-          settings?.aiSettings?.customDailyLimit,
-          settings?.aiSettings?.warningThresholdPercent || 20
+          settings?.aiSettings?.customDailyLimit ?? localAiConfig?.customDailyLimit,
+          settings?.aiSettings?.warningThresholdPercent ?? localAiConfig?.warningThresholdPercent ?? 20
         );
         setQuota(currentQuota);
       }
@@ -59,12 +67,18 @@ export function AIQuotaPill({ forceShow = false, inline = false, className = '' 
     refreshData();
     const unsub = aiUsageService.onUsageChange(refreshData);
 
+    const onSettingsUpdate = () => refreshData();
+    window.addEventListener('tender_app_ai_settings_updated', onSettingsUpdate);
+    window.addEventListener('storage', onSettingsUpdate);
+
     // Refresh reset timer every 30 seconds
     const interval = setInterval(refreshData, 30000);
 
     return () => {
       cancelled = true;
       unsub();
+      window.removeEventListener('tender_app_ai_settings_updated', onSettingsUpdate);
+      window.removeEventListener('storage', onSettingsUpdate);
       clearInterval(interval);
     };
   }, [settings?.aiSettings?.customDailyLimit, settings?.aiSettings?.warningThresholdPercent]);
@@ -101,14 +115,25 @@ export function AIQuotaPill({ forceShow = false, inline = false, className = '' 
 
   if (!quota) return null;
 
-  // Determine visibility: default to showing unless explicitly disabled in settings
-  const shouldShow =
-    forceShow ||
-    inline ||
-    settings?.aiSettings?.showQuotaPill === true ||
-    settings?.aiSettings?.showQuotaPill === undefined;
+  // Determine visibility: check both settings and localStorage cache
+  let isEnabled = true;
+  if (typeof window !== 'undefined') {
+    try {
+      const raw = localStorage.getItem('tender_app_ai_settings');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.showQuotaPill === false) isEnabled = false;
+      }
+    } catch {}
+  }
+  if (settings && settings.aiSettings?.showQuotaPill === false) {
+    isEnabled = false;
+  }
 
-  if (!shouldShow && !forceShow && !inline) return null;
+  // If disabled in settings and not forced, do not render
+  if (!forceShow && !isEnabled) {
+    return null;
+  }
 
   const isHealthy = quota.status === 'healthy';
   const isWarning = quota.status === 'warning';

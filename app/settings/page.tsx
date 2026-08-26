@@ -251,6 +251,12 @@ export default function SettingsPage() {
       const updated = await dataService.settings.update({
         aiSettings: cleanAiSettings,
       });
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('tender_app_ai_settings', JSON.stringify(cleanAiSettings));
+          window.dispatchEvent(new CustomEvent('tender_app_ai_settings_updated'));
+        } catch {}
+      }
       setSettings(updated);
       setSuccess('AI preferences updated.');
       setTimeout(() => setSuccess(''), 2500);

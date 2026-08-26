@@ -131,6 +131,12 @@ export function AIQuotaDashboardCard({
     if (aiConfig.customDailyLimit && Number(aiConfig.customDailyLimit) > 0) {
       cleanConfig.customDailyLimit = Number(aiConfig.customDailyLimit);
     }
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('tender_app_ai_settings', JSON.stringify(cleanConfig));
+        window.dispatchEvent(new CustomEvent('tender_app_ai_settings_updated'));
+      } catch {}
+    }
     await onUpdateSettings(cleanConfig);
   };
 

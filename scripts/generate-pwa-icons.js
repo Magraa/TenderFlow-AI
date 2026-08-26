@@ -140,7 +140,18 @@ async function generateIcons() {
     .toFile(path.join(outputDir, 'favicon-16x16.png'));
   console.log('Generated favicon-16x16.png');
 
-  console.log('All PWA icons successfully generated from TenderFlow AI Gradient Logo Only.png!');
+  // 6. Generate SVG icon (512x512 vector wrapper with high-res TenderFlow AI mark)
+  const png512Buffer = await sharp(path.join(outputDir, 'icon-512x512.png')).toBuffer();
+  const png512Base64 = png512Buffer.toString('base64');
+  const svgContent = `<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <title>TenderFlow AI</title>
+  <image href="data:image/png;base64,${png512Base64}" x="0" y="0" width="512" height="512" preserveAspectRatio="xMidYMid meet" />
+</svg>
+`;
+  fs.writeFileSync(path.join(outputDir, 'icon.svg'), svgContent, 'utf-8');
+  console.log('Generated icon.svg');
+
+  console.log('All PWA icons & icon.svg successfully generated from TenderFlow AI Gradient Logo Only.png!');
 }
 
 generateIcons().catch(console.error);

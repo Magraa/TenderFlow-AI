@@ -453,6 +453,12 @@ export default function OpenTendersPage() {
   // AI Background Job Queue State
   const [aiJobs, setAiJobs] = useState<AiAnalysisJob[]>([]);
   const isProcessingQueueRef = useRef(false);
+  const searchResponseRef = useRef(searchResponse);
+  searchResponseRef.current = searchResponse;
+  const starredTendersRef = useRef(starredTenders);
+  starredTendersRef.current = starredTenders;
+  const aiJobsRef = useRef(aiJobs);
+  aiJobsRef.current = aiJobs;
 
   // Enqueue a tender into the background worker queue
   const enqueueAiJob = useCallback((tender: GeMTender | GeMStarredTender) => {
@@ -479,108 +485,113 @@ export default function OpenTendersPage() {
     });
   }, [analysesMap, starredTenders]);
 
-  // Background AI Queue Worker (Processes jobs sequentially with safety delays)
+  // Background AI Queue Worker (Processes all queued jobs continuously in a robust loop)
   useEffect(() => {
-    const processNextJob = async () => {
-      if (isProcessingQueueRef.current) return;
+    const hasQueued = aiJobs.some((j) => j.status === 'queued');
+    if (!hasQueued || isProcessingQueueRef.current) return;
 
-      const nextJob = aiJobs.find((j) => j.status === 'queued');
-      if (!nextJob) return;
+    isProcessingQueueRef.current = true;
 
-      isProcessingQueueRef.current = true;
+    const runQueue = async () => {
+      while (true) {
+        // 1. Pick the next queued job from latest ref
+        const nextJob = aiJobsRef.current.find((j) => j.status === 'queued');
+        if (!nextJob) break;
 
-      // Update job state to running
-      setAiJobs((prev) =>
-        prev.map((j) =>
-          j.id === nextJob.id
-            ? { ...j, status: 'running', stepMessage: '🤖 Extracting PDF & ATC documents with AI...' }
-            : j
-        )
-      );
-
-      try {
-        const allKnownTenders = [...(searchResponse?.bids || []), ...starredTenders];
-        const tenderObj = allKnownTenders.find(
-          (t) => (t.bidNumber || String(t.id)).trim().toUpperCase() === nextJob.bidNumber.trim().toUpperCase()
+        // 2. Mark this job as running
+        setAiJobs((prev) =>
+          prev.map((j) =>
+            j.id === nextJob.id
+              ? { ...j, status: 'running', stepMessage: '🤖 Extracting PDF & ATC documents with AI...' }
+              : j
+          )
         );
 
-        const res = await fetch('/api/gem/analyze', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            pdfUrl: nextJob.pdfUrl || tenderObj?.pdfUrl,
-            bidNumber: nextJob.bidNumber,
-            tender: tenderObj,
-          }),
-        });
-
-        const data = await res.json();
-        if (data.success && data.analysis) {
-          aiUsageService.recordUsage({ feature: 'gem_analyze', success: true });
-
-          // 1. Save to Global Permanent AI Analysis Repository
-          await db.saveGeMAIAnalysis(
-            nextJob.bidNumber,
-            tenderObj?.id || 0,
-            data.analysis
-          ).catch(() => {});
-
-          // 2. Update local state & cache
-          const key = nextJob.bidNumber.trim().toUpperCase();
-          setAnalysesMap((prev) => ({ ...prev, [key]: data.analysis }));
-          if (typeof window !== 'undefined') {
-            try {
-              localStorage.setItem(`gem_ai_cache_${key}`, JSON.stringify(data.analysis));
-            } catch {}
-          }
-
-          // If tender is starred, update its aiAnalysis in starredTenders state
-          setStarredTenders((prev) =>
-            prev.map((st) =>
-              (st.bidNumber || String(st.id)).trim().toUpperCase() === key
-                ? { ...st, aiAnalysis: data.analysis }
-                : st
-            )
+        try {
+          const allKnownTenders = [...(searchResponseRef.current?.bids || []), ...starredTendersRef.current];
+          const tenderObj = allKnownTenders.find(
+            (t) => (t.bidNumber || String(t.id)).trim().toUpperCase() === nextJob.bidNumber.trim().toUpperCase()
           );
 
-          // Update job to completed
+          const res = await fetch('/api/gem/analyze', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              pdfUrl: nextJob.pdfUrl || tenderObj?.pdfUrl,
+              bidNumber: nextJob.bidNumber,
+              tender: tenderObj,
+            }),
+          });
+
+          const data = await res.json();
+          if (data.success && data.analysis) {
+            aiUsageService.recordUsage({ feature: 'gem_analyze', success: true });
+
+            // 1. Save to Global Permanent AI Analysis Repository
+            await db.saveGeMAIAnalysis(
+              nextJob.bidNumber,
+              tenderObj?.id || 0,
+              data.analysis
+            ).catch(() => {});
+
+            // 2. Update local state & cache
+            const key = nextJob.bidNumber.trim().toUpperCase();
+            setAnalysesMap((prev) => ({ ...prev, [key]: data.analysis }));
+            if (typeof window !== 'undefined') {
+              try {
+                localStorage.setItem(`gem_ai_cache_${key}`, JSON.stringify(data.analysis));
+              } catch {}
+            }
+
+            // If tender is starred, update its aiAnalysis in starredTenders state
+            setStarredTenders((prev) =>
+              prev.map((st) =>
+                (st.bidNumber || String(st.id)).trim().toUpperCase() === key
+                  ? { ...st, aiAnalysis: data.analysis }
+                  : st
+              )
+            );
+
+            // Update job to completed
+            setAiJobs((prev) =>
+              prev.map((j) =>
+                j.id === nextJob.id
+                  ? {
+                      ...j,
+                      status: 'completed',
+                      stepMessage: '✅ Analysis completed successfully!',
+                      completedAt: Date.now(),
+                    }
+                  : j
+              )
+            );
+          } else {
+            throw new Error(data.error || 'AI Analysis returned unsuccessful');
+          }
+        } catch (err: any) {
           setAiJobs((prev) =>
             prev.map((j) =>
               j.id === nextJob.id
                 ? {
                     ...j,
-                    status: 'completed',
-                    stepMessage: '✅ Analysis completed successfully!',
+                    status: 'failed',
+                    error: err?.message || 'Failed to analyze tender',
                     completedAt: Date.now(),
                   }
                 : j
             )
           );
-        } else {
-          throw new Error(data.error || 'AI Analysis returned unsuccessful');
         }
-      } catch (err: any) {
-        setAiJobs((prev) =>
-          prev.map((j) =>
-            j.id === nextJob.id
-              ? {
-                  ...j,
-                  status: 'failed',
-                  error: err?.message || 'Failed to analyze tender',
-                  completedAt: Date.now(),
-                }
-              : j
-          )
-        );
-      } finally {
-        // 2-second safety delay between calls to respect 15 RPM free tier limits
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-        isProcessingQueueRef.current = false;
+
+        // Safety delay between consecutive AI calls (1.5 seconds)
+        await new Promise((resolve) => setTimeout(resolve, 1500));
       }
+
+      isProcessingQueueRef.current = false;
     };
 
-    processNextJob();
-  }, [aiJobs, searchResponse, starredTenders]);
+    runQueue();
+  }, [aiJobs]);
 
   // Handle single AI analysis button click (Inline execution without opening new tab)
   const handleRunAIAnalysis = (tender: GeMTender | GeMStarredTender) => {

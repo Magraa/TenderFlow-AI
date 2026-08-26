@@ -16,12 +16,13 @@
 
 <p align="center">
   <b>Transform 4 hours of tedious government tender paperwork into a 60-second automated workflow.</b><br />
-  Live GeM Tender Explorer • Deep AI Bid Analysis • Real-Time AI Quota Tracking • One-Click Multi-Document Generation • Firm Letterhead Engine • Bilingual Hindi-English Transliteration • Print-Ready A4 PDF Engine • 100% Offline-First (IndexedDB) + Cloud Sync (Firestore)
+  24/7 Server Auto-Scanner • Live GeM Explorer • Deep AI Bid Analysis • Real-Time AI Quota Tracking • One-Click Multi-Document Generation • Firm Letterhead Engine • Bilingual Hindi-English Transliteration • Print-Ready A4 PDF Engine • 100% Offline-First (IndexedDB) + Cloud Sync (Firestore)
 </p>
 
 <p align="center">
   <a href="#-key-features">Key Features</a> •
   <a href="#-system-workflow">System Workflow</a> •
+  <a href="#-247-autonomous-server-side-auto-scanner">24/7 Auto-Scanner</a> •
   <a href="#-gem-tender-explorer">GeM Explorer</a> •
   <a href="#-ai-tender-deep-analysis">AI Analysis</a> •
   <a href="#-real-time-ai-quota-hud">AI Quota HUD</a> •
@@ -42,7 +43,7 @@
 
 **TenderFlow AI** is an enterprise-grade procurement automation platform engineered specifically for government contractors, vendors, and administrative departments.
 
-Whether importing live published bids from India's official **GeM (Government e-Marketplace)** portal or entering custom tender specifications, TenderFlow provides **instant AI deep-analysis of complex tender clauses (ATC)**, tracks live **AI API quotas in real-time**, and orchestrates, drafts, and renders an entire synchronized package of official documents — complete with firm-specific letterheads, custom legal conditions, localized Hindi transliterations, dynamic GST calculations, and pixel-perfect A4 print-ready layouts.
+Whether running **autonomous 24/7 server-side scans** for newly published tenders across Indian states/cities, performing **instant AI deep-analysis of complex tender clauses (ATC)**, or tracking live **AI API quotas in real-time**, TenderFlow orchestrates, drafts, and renders an entire synchronized package of official documents — complete with firm-specific letterheads, custom legal conditions, localized Hindi transliterations, dynamic GST calculations, and pixel-perfect A4 print-ready layouts.
 
 ---
 
@@ -50,6 +51,12 @@ Whether importing live published bids from India's official **GeM (Government e-
 
 ```mermaid
 flowchart TD
+    subgraph CRON ["🤖 24/7 Autonomous Server-Side Scanner"]
+        CS["<b>Vercel Cron (Every 30 Mins)</b><br/>Mumbai (bom1) Serverless Execution"]
+        CP["<b>Scan Profiles</b><br/>State • City • Department • Days Ahead"]
+        CS --> CP
+    end
+
     subgraph SOURCES ["🌐 Tender Input & Live Discovery"]
         G["<b>GeM Portal Live Explorer</b><br/>bidplus.gem.gov.in (Bid/RA, Category, Ministry, BOQ)"]
         M["<b>Manual / Custom Entry</b><br/>Tender ID • Budget • Quantities • Rates • GST %"]
@@ -75,6 +82,7 @@ flowchart TD
         P["<b>A4 Print-Ready PDF with Margins & Signatures</b>"]
     end
 
+    CP -->|Auto-Detect & Background AI Analyze| A
     G -->|1-Click Analyze| A
     A -->|1-Click Auto-Import| O
     G -->|Direct Import| O
@@ -94,6 +102,14 @@ flowchart TD
 <table>
   <tr>
     <td width="50%" valign="top">
+      <h3>🤖 24/7 Autonomous Server Auto-Scanner</h3>
+      <ul>
+        <li><b>Zero-Touch Tender Monitoring:</b> Vercel Cron runs every 30 mins from Mumbai (bom1) serverless nodes.</li>
+        <li><b>Targeted Profiles:</b> Configure custom scan rules by State, City, Department, Ministry, and Category.</li>
+        <li><b>Automated Background AI Analysis:</b> Discovered bids are pre-analyzed with ATC extraction and saved to your database automatically.</li>
+      </ul>
+    </td>
+    <td width="50%" valign="top">
       <h3>🧠 AI Tender Deep-Analysis Modal</h3>
       <ul>
         <li>Instantly parses and decodes complex government tenders into structured, digestible intelligence.</li>
@@ -101,6 +117,8 @@ flowchart TD
         <li><b>Key Insights:</b> Exact EMD amounts, EPBG, technical item specs, turnover/experience criteria, and mandatory checklist documents.</li>
       </ul>
     </td>
+  </tr>
+  <tr>
     <td width="50%" valign="top">
       <h3>📊 Real-Time AI Quota HUD & Tracker</h3>
       <ul>
@@ -109,8 +127,6 @@ flowchart TD
         <li><b>Usage Logs & Alerts:</b> Feature-by-feature breakdown (Drafts, Transliteration, Analysis) with automated threshold warning states.</li>
       </ul>
     </td>
-  </tr>
-  <tr>
     <td width="50%" valign="top">
       <h3>🌐 GeM Live Tender Explorer & Auto-Import</h3>
       <ul>
@@ -119,6 +135,8 @@ flowchart TD
         <li><b>1-Click Import:</b> Auto-populates line items, quantities, and deadlines into the tender drafting suite.</li>
       </ul>
     </td>
+  </tr>
+  <tr>
     <td width="50%" valign="top">
       <h3>🏛️ 1-Click Multi-Document Generation</h3>
       <ul>
@@ -127,8 +145,6 @@ flowchart TD
         <li>Instant document versioning snapshot engine with rollback support.</li>
       </ul>
     </td>
-  </tr>
-  <tr>
     <td width="50%" valign="top">
       <h3>⚡ QuickCustomizer™ Floating Drawer</h3>
       <ul>
@@ -137,6 +153,8 @@ flowchart TD
         <li><b>Per-Clause AI Micro-Regenerator:</b> Inline rephrasing with custom prompt instructions.</li>
       </ul>
     </td>
+  </tr>
+  <tr>
     <td width="50%" valign="top">
       <h3>🔍 Smart Product Autocomplete Portal</h3>
       <ul>
@@ -145,22 +163,12 @@ flowchart TD
         <li>Auto-fills product descriptions, units, rates, and GST tax slabs with 1-click.</li>
       </ul>
     </td>
-  </tr>
-  <tr>
     <td width="50%" valign="top">
       <h3>🎨 Precision A4 Letterhead Engine</h3>
       <ul>
         <li>Dynamic background letterhead integration with <code>contain</code>, <code>cover</code>, and <code>stretch</code> fit modes.</li>
         <li>Print-safe margin boundaries, live safe-zone guides, and overflow detection.</li>
         <li>Drag-and-drop firm digital signatures and official seals.</li>
-      </ul>
-    </td>
-    <td width="50%" valign="top">
-      <h3>🤖 Multi-LLM Bilingual Intelligence</h3>
-      <ul>
-        <li>Native support for <b>Google Gemini</b>, <b>Groq (Llama 3)</b>, <b>NVIDIA NIM</b>, and <b>OpenAI</b>.</li>
-        <li>Domain-tuned for formal Hindi government procurement terminology.</li>
-        <li>Automated English-to-Hindi item catalog transliteration cache.</li>
       </ul>
     </td>
   </tr>
@@ -175,6 +183,25 @@ flowchart TD
     </td>
   </tr>
 </table>
+
+---
+
+## 🤖 24/7 Autonomous Server-Side Auto-Scanner
+
+Set up custom surveillance profiles to monitor and parse government bids around the clock:
+
+```mermaid
+flowchart LR
+    CRON["⏰ <b>Vercel Cron Daemon</b><br/>Every 30 Mins (Mumbai Node)"] --> SCAN["⚙️ <b>serverTenderScanner</b><br/>Executes Active Profiles"]
+    SCAN --> GEM["🌐 <b>GeM Portal Search</b><br/>Location & Department Bridge"]
+    GEM --> DEDUP["🔍 <b>Deduplication Engine</b><br/>Filters Already-Saved Tenders"]
+    DEDUP --> AI["🧠 <b>Background AI Deep Analysis</b><br/>Extracts ATC, Specs & EMD"]
+    AI --> STORE["💾 <b>Saved / Starred Database</b><br/>Ready for 1-Click Drafting"]
+```
+
+* **Custom Monitoring Profiles**: Define targeted parameters (e.g., *State: MADHYA PRADESH, City: INDORE, Department: MUNICIPAL CORPORATION, Days: 30*).
+* **Automatic Background AI Ingestion**: Discovered tenders are immediately analyzed by the Multi-LLM engine without requiring user intervention.
+* **Autonomous Execution Logs**: Track scan duration, total tenders found, new unique bids discovered, and AI analysis success metrics in real time.
 
 ---
 
@@ -271,23 +298,26 @@ graph TB
         P1["Next.js 15 App Router"]
         P2["Tailwind CSS + Lucide Icons"]
         P3["GeM Open Tenders Explorer (/tenders/open)"]
-        P4["Full-Screen Analysis Suite (/tenders/open/analysis)"]
-        P5["TenderAIAnalysisModal (Deep ATC Parser)"]
-        P6["AIQuotaPill & SyncStatusPill (Live HUDs)"]
-        P7["TipTap WYSIWYG Rich Editor"]
-        P8["QuickCustomizer™ Floating Drawer"]
-        P9["Live A4 Canvas & Layout Engine"]
+        P4["AutoScannerModal (Profile & Cron Manager)"]
+        P5["Full-Screen Analysis Suite (/tenders/open/analysis)"]
+        P6["TenderAIAnalysisModal (Deep ATC Parser)"]
+        P7["AIQuotaPill & SyncStatusPill (Live HUDs)"]
+        P8["TipTap WYSIWYG Rich Editor"]
+        P9["QuickCustomizer™ Floating Drawer"]
+        P10["Live A4 Canvas & Layout Engine"]
     end
 
     subgraph SERVICES ["⚙️ BUSINESS SERVICE LAYER"]
-        S1["<b>gemScraperService</b><br/>GeM Session, CSRF & Solr Client"]
-        S2["<b>gemAnalysisPdfService</b><br/>Multi-Page Executive PDF Engine"]
-        S3["<b>aiUsageService</b><br/>Daily Quota, Token Tracking & Alerts"]
-        S4["<b>documentService</b><br/>Generation & Version Snapshots"]
-        S5["<b>aiDraftService</b><br/>Prompt Stacks & LLM Orchestration"]
-        S6["<b>layoutEngine</b><br/>A4 Margins, Bleeds & Letterhead"]
-        S7["<b>mappingService</b><br/>4-Variant Dictionaries & Transliteration"]
-        S8["<b>governmentTemplates</b><br/>Standardized Legal Layouts"]
+        S1["<b>serverTenderScanner</b><br/>24/7 Cron Daemon & Profile Scanner"]
+        S2["<b>gemScraperService</b><br/>GeM Session, CSRF & Solr Client"]
+        S3["<b>gemAnalysisService</b><br/>Background Autonomous Deep Analysis"]
+        S4["<b>gemAnalysisPdfService</b><br/>Multi-Page Executive PDF Engine"]
+        S5["<b>aiUsageService</b><br/>Daily Quota, Token Tracking & Alerts"]
+        S6["<b>documentService</b><br/>Generation & Version Snapshots"]
+        S7["<b>aiDraftService</b><br/>Prompt Stacks & LLM Orchestration"]
+        S8["<b>layoutEngine</b><br/>A4 Margins, Bleeds & Letterhead"]
+        S9["<b>mappingService</b><br/>4-Variant Dictionaries & Transliteration"]
+        S10["<b>governmentTemplates</b><br/>Standardized Legal Layouts"]
     end
 
     subgraph AI_LAYER ["🤖 MULTI-LLM AI ENGINE"]
@@ -296,7 +326,8 @@ graph TB
         A3["OpenAI GPT-4o"]
         A4["NVIDIA NIM"]
         A5["Deep Analysis API (/api/gem/analyze)"]
-        A6["Micro-Regenerator & Health Diagnostics"]
+        A6["Vercel Cron (/api/cron/scan-tenders)"]
+        A7["Micro-Regenerator & Health Diagnostics"]
     end
 
     subgraph STORAGE ["🗄️ DUAL-ENGINE STORAGE LAYER"]

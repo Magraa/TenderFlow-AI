@@ -20,6 +20,8 @@ import {
   GeMStarredTender,
   GeMTender,
   GeMAIAnalysis,
+  GeMScanProfile,
+  GeMScanLog,
 } from '@/types';
 import {
   Database,
@@ -1499,7 +1501,96 @@ class LocalStorageDB {
     });
     return result;
   }
+
+  // ==================== Auto-Scanner Profiles & Logs ====================
+
+  listGeMScanProfiles(): GeMScanProfile[] {
+    this.db = this.loadDatabase();
+    return [...(this.db.gemScanProfiles || [])].sort(
+      (a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime()
+    );
+  }
+
+  getGeMScanProfile(id: string): GeMScanProfile | undefined {
+    this.db = this.loadDatabase();
+    return (this.db.gemScanProfiles || []).find((p) => p.id === id);
+  }
+
+  saveGeMScanProfile(profile: Partial<GeMScanProfile> & { name: string; consigneeState: string; consigneeCity: string }): GeMScanProfile {
+    this.db = this.loadDatabase();
+    if (!this.db.gemScanProfiles) this.db.gemScanProfiles = [];
+    const now = nowIso();
+    const id = profile.id || `profile_${uuid()}`;
+    const record: GeMScanProfile = {
+      id,
+      name: profile.name.trim(),
+      enabled: profile.enabled !== undefined ? profile.enabled : true,
+      consigneeState: profile.consigneeState.trim(),
+      consigneeCity: profile.consigneeCity.trim(),
+      department: profile.department?.trim() || undefined,
+      departments: Array.isArray(profile.departments) && profile.departments.length > 0
+        ? profile.departments.map((d) => d.trim()).filter(Boolean)
+        : profile.department?.trim() ? [profile.department.trim()] : undefined,
+      ministry: profile.ministry?.trim() || undefined,
+      category: profile.category?.trim() || undefined,
+      daysAhead: Number(profile.daysAhead) || 30,
+      intervalMinutes: Number(profile.intervalMinutes) || 60,
+      autoAnalyze: profile.autoAnalyze !== undefined ? profile.autoAnalyze : true,
+      autoStar: profile.autoStar !== undefined ? profile.autoStar : true,
+      lastRunAt: profile.lastRunAt || undefined,
+      lastStatus: profile.lastStatus || 'idle',
+      lastFoundCount: profile.lastFoundCount !== undefined ? profile.lastFoundCount : 0,
+      lastError: profile.lastError || undefined,
+      createdAt: profile.createdAt || now,
+      updatedAt: now,
+    };
+
+    const existingIdx = this.db.gemScanProfiles.findIndex((p) => p.id === id);
+    if (existingIdx !== -1) {
+      this.db.gemScanProfiles[existingIdx] = record;
+    } else {
+      this.db.gemScanProfiles.unshift(record);
+    }
+
+    this.saveToStorage(this.db);
+    return record;
+  }
+
+  deleteGeMScanProfile(id: string): void {
+    this.db = this.loadDatabase();
+    if (!this.db.gemScanProfiles) return;
+    this.db.gemScanProfiles = this.db.gemScanProfiles.filter((p) => p.id !== id);
+    this.saveToStorage(this.db);
+  }
+
+  saveGeMScanLog(log: Omit<GeMScanLog, 'id'>): GeMScanLog {
+    this.db = this.loadDatabase();
+    if (!this.db.gemScanLogs) this.db.gemScanLogs = [];
+    const id = `log_${uuid()}`;
+    const record: GeMScanLog = {
+      id,
+      ...log,
+    };
+    this.db.gemScanLogs.unshift(record);
+    if (this.db.gemScanLogs.length > 200) {
+      this.db.gemScanLogs = this.db.gemScanLogs.slice(0, 200);
+    }
+    this.saveToStorage(this.db);
+    return record;
+  }
+
+  listGeMScanLogs(profileId?: string, limitCount = 50): GeMScanLog[] {
+    this.db = this.loadDatabase();
+    let filtered = this.db.gemScanLogs || [];
+    if (profileId) {
+      filtered = filtered.filter((l) => l.profileId === profileId);
+    }
+    return [...filtered]
+      .sort((a, b) => new Date(b.runAt || 0).getTime() - new Date(a.runAt || 0).getTime())
+      .slice(0, limitCount);
+  }
 }
+
 
 
 export const db = new LocalStorageDB();

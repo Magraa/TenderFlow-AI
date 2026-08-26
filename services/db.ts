@@ -123,7 +123,13 @@ type ExposedKeys =
   | 'updateStarredGeMTenderAnalysis'
   | 'saveGeMAIAnalysis'
   | 'getGeMAIAnalysis'
-  | 'listGeMAIAnalyses';
+  | 'listGeMAIAnalyses'
+  | 'listGeMScanProfiles'
+  | 'getGeMScanProfile'
+  | 'saveGeMScanProfile'
+  | 'deleteGeMScanProfile'
+  | 'saveGeMScanLog'
+  | 'listGeMScanLogs';
 
 
 type DbAdapter = {
@@ -257,5 +263,13 @@ export const db: DbAdapter = {
   saveGeMAIAnalysis: async (...args: any[]) => (await getAdapter()).saveGeMAIAnalysis(...(args as [any, any, any])),
   getGeMAIAnalysis: async (...args: any[]) => (await getAdapter()).getGeMAIAnalysis(...(args as [any])),
   listGeMAIAnalyses: async () => (await getAdapter()).listGeMAIAnalyses(),
+
+  // Auto-Scanner Profiles & Logs
+  listGeMScanProfiles: async () => (await getAdapter()).listGeMScanProfiles(),
+  getGeMScanProfile: async (id: string) => (await getAdapter()).getGeMScanProfile(id),
+  saveGeMScanProfile: async (profile: any) => (await getAdapter()).saveGeMScanProfile(profile),
+  deleteGeMScanProfile: async (id: string) => (await getAdapter()).deleteGeMScanProfile(id),
+  saveGeMScanLog: async (log: any) => (await getAdapter()).saveGeMScanLog(log),
+  listGeMScanLogs: async (profileId?: string, limitCount?: number) => (await getAdapter()).listGeMScanLogs(profileId, limitCount),
 };
 

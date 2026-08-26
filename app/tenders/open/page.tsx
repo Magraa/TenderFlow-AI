@@ -21,6 +21,7 @@ import {
   ArrowLeft,
   Star,
   MapPin,
+  Bot,
 } from 'lucide-react';
 import {
   GeMSearchFilters,
@@ -36,6 +37,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { TenderAIAnalysisModal } from '@/components/tender/TenderAIAnalysisModal';
+import { AutoScannerModal } from '@/components/tender/AutoScannerModal';
 
 // Helper to compute default dates (1 month previous to current date & 1 month after current date)
 function getDefaultDates() {
@@ -194,6 +196,9 @@ export default function OpenTendersPage() {
   const [corrigendumLoading, setCorrigendumLoading] = useState(false);
   const [corrigendumHtml, setCorrigendumHtml] = useState<string>('');
   const [selectedBidForCorrigendum, setSelectedBidForCorrigendum] = useState<GeMTender | null>(null);
+
+  // Auto-Scanner 24/7 Modal State
+  const [autoScannerOpen, setAutoScannerOpen] = useState(false);
 
   // Copied state tracker
   const [copiedId, setCopiedId] = useState<string | number | null>(null);
@@ -931,6 +936,18 @@ export default function OpenTendersPage() {
               Starred Tenders Archive
               <span className="bg-slate-900/60 text-white px-2 py-0.5 rounded-full text-xs font-bold">
                 {starredTenders.length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setAutoScannerOpen(true)}
+              className="px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white hover:from-indigo-600 hover:to-purple-700 shadow-md border border-indigo-400/40 ml-auto"
+            >
+              <Bot className="w-4 h-4 animate-pulse" />
+              24/7 Auto-Scanner
+              <span className="bg-emerald-400 text-slate-950 px-2 py-0.2 rounded-full text-[10px] font-black uppercase tracking-wider">
+                Server AI
               </span>
             </button>
           </div>
@@ -2126,6 +2143,16 @@ export default function OpenTendersPage() {
           </div>
         </div>
       )}
+
+      {/* 24/7 Server-Side Auto-Scanner Modal */}
+      <AutoScannerModal
+        isOpen={autoScannerOpen}
+        onClose={() => setAutoScannerOpen(false)}
+        onRefreshData={() => {
+          loadStarredTenders();
+          loadGlobalAnalyses();
+        }}
+      />
     </div>
   );
 }

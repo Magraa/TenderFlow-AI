@@ -194,3 +194,46 @@ export interface GeMTenderAnalysisRecord {
   aiAnalysis: GeMAIAnalysis;
   updatedAt: string;
 }
+
+export interface GeMScanProfile {
+  id: string;
+  name: string; // e.g. "Morena - Urban Development"
+  enabled: boolean;
+  
+  // Search Filters
+  consigneeState: string; // e.g., "MADHYA PRADESH"
+  consigneeCity: string;  // e.g., "MORENA"
+  department?: string;    // single or primary department
+  departments?: string[];  // multiple departments support
+  ministry?: string;
+  category?: string;
+  
+  // Date Settings
+  daysAhead: number; // e.g., 30 (Rolling window from today to today + daysAhead)
+  
+  // Automation Preferences
+  intervalMinutes: number; // e.g., 60, 180, 360, 720
+  autoAnalyze: boolean;    // Automatically trigger AI analysis
+  autoStar: boolean;       // Automatically star/save to dashboard
+  
+  // Runtime State
+  lastRunAt?: string;      // ISO timestamp
+  lastStatus?: 'idle' | 'success' | 'failed' | 'running';
+  lastFoundCount?: number;
+  lastError?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GeMScanLog {
+  id: string;
+  profileId: string;
+  profileName: string;
+  runAt: string;
+  durationMs: number;
+  status: 'success' | 'failed';
+  totalBidsFound: number;
+  newBidsCount: number;
+  analyzedCount: number;
+  error?: string;
+}

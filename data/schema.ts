@@ -11,6 +11,8 @@ import {
   CustomTemplate,
   Bill,
   GeMStarredTender,
+  GeMScanProfile,
+  GeMScanLog,
 } from '@/types';
 import { defaultVersioningSettings } from '@/services/versioningSettings';
 
@@ -32,6 +34,8 @@ export interface Database {
   bills: Bill[];
   starredTenders: GeMStarredTender[];
   gemTenderAnalyses: { id: string; bidNumber: string; gemBidId?: number; aiAnalysis: any; updatedAt: string }[];
+  gemScanProfiles?: GeMScanProfile[];
+  gemScanLogs?: GeMScanLog[];
 }
 
 
@@ -137,6 +141,8 @@ export const defaultDatabase: Database = {
   bills: [],
   starredTenders: [],
   gemTenderAnalyses: [],
+  gemScanProfiles: [],
+  gemScanLogs: [],
 };
 
 

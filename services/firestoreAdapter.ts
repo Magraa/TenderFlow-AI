@@ -33,6 +33,8 @@ import {
   GeMStarredTender,
   GeMTender,
   GeMAIAnalysis,
+  GeMScanProfile,
+  GeMScanLog,
 } from '@/types';
 
 import { getFirebaseFirestore } from '@/services/firebase/firebaseClient';
@@ -1100,4 +1102,83 @@ export class FirestoreDB {
     });
     return result;
   }
+
+  // ==================== Auto-Scanner Profiles & Logs ====================
+
+  async listGeMScanProfiles(): Promise<GeMScanProfile[]> {
+    const list = await this.listEntities('gemScanProfiles' as any);
+    return ((list || []) as GeMScanProfile[]).sort(
+      (a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime()
+    );
+  }
+
+  async getGeMScanProfile(id: string): Promise<GeMScanProfile | undefined> {
+    return this.getEntity('gemScanProfiles' as any, id) as Promise<GeMScanProfile | undefined>;
+  }
+
+  async saveGeMScanProfile(profile: Partial<GeMScanProfile> & { name: string; consigneeState: string; consigneeCity: string }): Promise<GeMScanProfile> {
+    const now = nowIso();
+    const id = profile.id || `profile_${uuid()}`;
+    const data: GeMScanProfile = removeUndefinedValues({
+      id,
+      name: profile.name.trim(),
+      enabled: profile.enabled !== undefined ? profile.enabled : true,
+      consigneeState: profile.consigneeState.trim(),
+      consigneeCity: profile.consigneeCity.trim(),
+      department: profile.department?.trim() || undefined,
+      departments: Array.isArray(profile.departments) && profile.departments.length > 0
+        ? profile.departments.map((d) => d.trim()).filter(Boolean)
+        : profile.department?.trim() ? [profile.department.trim()] : undefined,
+      ministry: profile.ministry?.trim() || undefined,
+      category: profile.category?.trim() || undefined,
+      daysAhead: Number(profile.daysAhead) || 30,
+      intervalMinutes: Number(profile.intervalMinutes) || 60,
+      autoAnalyze: profile.autoAnalyze !== undefined ? profile.autoAnalyze : true,
+      autoStar: profile.autoStar !== undefined ? profile.autoStar : true,
+      lastRunAt: profile.lastRunAt || undefined,
+      lastStatus: profile.lastStatus || 'idle',
+      lastFoundCount: profile.lastFoundCount !== undefined ? profile.lastFoundCount : 0,
+      lastError: profile.lastError || undefined,
+      createdAt: profile.createdAt || now,
+      updatedAt: now,
+    });
+
+    await setDoc(this.docRef('gemScanProfiles' as any, id), {
+      ...data,
+      _serverUpdatedAt: serverTimestamp(),
+    });
+
+    return data;
+  }
+
+  async deleteGeMScanProfile(id: string): Promise<void> {
+    await deleteDoc(this.docRef('gemScanProfiles' as any, id));
+  }
+
+  async saveGeMScanLog(log: Omit<GeMScanLog, 'id'>): Promise<GeMScanLog> {
+    const id = `log_${uuid()}`;
+    const data: GeMScanLog = removeUndefinedValues({
+      id,
+      ...log,
+    });
+
+    await setDoc(this.docRef('gemScanLogs' as any, id), {
+      ...data,
+      _serverUpdatedAt: serverTimestamp(),
+    });
+
+    return data;
+  }
+
+  async listGeMScanLogs(profileId?: string, limitCount = 50): Promise<GeMScanLog[]> {
+    const list = (await this.listEntities('gemScanLogs' as any)) as GeMScanLog[];
+    let filtered = list || [];
+    if (profileId) {
+      filtered = filtered.filter((l) => l.profileId === profileId);
+    }
+    return filtered
+      .sort((a, b) => new Date(b.runAt || 0).getTime() - new Date(a.runAt || 0).getTime())
+      .slice(0, limitCount);
+  }
 }
+

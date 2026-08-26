@@ -314,7 +314,7 @@ ${analysis.items.map((it) => `- ${it.name} | Qty: ${it.quantity} ${it.unit || ''
             <div className="py-12 text-center text-slate-500">
               <FileText className="w-12 h-12 text-slate-300 mx-auto mb-3" />
               <p className="font-semibold text-sm">No AI analysis data available yet.</p>
-              <p className="text-xs text-slate-400 mt-1">Click "Re-analyze" to run deep multimodal AI parsing on this tender.</p>
+              <p className="text-xs text-slate-400 mt-1">Click &quot;Re-analyze&quot; to run deep multimodal AI parsing on this tender.</p>
               {onReanalyze && (
                 <Button onClick={onReanalyze} className="mt-4 bg-blue-600 text-white text-xs">
                   <Sparkles className="w-3.5 h-3.5 mr-1.5" />

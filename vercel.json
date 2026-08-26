@@ -1,9 +1,4 @@
 {
-  "regions": ["bom1"],
-  "crons": [
-    {
-      "path": "/api/cron/scan-tenders",
-      "schedule": "*/30 * * * *"
-    }
-  ]
+  "regions": ["bom1"]
 }
+

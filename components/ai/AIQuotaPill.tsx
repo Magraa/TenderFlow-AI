@@ -291,7 +291,7 @@ export function AIQuotaPill({ forceShow = false, inline = false, className = '' 
             {/* Feature Usage Breakdown */}
             <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
               <div className="mb-2 flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-700">Today's Feature Breakdown</span>
+                <span className="text-xs font-bold text-slate-700">Today&apos;s Feature Breakdown</span>
                 <span className="text-[10px] text-slate-400">Total calls: {quota.requestsUsedToday}</span>
               </div>
               <div className="grid grid-cols-2 gap-2 text-xs">

@@ -830,7 +830,7 @@ _Generated via Magra Automation Panel_`;
                     </h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                       <div className="bg-white p-3.5 rounded-lg border border-slate-200 shadow-xs">
-                        <span className="text-slate-500 font-medium block">मं ालय/रा!य का नाम / Ministry / State:</span>
+                        <span className="text-slate-500 font-medium block">मंत्रालय/राज्य का नाम / Ministry / State:</span>
                         <span className="text-sm font-bold text-slate-900 block mt-1">
                           {analysis.ministryName || 'N/A'}
                         </span>

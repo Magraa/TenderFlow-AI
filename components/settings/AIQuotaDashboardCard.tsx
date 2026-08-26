@@ -382,7 +382,7 @@ export function AIQuotaDashboardCard({
                     View AI Quota pill across Website & Homepage
                   </span>
                   <span className="text-[11px] text-slate-500">
-                    Shows a live status badge (e.g. "🟢 1,482/1,500 left") with one-click full diagnostics.
+                    Shows a live status badge (e.g. &quot;🟢 1,482/1,500 left&quot;) with one-click full diagnostics.
                   </span>
                 </div>
               </label>

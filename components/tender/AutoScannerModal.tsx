@@ -1080,9 +1080,9 @@ export function AutoScannerModal({ isOpen, onClose, onRefreshData }: AutoScanner
               </p>
 
               <div className="bg-slate-900 text-slate-100 rounded-lg p-4 font-mono text-[11px] space-y-1">
-                <div className="text-indigo-400 font-bold">// Cron Webhook Endpoint:</div>
+                <div className="text-indigo-400 font-bold">{"// Cron Webhook Endpoint:"}</div>
                 <div className="text-emerald-300 select-all">POST https://your-domain.com/api/cron/scan-tenders</div>
-                <div className="text-gray-400 text-[10px] mt-1">// Configured automatically in vercel.json every 30 minutes</div>
+                <div className="text-gray-400 text-[10px] mt-1">{"// Configured automatically in vercel.json every 30 minutes"}</div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">

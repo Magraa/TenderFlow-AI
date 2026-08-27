@@ -1099,25 +1099,39 @@ export class FirestoreDB {
   }
 
   async listGeMAIAnalyses(): Promise<Record<string, GeMAIAnalysis>> {
-    const all = await this.listEntities('gemTenderAnalyses' as any);
-    const result: Record<string, GeMAIAnalysis> = {};
-    (all as any[]).forEach((item) => {
-      if (item?.aiAnalysis) {
-        if (item.bidNumber) result[item.bidNumber.trim().toUpperCase()] = item.aiAnalysis;
-        if (item.gemBidId) result[String(item.gemBidId)] = item.aiAnalysis;
-        if (item.id) result[item.id] = item.aiAnalysis;
-      }
-    });
-    return result;
+    try {
+      const colRef = collection(this.firestore, collectionPath('gemTenderAnalyses' as any));
+      const snap = await getDocs(query(colRef, limit(300)));
+      const result: Record<string, GeMAIAnalysis> = {};
+      snap.docs.forEach((d) => {
+        const item = d.data() as any;
+        if (item?.aiAnalysis) {
+          if (item.bidNumber) result[item.bidNumber.trim().toUpperCase()] = item.aiAnalysis;
+          if (item.gemBidId) result[String(item.gemBidId)] = item.aiAnalysis;
+          if (item.id) result[item.id] = item.aiAnalysis;
+        }
+      });
+      return result;
+    } catch (err) {
+      console.error('Error listing gemTenderAnalyses from Firestore:', err);
+      return {};
+    }
   }
 
   // ==================== Auto-Scanner Profiles & Logs ====================
 
   async listGeMScanProfiles(): Promise<GeMScanProfile[]> {
-    const list = await this.listEntities('gemScanProfiles' as any);
-    return ((list || []) as GeMScanProfile[]).sort(
-      (a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime()
-    );
+    try {
+      const colRef = collection(this.firestore, collectionPath('gemScanProfiles' as any));
+      const snap = await getDocs(query(colRef, limit(100)));
+      const list = snap.docs.map((d) => d.data() as GeMScanProfile);
+      return list.sort(
+        (a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime()
+      );
+    } catch (err) {
+      console.error('Error listing gemScanProfiles from Firestore:', err);
+      return [];
+    }
   }
 
   async getGeMScanProfile(id: string): Promise<GeMScanProfile | undefined> {
@@ -1170,9 +1184,13 @@ export class FirestoreDB {
 
   async saveGeMScanLog(log: Omit<GeMScanLog, 'id'>): Promise<GeMScanLog> {
     const id = `log_${uuid()}`;
-    const data: GeMScanLog = removeUndefinedValues({
+    const now = nowIso();
+    const data: GeMScanLog & { updatedAt: string; createdAt: string } = removeUndefinedValues({
       id,
       ...log,
+      runAt: log.runAt || now,
+      createdAt: now,
+      updatedAt: now,
     });
 
     await setDoc(this.docRef('gemScanLogs' as any, id), {
@@ -1184,22 +1202,31 @@ export class FirestoreDB {
   }
 
   async listGeMScanLogs(profileId?: string, limitCount = 50): Promise<GeMScanLog[]> {
-    const list = (await this.listEntities('gemScanLogs' as any)) as GeMScanLog[];
-    let filtered = list || [];
-    if (profileId) {
-      filtered = filtered.filter((l) => l.profileId === profileId);
+    try {
+      const colRef = collection(this.firestore, collectionPath('gemScanLogs' as any));
+      const snap = await getDocs(query(colRef, limit(200)));
+      let filtered = snap.docs.map((d) => d.data() as GeMScanLog);
+      if (profileId) {
+        filtered = filtered.filter((l) => l.profileId === profileId);
+      }
+      return filtered
+        .sort((a, b) => new Date(b.runAt || (b as any).updatedAt || 0).getTime() - new Date(a.runAt || (a as any).updatedAt || 0).getTime())
+        .slice(0, limitCount);
+    } catch (err) {
+      console.error('Error listing gemScanLogs from Firestore:', err);
+      return [];
     }
-    return filtered
-      .sort((a, b) => new Date(b.runAt || 0).getTime() - new Date(a.runAt || 0).getTime())
-      .slice(0, limitCount);
   }
 
   async clearGeMScanLogs(): Promise<void> {
-    const list = (await this.listEntities('gemScanLogs' as any)) as GeMScanLog[];
-    for (const item of list || []) {
-      if (item.id) {
-        await deleteDoc(this.docRef('gemScanLogs' as any, item.id)).catch(() => {});
+    try {
+      const colRef = collection(this.firestore, collectionPath('gemScanLogs' as any));
+      const snap = await getDocs(query(colRef, limit(300)));
+      for (const d of snap.docs) {
+        await deleteDoc(d.ref).catch(() => {});
       }
+    } catch (err) {
+      console.error('Error clearing gemScanLogs from Firestore:', err);
     }
   }
 }

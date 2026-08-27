@@ -1,6 +1,9 @@
 <div align="center">
 
 # ⚡ TENDERFLOW AI
+
+<img src="public/Assets/Tenderflow%20AI%20Logo%20Horizontal%20on%20Transparency.webp" alt="TenderFlow AI Logo" width="480" />
+
 ### *Next-Gen Autonomous Government Tender & Procurement Automation Suite*
 
 [![Next.js 15](https://img.shields.io/badge/Next.js-15.1-black?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org/)

@@ -200,6 +200,8 @@ CRITICAL INSTRUCTIONS FOR ATTACHED BUYER UPLOADED DOCUMENTS & SPECIFICATIONS:
 - Extract complete technical specifications and parameters from the attached buyer specification sheet (such as Voltage range, LED Lumen Output/watt, Frequency range, Power Factor, CRI, Protection Level / IP rating including any amendments like IP-66 vs IP-67, Impact Protection IK level, Total Harmonic Distortion, Surge Protection Internal & External, LED Life Expectancy, LM Report, make/model, etc.).
 - If there are additional items or specific technical parameters in the attached buyer ATC document, add them directly to the "items" and "specifications" fields and highlight them in the summary!
 - Note any specific handwritten or stamped notes or amendments in the ATC sheet (e.g. amendments changing IP-67 to IP-66 or special buyer instructions).
+- Explain each attached document clearly in the "linkedDocuments" array so bidders know what each document contains (BOQ spreadsheet, Chemical specification, Technical parameter sheet, Layout/Drawing, etc.) before opening/downloading.
+- If there are any unusual clauses, special penalties, lab testing requirements, milestone payments, or special instructions not covered elsewhere, add them to "extraObservations".
 - DO NOT summarize or include boilerplate GeM General Terms and Conditions (GTC). Focus strictly on this specific tender's requirements, buyer-added terms, item specifications, and financials.
 
 Return ONLY valid JSON matching this exact structure:
@@ -275,9 +277,13 @@ Return ONLY valid JSON matching this exact structure:
   },
   "linkedDocuments": [
     {
-      "title": "Buyer Technical Specification Document",
-      "url": "https://..."
+      "title": "Descriptive Document Title (e.g. Buyer Technical Specification BOQ / Chemical Parameters Sheet)",
+      "url": "https://... (MUST be a real valid http/https URL. NEVER return 'Attached in prompt' or relative text)",
+      "description": "Clear 1-2 sentence explanation of what this document contains, what specifications/rules it outlines, and why it is important for the bidder."
     }
+  ],
+  "extraObservations": [
+    "Special observation, penalty condition, testing requirement, delivery note, or buyer quirk..."
   ],
   "summaryHindi": "हिंदी में विस्तृत एवं संक्षिप्त सारांश जिसमें वस्तु, मात्रा, तकनीकी विशिष्टताएँ तथा क्रेता की मुख्य शर्तें शामिल हों...",
   "summaryEnglish": "Crisp summary in English highlighting scope, technical specifications, and key buyer terms."
@@ -346,6 +352,12 @@ export async function analyzeGeMTenderDirectly(
     let rawAiResponse = '';
     let usedModel = modelName;
 
+    const docContextPrompt = secondaryDocs.length > 0
+      ? `\n\nBuyer Uploaded Secondary Documents detected:\n${secondaryDocs
+          .map((d, i) => `${i + 1}. Title: "${d.title}" | Direct URL: ${d.url}`)
+          .join('\n')}\nAnalyze each attached sheet and in 'linkedDocuments', provide each document's real URL, accurate title, and a clear 'description' explaining what it contains and requires.`
+      : '';
+
     // Step 4: Call Multimodal Gemini AI with Main PDF + all attached Buyer ATC PDFs
     if (provider === 'gemini' || !provider || provider === 'google') {
       const genAI = new GoogleGenerativeAI(apiKey);
@@ -386,7 +398,7 @@ export async function analyzeGeMTenderDirectly(
       promptParts.push({
         text: `${SYSTEM_ANALYSIS_PROMPT}\n\nAnalyze this GeM Bid Document (Bid Number: ${
           bidNumber || 'N/A'
-        }).${attachedNotes}\nReturn full structured JSON as specified.`,
+        }).${attachedNotes}${docContextPrompt}\nReturn full structured JSON as specified.`,
       });
 
       const result = await model.generateContent(promptParts);
@@ -402,7 +414,7 @@ export async function analyzeGeMTenderDirectly(
             role: 'user',
             content: `Analyze GeM Bid: ${bidNumber || 'N/A'}. Main PDF URL: ${targetPdfUrl}. Secondary attached docs: ${JSON.stringify(
               secondaryDocs
-            )}`,
+            )}${docContextPrompt}`,
           },
         ],
         temperature: 0.1,
@@ -418,7 +430,7 @@ export async function analyzeGeMTenderDirectly(
             role: 'user',
             content: `Analyze GeM Bid: ${bidNumber || 'N/A'}. Main PDF URL: ${targetPdfUrl}. Secondary attached docs: ${JSON.stringify(
               secondaryDocs
-            )}`,
+            )}${docContextPrompt}`,
           },
         ],
         temperature: 0.1,
@@ -434,22 +446,53 @@ export async function analyzeGeMTenderDirectly(
     const allLinkedDocs: GeMLinkedDoc[] = [];
     const seenUrls = new Set<string>();
 
+    // Map AI extracted descriptions by URL or index
+    const aiDocDescriptions = new Map<string, { title?: string; description?: string }>();
     if (Array.isArray(parsedJson.linkedDocuments)) {
       parsedJson.linkedDocuments.forEach((d: any) => {
-        if (d?.url && !seenUrls.has(d.url)) {
-          seenUrls.add(d.url);
-          allLinkedDocs.push({
-            title: String(d.title || 'Attached Document'),
-            url: String(d.url),
+        const rawUrl = String(d?.url || '').trim();
+        // Ignore invalid placeholder URLs like "Attached in prompt", "N/A", relative paths
+        if (rawUrl && rawUrl.startsWith('http')) {
+          aiDocDescriptions.set(rawUrl.toLowerCase(), {
+            title: d.title ? String(d.title).trim() : undefined,
+            description: d.description || d.extractedSummary ? String(d.description || d.extractedSummary).trim() : undefined,
           });
+
+          if (!seenUrls.has(rawUrl)) {
+            seenUrls.add(rawUrl);
+            allLinkedDocs.push({
+              title: String(d.title || 'Buyer Specification Document'),
+              url: rawUrl,
+              description: d.description || d.extractedSummary ? String(d.description || d.extractedSummary).trim() : undefined,
+            });
+          }
         }
       });
     }
 
+    // Ensure all real secondaryDocs extracted from the PDF are present with valid URLs and descriptions
     secondaryDocs.forEach((d) => {
-      if (!seenUrls.has(d.url)) {
+      const lowerUrl = d.url.toLowerCase();
+      const existing = allLinkedDocs.find((x) => x.url.toLowerCase() === lowerUrl);
+      if (existing) {
+        if (!existing.description && aiDocDescriptions.has(lowerUrl)) {
+          existing.description = aiDocDescriptions.get(lowerUrl)?.description;
+        }
+      } else if (!seenUrls.has(d.url)) {
         seenUrls.add(d.url);
-        allLinkedDocs.push(d);
+        const aiInfo = aiDocDescriptions.get(lowerUrl);
+        let fallbackDesc = 'Buyer uploaded ATC & technical specification document.';
+        if (lowerUrl.includes('csv') || lowerUrl.includes('boq')) {
+          fallbackDesc = 'BOQ line items and item parameters spreadsheet.';
+        } else if (lowerUrl.includes('spec')) {
+          fallbackDesc = 'Detailed technical specifications and parameters sheet.';
+        }
+
+        allLinkedDocs.push({
+          title: aiInfo?.title || d.title,
+          url: d.url,
+          description: aiInfo?.description || fallbackDesc,
+        });
       }
     });
 
@@ -473,6 +516,10 @@ export async function analyzeGeMTenderDirectly(
         placeDisplay = district;
       }
     }
+
+    const extraObservations: string[] = Array.isArray(parsedJson.extraObservations)
+      ? (parsedJson.extraObservations as any[]).map(String).map((s: string) => s.trim()).filter((s: string) => s.length > 0)
+      : [];
 
     const analysis: GeMAIAnalysis = {
       ministryName: parsedJson.ministryName || tender?.ministryName || '',
@@ -551,6 +598,7 @@ export async function analyzeGeMTenderDirectly(
         raDate: '',
       },
       linkedDocuments: allLinkedDocs,
+      extraObservations: extraObservations.length > 0 ? extraObservations : undefined,
       summaryHindi: parsedJson.summaryHindi || '',
       summaryEnglish: parsedJson.summaryEnglish || '',
       analyzedAt: new Date().toISOString(),

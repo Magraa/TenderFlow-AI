@@ -120,6 +120,7 @@ export interface GeMLinkedDoc {
   url: string;
   docType?: string;
   extractedSummary?: string;
+  description?: string;
 }
 
 export interface GeMAIAnalysis {
@@ -148,6 +149,7 @@ export interface GeMAIAnalysis {
     raDate?: string;
   };
   linkedDocuments?: GeMLinkedDoc[];
+  extraObservations?: string[];
   summaryHindi?: string;
   summaryEnglish?: string;
   analyzedAt: string;

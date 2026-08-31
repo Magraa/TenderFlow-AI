@@ -512,7 +512,7 @@ export function buildTenderAnalysisHtml(
         <table class="data-table">
           <thead>
             <tr style="background-color: #f1f5f9;">
-              <th style="width: 35%;">Document Name</th>
+              <th style="width: 35%;">Document Name & Overview</th>
               <th style="width: 65%;">Official Direct Access URL</th>
             </tr>
           </thead>
@@ -522,12 +522,16 @@ export function buildTenderAnalysisHtml(
               <td><a class="doc-link" href="${tender.pdfUrl}" target="_blank">${tender.pdfUrl}</a></td>
             </tr>
             ${
-              analysis.linkedDocuments && analysis.linkedDocuments.length > 0
+              analysis.linkedDocuments && analysis.linkedDocuments.filter((d) => d.url && d.url.startsWith('http')).length > 0
                 ? analysis.linkedDocuments
+                    .filter((d) => d.url && d.url.startsWith('http'))
                     .map(
                       (doc) => `
               <tr>
-                <td><strong>${doc.title}</strong></td>
+                <td>
+                  <strong>${doc.title}</strong>
+                  ${doc.description ? `<div style="font-size: 7.5pt; color: #475569; margin-top: 2px;">${doc.description}</div>` : ''}
+                </td>
                 <td><a class="doc-link" href="${doc.url}" target="_blank">${doc.url}</a></td>
               </tr>
             `
@@ -538,6 +542,20 @@ export function buildTenderAnalysisHtml(
           </tbody>
         </table>
       </div>
+
+      ${
+        analysis.extraObservations && analysis.extraObservations.length > 0
+          ? `
+      <!-- SECTION 8: SPECIAL OBSERVATIONS & EXTRA AI INSIGHTS -->
+      <div class="section">
+        <div class="section-title">8. Special Observations & Extra Tender Insights</div>
+        <ol class="atc-list">
+          ${analysis.extraObservations.map((obs) => `<li>${obs}</li>`).join('')}
+        </ol>
+      </div>
+      `
+          : ''
+      }
     </div>
 
     <!-- FOOTER PAGE 2 -->

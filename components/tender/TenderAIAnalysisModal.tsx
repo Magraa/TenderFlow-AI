@@ -16,10 +16,12 @@ import {
   ExternalLink,
   RefreshCw,
   Award,
+  Share2,
+  Lightbulb,
 } from 'lucide-react';
 import { GeMAIAnalysis, GeMTender, GeMStarredTender } from '@/types/gem';
 import { Button } from '@/components/ui/button';
-
+import { generateAndDownloadTenderPdf } from '@/services/gemAnalysisPdfService';
 import { useScrollLock } from '@/components/ui/useScrollLock';
 
 interface TenderAIAnalysisModalProps {
@@ -41,11 +43,13 @@ export function TenderAIAnalysisModal({
   onReanalyze,
   onImportToTender,
 }: TenderAIAnalysisModalProps) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'atc' | 'items' | 'emd' | 'eligibility' | 'docs'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'atc' | 'items' | 'emd' | 'eligibility' | 'docs' | 'extras'>('overview');
   const [copied, setCopied] = useState(false);
   const [atcSearch, setAtcSearch] = useState('');
   const [isClosing, setIsClosing] = useState(false);
   const [modalSummaryLang, setModalSummaryLang] = useState<'hindi' | 'english'>('hindi');
+  const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [sharingWhatsApp, setSharingWhatsApp] = useState(false);
 
   // Lock background scroll when open on PC and Phone
   useScrollLock(isOpen);
@@ -70,6 +74,99 @@ export function TenderAIAnalysisModal({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, isClosing]);
+
+  // Download Analysis PDF
+  const handleDownloadAnalysisPdf = async () => {
+    if (!analysis || !tender) return;
+    setGeneratingPdf(true);
+    try {
+      const blob = await generateAndDownloadTenderPdf(tender, analysis);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `GeM_${(tender.bidNumber || 'Tender').replace(/[^a-zA-Z0-9]/g, '_')}_Analysis.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      console.error('PDF download error:', err);
+      alert('Failed to generate PDF document: ' + (err?.message || 'Unknown error'));
+    } finally {
+      setGeneratingPdf(false);
+    }
+  };
+
+  // Share to WhatsApp
+  const handleShareWhatsApp = async () => {
+    if (!analysis || !tender) return;
+    setSharingWhatsApp(true);
+
+    const estVal =
+      analysis.estimatedBidValue?.isEstimatedProvided && analysis.estimatedBidValue.amount
+        ? `₹ ${analysis.estimatedBidValue.amount.toLocaleString('en-IN')}`
+        : analysis.emdAmount?.amount && analysis.emdAmount.amount > 0
+        ? `₹ ${(analysis.emdAmount.amount * 100).toLocaleString('en-IN')} (Est. from 1% EMD)`
+        : analysis.estimatedBidValue?.rawText || 'Undisclosed';
+
+    const emdVal =
+      analysis.emdAmount?.required && analysis.emdAmount.amount > 0
+        ? `₹ ${analysis.emdAmount.amount.toLocaleString('en-IN')}`
+        : 'Nil';
+
+    const attachedDocsText =
+      analysis.linkedDocuments && analysis.linkedDocuments.length > 0
+        ? `\n\n📎 *Attached Specification Sheets:*\n${analysis.linkedDocuments
+            .filter((d) => d.url && d.url.startsWith('http'))
+            .map((d, i) => `${i + 1}. ${d.title}: ${d.url}${d.description ? `\n   ↳ ${d.description}` : ''}`)
+            .join('\n')}`
+        : '';
+
+    const shareText = `*📑 GeM Tender Analysis Report*
+---------------------------------------
+🆔 *Bid No:* ${tender.bidNumber}
+📋 *Title:* ${analysis.itemTitle || tender.categoryName}
+🏛️ *Ministry:* ${analysis.ministryName || 'N/A'}
+🏢 *Office:* ${analysis.officeName || 'N/A'} ${analysis.placeDisplay ? `(📍 ${analysis.placeDisplay})` : ''}
+📦 *Quantity:* ${(analysis.totalQuantity || tender.totalQuantity || 1).toLocaleString('en-IN')} Units
+💰 *Est. Value:* ${estVal}
+💵 *EMD Amount:* ${emdVal}
+⏰ *Bid End Date:* ${tender.endDate ? new Date(tender.endDate).toLocaleDateString('en-IN') : 'N/A'}
+
+📝 *Executive Summary:*
+${analysis.summaryEnglish || analysis.summaryHindi || 'N/A'}
+
+📥 *Official GeM PDF:* ${tender.pdfUrl}${attachedDocsText}
+---------------------------------------
+_Generated via Magra Automation Panel_`;
+
+    try {
+      if (typeof navigator !== 'undefined' && navigator.share) {
+        const blob = await generateAndDownloadTenderPdf(tender, analysis);
+        const file = new File(
+          [blob],
+          `GeM_${(tender.bidNumber || 'Tender').replace(/[^a-zA-Z0-9]/g, '_')}_Analysis.pdf`,
+          { type: 'application/pdf' }
+        );
+
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            title: `GeM Bid Analysis - ${tender.bidNumber}`,
+            text: shareText,
+            files: [file],
+          });
+          setSharingWhatsApp(false);
+          return;
+        }
+      }
+    } catch (err) {
+      console.log('Native share dismissed or not supported, falling back to WhatsApp Web URL:', err);
+    }
+
+    const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(shareText)}`;
+    window.open(whatsappUrl, '_blank');
+    setSharingWhatsApp(false);
+  };
 
   if (!isOpen) return null;
 
@@ -123,16 +220,18 @@ ${analysis.items.map((it) => `- ${it.name} | Qty: ${it.quantity} ${it.unit || ''
         <div className="w-12 h-1.5 bg-slate-400/40 rounded-full mx-auto mt-2 sm:hidden shrink-0" />
 
         {/* Header */}
-        <div className="px-4 sm:px-5 py-3 sm:py-4 border-b border-slate-200 bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-950 text-white flex items-start justify-between gap-3">
-          <div className="space-y-1 min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-              <span className="text-[11px] sm:text-xs font-mono font-bold bg-blue-500/20 text-blue-300 border border-blue-400/30 px-2 sm:px-2.5 py-0.5 rounded-full truncate max-w-[200px] sm:max-w-none">
+        <div className="px-3 sm:px-5 py-2.5 sm:py-3.5 border-b border-slate-200 bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-950 text-white flex items-center justify-between gap-2 sm:gap-3">
+          
+          {/* Tender Identity (Left Column) */}
+          <div className="space-y-0.5 min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-1 sm:gap-2">
+              <span className="text-[10px] sm:text-xs font-mono font-bold bg-blue-500/25 text-blue-200 border border-blue-400/30 px-1.5 sm:px-2.5 py-0.5 rounded-md sm:rounded-full truncate max-w-[130px] sm:max-w-[220px]">
                 {tender.bidNumber}
               </span>
-              <span className="text-[11px] sm:text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 px-2 sm:px-2.5 py-0.5 rounded-full flex items-center gap-1 shrink-0">
-                <Sparkles className="w-3 h-3" />
-                <span className="hidden xs:inline">AI Intelligence</span>
-                <span className="xs:hidden">AI Intel</span>
+              <span className="text-[10px] sm:text-xs font-semibold bg-emerald-500/25 text-emerald-300 border border-emerald-400/30 px-1.5 sm:px-2 py-0.5 rounded-md sm:rounded-full flex items-center gap-1 shrink-0">
+                <Sparkles className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                <span className="hidden xs:inline">AI Analysis</span>
+                <span className="xs:hidden">AI</span>
               </span>
               {analysis?.modelUsed && (
                 <span className="text-[10px] text-slate-400 font-mono hidden md:inline-block">
@@ -140,38 +239,82 @@ ${analysis.items.map((it) => `- ${it.name} | Qty: ${it.quantity} ${it.unit || ''
                 </span>
               )}
             </div>
-            <h2 className="text-fluid-base font-extrabold text-white leading-snug line-clamp-1">
+            <h2
+              className="text-xs sm:text-sm md:text-base font-extrabold text-white leading-tight line-clamp-1 sm:line-clamp-2"
+              title={analysis?.itemTitle || tender.categoryName || 'GeM Tender Details'}
+            >
               {analysis?.itemTitle || tender.categoryName || 'GeM Tender Details'}
             </h2>
           </div>
 
+          {/* Dialog Action Buttons (Right Column) */}
           <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+            {/* 1. Download Analysis PDF */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDownloadAnalysisPdf}
+              disabled={!analysis || loading || generatingPdf}
+              className="h-8 w-8 sm:w-auto p-0 sm:px-2.5 bg-white/10 hover:bg-white/20 text-white border-white/20 text-xs shadow-xs font-semibold flex items-center justify-center"
+              title="Download AI Analysis PDF Document"
+            >
+              <Download className={`w-3.5 h-3.5 sm:mr-1.5 text-blue-300 shrink-0 ${generatingPdf ? 'animate-bounce' : ''}`} />
+              <span className="hidden sm:inline">{generatingPdf ? 'Generating...' : 'Analysis PDF'}</span>
+            </Button>
+
+            {/* 2. Share to WhatsApp */}
+            <Button
+              size="sm"
+              onClick={handleShareWhatsApp}
+              disabled={!analysis || loading || sharingWhatsApp}
+              className="h-8 w-8 sm:w-auto p-0 sm:px-2.5 bg-[#25D366] hover:bg-[#1EBE5D] text-white text-xs font-semibold shadow-xs flex items-center justify-center"
+              title="Share AI Analysis Summary to WhatsApp"
+            >
+              <Share2 className="w-3.5 h-3.5 sm:mr-1.5 shrink-0" />
+              <span className="hidden sm:inline">WhatsApp</span>
+            </Button>
+
+            {/* 3. Original GeM PDF */}
+            {tender.pdfUrl && (
+              <a
+                href={tender.pdfUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="h-8 w-8 sm:w-auto p-0 sm:px-2.5 inline-flex items-center justify-center bg-blue-600/90 hover:bg-blue-600 text-white border border-blue-400/40 rounded-lg text-xs font-semibold shadow-xs transition-colors"
+                title="Download Original GeM Official PDF"
+              >
+                <Download className="w-3.5 h-3.5 sm:mr-1.5 text-blue-200 shrink-0" />
+                <span className="hidden sm:inline">GeM PDF</span>
+              </a>
+            )}
+
+            {/* 4. Copy Text (Hidden on mobile) */}
             <Button
               variant="outline"
               size="sm"
               onClick={copyAnalysisAsText}
               disabled={!analysis || loading}
-              className="h-8 px-2 sm:px-2.5 bg-white/10 hover:bg-white/20 text-white border-white/20 text-xs"
-              title="Copy Analysis Text"
+              className="h-8 w-8 p-0 bg-white/10 hover:bg-white/20 text-white border-white/20 text-xs hidden md:inline-flex items-center justify-center"
+              title="Copy Full Analysis Text"
             >
               {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-              <span className="hidden sm:inline ml-1.5">{copied ? 'Copied' : 'Copy'}</span>
             </Button>
 
+            {/* 5. Re-analyze (Hidden on small mobile) */}
             {onReanalyze && (
               <Button
                 variant="outline"
                 size="sm"
                 onClick={onReanalyze}
                 disabled={loading}
-                className="h-8 px-2 sm:px-2.5 bg-white/10 hover:bg-white/20 text-white border-white/20 text-xs"
+                className="h-8 w-8 p-0 bg-white/10 hover:bg-white/20 text-white border-white/20 text-xs hidden lg:inline-flex items-center justify-center"
                 title="Re-run AI Analysis"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-                <span className="hidden sm:inline ml-1.5">Re-analyze</span>
               </Button>
             )}
 
+            {/* 6. Open Dedicated Full Page */}
             <Button
               variant="outline"
               size="sm"
@@ -187,17 +330,19 @@ ${analysis.items.map((it) => `- ${it.name} | Qty: ${it.quantity} ${it.unit || ''
                   window.open(targetUrl, '_blank');
                 }
               }}
-              className="h-8 px-2 sm:px-2.5 bg-blue-600 hover:bg-blue-700 text-white border-blue-500 text-xs shadow-sm"
-              title="Open Full Analysis in New Tab"
+              className="h-8 w-8 sm:w-auto p-0 sm:px-2 bg-indigo-600/90 hover:bg-indigo-600 text-white border-indigo-400/40 text-xs shadow-xs hidden xs:inline-flex items-center justify-center"
+              title="Open Full Analysis in Dedicated Page"
             >
-              <ExternalLink className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline ml-1.5">Full Page</span>
+              <ExternalLink className="w-3.5 h-3.5 sm:mr-1" />
+              <span className="hidden sm:inline">Full Page</span>
             </Button>
 
+            {/* 7. Close Dialog Button */}
             <button
               type="button"
               onClick={handleSmoothClose}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-300 hover:text-white hover:bg-white/10 transition-colors"
+              title="Close Dialog"
             >
               <X className="w-5 h-5" />
             </button>
@@ -348,7 +493,22 @@ ${analysis.items.map((it) => `- ${it.name} | Qty: ${it.quantity} ${it.unit || ''
               }`}
             >
               <ExternalLink className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              <span>Docs ({analysis.linkedDocuments.length})</span>
+              <span>Attached Docs ({analysis.linkedDocuments.length})</span>
+            </button>
+          )}
+
+          {analysis?.extraObservations && analysis.extraObservations.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setActiveTab('extras')}
+              className={`py-2.5 sm:py-3 px-3 text-xs sm:text-sm font-semibold border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 shrink-0 ${
+                activeTab === 'extras'
+                  ? 'border-purple-600 text-purple-600'
+                  : 'border-transparent text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Lightbulb className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-purple-600" />
+              <span>Extras & Insights ({analysis.extraObservations.length})</span>
             </button>
           )}
         </div>
@@ -784,31 +944,85 @@ ${analysis.items.map((it) => `- ${it.name} | Qty: ${it.quantity} ${it.unit || ''
                 </div>
               )}
 
-              {/* TAB 6: LINKED DOCUMENTS */}
+              {/* TAB 6: ATTACHED SPECIFICATION SHEETS */}
               {activeTab === 'docs' && analysis.linkedDocuments && (
                 <div className="space-y-3">
                   <p className="text-xs text-slate-500">
-                    Additional documents, specifications, or buyer uploaded files referenced in this GeM tender:
+                    The following buyer-uploaded ATC, BOQ sheets, and technical specification files were extracted directly from the GeM bid document:
                   </p>
-                  <div className="space-y-2">
-                    {analysis.linkedDocuments.map((doc, idx) => (
+                  <div className="space-y-2.5">
+                    {analysis.linkedDocuments
+                      .filter((doc) => doc.url && doc.url.startsWith('http'))
+                      .map((doc, idx) => (
+                        <div
+                          key={idx}
+                          className="bg-white rounded-xl border border-slate-200 hover:border-blue-300 p-4 transition-all shadow-xs space-y-2"
+                        >
+                          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                            <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                              <div className="p-2 rounded-lg bg-blue-50 text-blue-700 mt-0.5 shrink-0">
+                                <FileText className="w-4 h-4" />
+                              </div>
+                              <div className="min-w-0 flex-1 space-y-1">
+                                <span className="text-xs sm:text-sm font-bold text-slate-900 block leading-snug">
+                                  {doc.title}
+                                </span>
+                                {doc.description && (
+                                  <p className="text-xs text-slate-600 bg-slate-50 p-2 rounded-md border border-slate-100 leading-relaxed">
+                                    <strong className="text-blue-900 font-semibold">Document Overview: </strong>
+                                    {doc.description}
+                                  </p>
+                                )}
+                                <span className="text-[11px] text-slate-400 font-mono block truncate">
+                                  {doc.url}
+                                </span>
+                              </div>
+                            </div>
+
+                            <a
+                              href={doc.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center justify-center px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs transition-colors shrink-0 gap-1.5"
+                            >
+                              <span>Open Document</span>
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            </a>
+                          </div>
+                        </div>
+                      ))}
+
+                    {analysis.linkedDocuments.filter((doc) => doc.url && doc.url.startsWith('http')).length === 0 && (
+                      <div className="p-6 text-center bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-500">
+                        No external secondary specification URLs attached in this bid.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 7: EXTRAS & SPECIAL OBSERVATIONS */}
+              {activeTab === 'extras' && analysis.extraObservations && analysis.extraObservations.length > 0 && (
+                <div className="space-y-4">
+                  <div className="bg-purple-50/80 border border-purple-200 rounded-xl p-4 text-xs">
+                    <h4 className="font-bold text-purple-950 flex items-center gap-2 text-sm">
+                      <Lightbulb className="w-4 h-4 text-purple-600" />
+                      Special Observations & Extra AI Insights
+                    </h4>
+                    <p className="text-purple-800 mt-1">
+                      Critical parameters, special penalties, lab testing criteria, delivery instructions, or nuances extracted from the tender and buyer specification documents:
+                    </p>
+                  </div>
+                  <div className="space-y-2.5">
+                    {analysis.extraObservations.map((obs, idx) => (
                       <div
                         key={idx}
-                        className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs"
+                        className="bg-white rounded-xl border border-slate-200 p-3.5 sm:p-4 text-xs sm:text-sm text-slate-800 leading-relaxed flex items-start gap-3 shadow-xs"
                       >
-                        <div className="flex items-center gap-2">
-                          <FileText className="w-4 h-4 text-blue-600" />
-                          <span className="font-semibold text-slate-800">{doc.title}</span>
-                        </div>
-                        <a
-                          href={doc.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center text-blue-600 hover:text-blue-800 font-medium underline gap-1"
-                        >
-                          Open Document
-                          <ExternalLink className="w-3 h-3" />
-                        </a>
+                        <span className="w-5 h-5 rounded-full bg-purple-100 text-purple-800 font-bold text-xs flex items-center justify-center flex-shrink-0 mt-0.5">
+                          {idx + 1}
+                        </span>
+                        <div className="flex-1 whitespace-pre-line">{obs}</div>
                       </div>
                     ))}
                   </div>
@@ -821,15 +1035,32 @@ ${analysis.items.map((it) => `- ${it.name} | Qty: ${it.quantity} ${it.unit || ''
         {/* Footer Actions */}
         <div className="px-4 sm:px-5 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between gap-2 shrink-0">
           <div className="flex items-center gap-2">
-            <a
-              href={tender.pdfUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-xs transition-colors"
-            >
-              <Download className="w-3.5 h-3.5 mr-1 sm:mr-1.5 text-blue-600 shrink-0" />
-              <span><span className="hidden xs:inline">GeM</span> PDF</span>
-            </a>
+            {tender.pdfUrl && (
+              <a
+                href={tender.pdfUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-xs transition-colors"
+                title="Download Original GeM Official PDF"
+              >
+                <Download className="w-3.5 h-3.5 mr-1 sm:mr-1.5 text-blue-600 shrink-0" />
+                <span>GeM PDF</span>
+              </a>
+            )}
+
+            {analysis && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDownloadAnalysisPdf}
+                disabled={generatingPdf}
+                className="inline-flex items-center text-xs font-semibold h-8 px-2.5 sm:px-3 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-xs transition-colors"
+                title="Download Generated AI Analysis Report PDF"
+              >
+                <Download className={`w-3.5 h-3.5 mr-1 sm:mr-1.5 text-indigo-600 shrink-0 ${generatingPdf ? 'animate-bounce' : ''}`} />
+                <span>Analysis PDF</span>
+              </Button>
+            )}
           </div>
 
           <div className="flex items-center gap-2">

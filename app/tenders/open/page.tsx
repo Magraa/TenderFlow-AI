@@ -41,6 +41,7 @@ import { useScrollLock } from '@/components/ui/useScrollLock';
 import { TenderAIAnalysisModal } from '@/components/tender/TenderAIAnalysisModal';
 import { AutoScannerModal } from '@/components/tender/AutoScannerModal';
 import { AiJobQueueDrawer, AiAnalysisJob } from '@/components/tender/AiJobQueueDrawer';
+import { getAllStates, getDistrictsForState, getTownsForDistrict } from '@/data/stateDistrictTowns';
 
 // Helper to compute default dates (1 month previous to current date & 1 month after current date)
 function getDefaultDates() {
@@ -162,6 +163,16 @@ export default function OpenTendersPage() {
   // BOQ Search
   const [boqTitle, setBoqTitle] = useState('');
   const [bidValue, setBidValue] = useState('');
+
+  // Deep District & Town Search
+  const [deepState, setDeepState] = useState('Madhya Pradesh');
+  const [deepDistrict, setDeepDistrict] = useState('Bhind');
+  const [deepTown, setDeepTown] = useState('ALL');
+  const [deepDepartment, setDeepDepartment] = useState('Urban Development and Environment Department');
+
+  const deepStatesList = useMemo(() => getAllStates(), []);
+  const deepDistrictsList = useMemo(() => getDistrictsForState(deepState), [deepState]);
+  const deepTownsList = useMemo(() => getTownsForDistrict(deepState, deepDistrict), [deepState, deepDistrict]);
 
   // Pagination & Results State
   const [currentPage, setCurrentPage] = useState(1);
@@ -795,6 +806,13 @@ export default function OpenTendersPage() {
         payload.bidvalue = bidValue.trim() || undefined;
         payload.bidEndFromBoq = formatDateToGeM(bidEndFrom) || undefined;
         payload.bidEndToBoq = formatDateToGeM(bidEndTo) || undefined;
+      } else if (searchType === 'deep-town-search') {
+        payload.selectedState = deepState;
+        payload.selectedDistrict = deepDistrict;
+        payload.selectedTown = deepTown;
+        payload.department = deepDepartment.trim() || undefined;
+        payload.bidEndFromMin = formatDateToGeM(bidEndFrom) || undefined;
+        payload.bidEndToMin = formatDateToGeM(bidEndTo) || undefined;
       }
 
       try {
@@ -830,6 +848,10 @@ export default function OpenTendersPage() {
       consigneeCity,
       boqTitle,
       bidValue,
+      deepState,
+      deepDistrict,
+      deepTown,
+      deepDepartment,
     ]
   );
 
@@ -1227,6 +1249,21 @@ export default function OpenTendersPage() {
                   >
                     BOQ Title
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchType('deep-town-search');
+                      setCurrentPage(1);
+                    }}
+                    className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 shrink-0 ${
+                      searchType === 'deep-town-search'
+                        ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-sm ring-1 ring-emerald-500'
+                        : 'bg-emerald-50/80 text-emerald-800 hover:bg-emerald-100 border border-emerald-300'
+                    }`}
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                    District & Town (Deep Scan)
+                  </button>
                 </div>
               </div>
 
@@ -1450,25 +1487,170 @@ export default function OpenTendersPage() {
                     </div>
                   )}
 
+                  {/* Mode 5: District & Town (Deep Scan) */}
+                  {searchType === 'deep-town-search' && (
+                    <div className="space-y-4">
+                      <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50/40 border border-emerald-200/90 rounded-xl p-3 sm:p-3.5 text-xs text-emerald-950 flex items-start gap-3 shadow-xs">
+                        <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-700 shrink-0 mt-0.5">
+                          <Sparkles className="w-4 h-4" />
+                        </div>
+                        <div className="leading-relaxed">
+                          <span className="font-bold text-emerald-900">Deep Scan Mode Activated:</span> Bypasses GeM&apos;s missing-location bug. Even when government buyers leave state or district blank when posting a tender (such as Akoda Nagar Parishad), this scan queries the department directly and resolves the exact town and local body via official buyer usernames and consignee addresses.
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3.5">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">State</label>
+                          <CustomDropdown
+                            value={deepState}
+                            onChange={(val) => {
+                              setDeepState(val);
+                              const dists = getDistrictsForState(val);
+                              if (dists.length > 0) {
+                                setDeepDistrict(dists[0]);
+                                setDeepTown('ALL');
+                              }
+                            }}
+                            options={deepStatesList.map((s) => ({ value: s, label: s }))}
+                            searchable
+                            placeholder="Select State"
+                            buttonClassName="h-10 text-xs sm:text-sm border-emerald-300 focus:ring-emerald-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">District</label>
+                          <CustomDropdown
+                            value={deepDistrict}
+                            onChange={(val) => {
+                              setDeepDistrict(val);
+                              setDeepTown('ALL');
+                            }}
+                            options={deepDistrictsList.map((d) => ({ value: d, label: d }))}
+                            searchable
+                            placeholder="Select District"
+                            buttonClassName="h-10 text-xs sm:text-sm border-emerald-300 focus:ring-emerald-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">Town / Local Body</label>
+                          <CustomDropdown
+                            value={deepTown}
+                            onChange={(val) => setDeepTown(val)}
+                            options={[
+                              { value: 'ALL', label: `✨ All Towns in ${deepDistrict}` },
+                              ...deepTownsList.map((t) => ({
+                                value: t.name,
+                                label: `${t.name}${t.type ? ` (${t.type})` : ''}`,
+                              })),
+                            ]}
+                            searchable
+                            placeholder="All Towns"
+                            buttonClassName="h-10 text-xs sm:text-sm border-emerald-300 focus:ring-emerald-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">Target Department</label>
+                          <Input
+                            placeholder="All Departments (or specify department)..."
+                            value={deepDepartment}
+                            onChange={(e) => setDeepDepartment(e.target.value)}
+                            className="text-xs sm:text-sm h-10 border-emerald-300 focus-visible:ring-emerald-500"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-700 mb-1">End From</label>
+                            <Input
+                              type="date"
+                              value={bidEndFrom}
+                              onChange={(e) => setBidEndFrom(e.target.value)}
+                              className="text-xs h-10 border-slate-200"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-700 mb-1">End To</label>
+                            <Input
+                              type="date"
+                              value={bidEndTo}
+                              onChange={(e) => setBidEndTo(e.target.value)}
+                              className="text-xs h-10 border-slate-200"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Quick Department Presets */}
+                      <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+                        <span className="font-semibold text-slate-600">Quick Departments:</span>
+                        {[
+                          { id: '', label: '✨ All Departments' },
+                          { id: 'Urban Development and Environment Department', label: 'Urban Development' },
+                          { id: 'Public Health Engineering Department', label: 'Public Health (PHE)' },
+                          { id: 'Public Works Department', label: 'Public Works (PWD)' },
+                          { id: 'Health and Family Welfare Department', label: 'Health & Family' },
+                        ].map((d) => (
+                          <button
+                            key={d.id}
+                            type="button"
+                            onClick={() => setDeepDepartment(d.id)}
+                            className={`px-2.5 py-1 rounded text-[11px] border transition-all ${
+                              deepDepartment === d.id
+                                ? 'bg-emerald-600 text-white border-emerald-600 font-semibold shadow-xs'
+                                : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/50'
+                            }`}
+                          >
+                            {d.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="flex items-center justify-between pt-2 border-t border-slate-100">
                     <div className="text-xs text-slate-500 flex items-center gap-1.5">
                       <Info className="w-4 h-4 text-blue-500" />
-                      <span>Showing real-time results directly from GeM Advance Search engine.</span>
+                      <span>
+                        {searchType === 'deep-town-search'
+                          ? `Scanning ${deepTown === 'ALL' ? `all towns in ${deepDistrict}` : `${deepTown} (${deepDistrict})`} across ${deepDepartment}...`
+                          : 'Showing real-time results directly from GeM Advance Search engine.'}
+                      </span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Button type="button" variant="ghost" onClick={handleReset} className="text-xs h-9">
                         Clear Filters
                       </Button>
-                      <Button type="submit" disabled={loading} className="bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm h-9 px-5">
+                      <Button
+                        type="submit"
+                        disabled={loading}
+                        className={`text-xs sm:text-sm h-9 px-5 transition-all shadow-sm ${
+                          searchType === 'deep-town-search'
+                            ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white ring-1 ring-emerald-500'
+                            : 'bg-blue-600 hover:bg-blue-700 text-white'
+                        }`}
+                      >
                         {loading ? (
                           <>
                             <RefreshCw className="w-3.5 h-3.5 mr-2 animate-spin" />
-                            Searching...
+                            {searchType === 'deep-town-search' ? 'Scanning Bids...' : 'Searching...'}
                           </>
                         ) : (
                           <>
-                            <Search className="w-3.5 h-3.5 mr-2" />
-                            Search Tenders
+                            {searchType === 'deep-town-search' ? (
+                              <>
+                                <Sparkles className="w-3.5 h-3.5 mr-2" />
+                                Deep Scan Bids
+                              </>
+                            ) : (
+                              <>
+                                <Search className="w-3.5 h-3.5 mr-2" />
+                                Search Tenders
+                              </>
+                            )}
                           </>
                         )}
                       </Button>
@@ -1646,12 +1828,22 @@ export default function OpenTendersPage() {
                                   {analysis?.itemTitle || tender.categoryName || 'General Tender Requirement'}
                                 </h3>
 
-                                {placeBadge && (
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-50 border border-blue-200 text-blue-900 font-bold text-xs shadow-xs">
-                                    <MapPin className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />
-                                    <span>{placeBadge}</span>
-                                  </span>
-                                )}
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  {placeBadge && (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-50 border border-blue-200 text-blue-900 font-bold text-xs shadow-xs">
+                                      <MapPin className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />
+                                      <span>{placeBadge}</span>
+                                    </span>
+                                  )}
+                                  {tender.creatorUsername && (
+                                    <span
+                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-mono bg-emerald-50 border border-emerald-200 text-emerald-800 font-medium"
+                                      title={`GeM Buyer Handle: ${tender.creatorUsername}`}
+                                    >
+                                      <span>@{tender.creatorUsername}</span>
+                                    </span>
+                                  )}
+                                </div>
                               </div>
 
                               {tender.items && tender.items.length > 1 && (
@@ -2135,12 +2327,22 @@ export default function OpenTendersPage() {
                                 {analysis?.itemTitle || tender.categoryName}
                               </h3>
 
-                              {placeBadge && (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-50 border border-blue-200 text-blue-900 font-bold text-xs shadow-xs">
-                                  <MapPin className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />
-                                  <span>{placeBadge}</span>
-                                </span>
-                              )}
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {placeBadge && (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-50 border border-blue-200 text-blue-900 font-bold text-xs shadow-xs">
+                                    <MapPin className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />
+                                    <span>{placeBadge}</span>
+                                  </span>
+                                )}
+                                {tender.creatorUsername && (
+                                  <span
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-mono bg-emerald-50 border border-emerald-200 text-emerald-800 font-medium"
+                                    title={`GeM Buyer Handle: ${tender.creatorUsername}`}
+                                  >
+                                    <span>@{tender.creatorUsername}</span>
+                                  </span>
+                                )}
+                              </div>
                             </div>
 
                             {/* Government Hierarchy Breakdown */}

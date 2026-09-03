@@ -938,6 +938,7 @@ export class FirestoreDB {
     const townName = effectiveAnalysis?.townName || existing?.townName || ('townName' in tender ? (tender as any).townName : '');
     const districtName = effectiveAnalysis?.districtName || existing?.districtName || ('districtName' in tender ? (tender as any).districtName : '');
     const placeDisplay = effectiveAnalysis?.placeDisplay || existing?.placeDisplay || ('placeDisplay' in tender ? (tender as any).placeDisplay : '');
+    const creatorUsername = existing?.creatorUsername || tender.creatorUsername || ('creatorUsername' in tender ? (tender as any).creatorUsername : '');
 
     const data: GeMStarredTender = {
       id: docId,
@@ -953,6 +954,7 @@ export class FirestoreDB {
       townName: townName || undefined,
       districtName: districtName || undefined,
       placeDisplay: placeDisplay || undefined,
+      creatorUsername: creatorUsername || undefined,
       buyerStatus: tender.buyerStatus || '',
       bidType: tender.bidType || 1,
       isRA: Boolean(tender.isRA),

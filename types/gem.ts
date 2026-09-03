@@ -1,4 +1,4 @@
-export type GeMSearchType = 'bidNumber' | 'ministry-search' | 'location-search' | 'boq-search' | 'con' | 'boq';
+export type GeMSearchType = 'bidNumber' | 'ministry-search' | 'location-search' | 'boq-search' | 'con' | 'boq' | 'deep-town-search';
 
 export interface GeMSearchFilters {
   searchType: GeMSearchType;
@@ -28,6 +28,12 @@ export interface GeMSearchFilters {
   bidEndFromBoq?: string;
   bidEndToBoq?: string;
 
+  // Deep District & Town Search
+  selectedState?: string;
+  selectedDistrict?: string;
+  selectedTown?: string;
+  targetTowns?: string[];
+
   page?: number;
 }
 
@@ -42,6 +48,10 @@ export interface GeMTender {
   ministryName?: string;
   departmentName?: string;
   buyerStatus?: string;
+  townName?: string;
+  districtName?: string;
+  placeDisplay?: string;
+  creatorUsername?: string;
   bidType: number; // 1: Bid, 2/5: RA
   isRA: boolean;
   isBunch: boolean;
@@ -170,6 +180,7 @@ export interface GeMStarredTender {
   townName?: string;
   districtName?: string;
   placeDisplay?: string;
+  creatorUsername?: string;
   buyerStatus?: string;
   bidType: number;
   isRA: boolean;

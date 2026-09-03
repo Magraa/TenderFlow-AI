@@ -704,6 +704,10 @@ export function AutoScannerModal({ isOpen, onClose, onRefreshData }: AutoScanner
                                   <Sparkles className="w-3 h-3 text-emerald-600 shrink-0" /> Auto-AI
                                 </div>
                               )}
+
+                              <div className="flex items-center gap-1 text-teal-700 font-medium bg-teal-50 border border-teal-200/60 px-1.5 py-0.5 rounded text-[10px]">
+                                <Sparkles className="w-3 h-3 text-teal-600 shrink-0" /> Deep Scan Active
+                              </div>
                             </div>
 
                             {/* Cities badges in card */}
@@ -920,6 +924,14 @@ export function AutoScannerModal({ isOpen, onClose, onRefreshData }: AutoScanner
                         </Button>
                       </div>
                     </div>
+                  </div>
+
+                  {/* Deep Scan Info Banner */}
+                  <div className="p-2.5 rounded-lg bg-teal-50/80 border border-teal-200/80 flex items-start gap-2 text-teal-900">
+                    <Sparkles className="w-4 h-4 text-teal-600 shrink-0 mt-0.5" />
+                    <p className="text-[11px] leading-relaxed">
+                      <strong>Hybrid Deep Scan Active:</strong> The scanner monitors both GeM location indices and department scans to automatically capture constituent local bodies (such as Akoda, Pohari, Magroni, etc.) even when government buyers omit the district/city.
+                    </p>
                   </div>
                 </div>
 

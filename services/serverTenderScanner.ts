@@ -1,5 +1,5 @@
-import { GeMScanProfile, GeMTender, GeMSearchFilters, GeMAIAnalysis } from '@/types/gem';
-import { searchGeMBids } from '@/services/gemScraperService';
+import { GeMScanProfile, GeMTender, GeMAIAnalysis } from '@/types/gem';
+import { searchDeepTownBids } from '@/services/gemScraperService';
 import { analyzeGeMTenderDirectly } from '@/services/gemAnalysisService';
 import { db } from '@/services/db';
 
@@ -57,54 +57,64 @@ export async function runProfileScan(profile: GeMScanProfile): Promise<ScanExecu
 
     const allFetchedBidsMap = new Map<string, GeMTender>();
 
-    // 3. Query GeM API for each city configured
+    // 3. Query GeM for each configured city / district using our Unified Hybrid Engine
+    // (Simultaneously queries GeM location index + Department deep scan across all pages,
+    // ensuring tenders from constituent local bodies like Akoda are never missed,
+    // and filtering out unrelated departments like GAIL when a target department is set)
     for (const city of targetCities) {
-      const filters: GeMSearchFilters = {
-        searchType: 'location-search',
-        state_name_con: profile.consigneeState,
-        city_name_con: city || undefined,
-        department: targetDepartments.length === 1 ? targetDepartments[0] : undefined,
-        ministry: profile.ministry || undefined,
-        buyerState: profile.consigneeState || undefined,
-        category: profile.category || undefined,
-        bidEndFrom: fromDateStr,
-        bidEndTo: toDateStr,
-        bidEndFromCon: fromDateStr,
-        bidEndToCon: toDateStr,
-        bidEndFromMin: fromDateStr,
-        bidEndToMin: toDateStr,
-        page: 1,
-      };
+      if (targetDepartments.length > 0) {
+        for (const dept of targetDepartments) {
+          try {
+            console.log(`[Auto-Scanner] Scanning "${city || profile.consigneeState}" for dept "${dept}"...`);
+            const deepRes = await searchDeepTownBids({
+              searchType: 'deep-town-search',
+              department: dept,
+              selectedState: profile.consigneeState,
+              selectedDistrict: city,
+              selectedTown: 'ALL',
+              category: profile.category || undefined,
+              bidEndFromMin: fromDateStr,
+              bidEndToMin: toDateStr,
+            });
 
-      try {
-        const response = await searchGeMBids(filters);
-        if (response && response.success && Array.isArray(response.bids)) {
-          response.bids.forEach((bid) => {
-            const key = (bid.bidNumber || String(bid.id)).trim().toUpperCase();
-            allFetchedBidsMap.set(key, bid);
-          });
+            if (deepRes && deepRes.success && Array.isArray(deepRes.bids)) {
+              deepRes.bids.forEach((bid) => {
+                const key = (bid.bidNumber || String(bid.id)).trim().toUpperCase();
+                allFetchedBidsMap.set(key, bid);
+              });
+            }
+          } catch (deepErr: any) {
+            console.warn(`[Auto-Scanner] Deep scan error for city "${city}" dept "${dept}":`, deepErr?.message);
+          }
         }
-      } catch (err: any) {
-        console.warn(`[Auto-Scanner] Failed to fetch bids for city "${city}":`, err?.message);
+      } else {
+        // No specific department: scan all departments in this city/district
+        try {
+          console.log(`[Auto-Scanner] Scanning "${city || profile.consigneeState}" for all departments...`);
+          const deepRes = await searchDeepTownBids({
+            searchType: 'deep-town-search',
+            department: '',
+            selectedState: profile.consigneeState,
+            selectedDistrict: city,
+            selectedTown: 'ALL',
+            category: profile.category || undefined,
+            bidEndFromMin: fromDateStr,
+            bidEndToMin: toDateStr,
+          });
+
+          if (deepRes && deepRes.success && Array.isArray(deepRes.bids)) {
+            deepRes.bids.forEach((bid) => {
+              const key = (bid.bidNumber || String(bid.id)).trim().toUpperCase();
+              allFetchedBidsMap.set(key, bid);
+            });
+          }
+        } catch (deepErr: any) {
+          console.warn(`[Auto-Scanner] Deep scan error for city "${city}" (all departments):`, deepErr?.message);
+        }
       }
     }
 
-    let allBids: GeMTender[] = Array.from(allFetchedBidsMap.values());
-
-    // Filter by departments if one or more departments are specified (OR matching)
-    if (targetDepartments.length > 0) {
-      const lowerTerms = targetDepartments.map((d) => d.toLowerCase());
-      const matched = allBids.filter((b) => {
-        const dName = (b.departmentName || '').toLowerCase();
-        const mName = (b.ministryName || '').toLowerCase();
-        const bStatus = (b.buyerStatus || '').toLowerCase();
-        const combined = `${dName} ${mName} ${bStatus}`;
-        return lowerTerms.some((term) => combined.includes(term));
-      });
-      if (matched.length > 0 || allBids.length > 0) {
-        allBids = matched;
-      }
-    }
+    const allBids: GeMTender[] = Array.from(allFetchedBidsMap.values());
 
     // 4. Fetch already starred/saved tenders & analyses to detect brand-new bids
     const existingStarred = (await db.listStarredGeMTenders()) || [];

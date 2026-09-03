@@ -1,4 +1,5 @@
 import { GeMSearchFilters, GeMTender, GeMSearchResponse, GeMDropdownOption } from '@/types/gem';
+import { getSearchTokensForSelection, getTownsForDistrict } from '@/data/stateDistrictTowns';
 
 interface SessionCache {
   cookieStr: string;
@@ -156,6 +157,8 @@ function normalizeDoc(raw: Record<string, any>): GeMTender {
     ? [categoryName]
     : [];
 
+  const creatorUsername = String(unwrap(raw['b.b_created_by'], ''));
+
   return {
     id,
     bidNumber,
@@ -167,6 +170,7 @@ function normalizeDoc(raw: Record<string, any>): GeMTender {
     ministryName,
     departmentName,
     buyerStatus,
+    creatorUsername,
     bidType,
     isRA,
     isBunch,
@@ -194,6 +198,10 @@ function toGeMDateFormat(d?: string): string {
  * Searches GeM open tenders with given filters and pagination.
  */
 export async function searchGeMBids(filters: GeMSearchFilters, isRetry = false): Promise<GeMSearchResponse> {
+  if (filters.searchType === 'deep-town-search') {
+    return await searchDeepTownBids(filters, isRetry);
+  }
+
   try {
     const { cookieStr, csrfToken } = await getGeMSession(isRetry);
 
@@ -298,6 +306,275 @@ export async function searchGeMBids(filters: GeMSearchFilters, isRetry = false):
       success: false,
       totalRecords: 0,
       page: filters.page || 1,
+      pageSize: 10,
+      totalPages: 0,
+      bids: [],
+      error: extractErrorMessage(error),
+    };
+  }
+}
+
+/**
+ * Searches GeM bids using the Deep Town Scan technique (Method A).
+ * Queries department-wide without restricting ministry/state in the GeM Solr query
+ * so that tenders with unlinked state/district (like Akoda) are never omitted.
+ * Concurrently fetches department pages and filters matching buyer usernames/offices.
+ */
+export async function searchDeepTownBids(filters: GeMSearchFilters, isRetry = false): Promise<GeMSearchResponse> {
+  try {
+    const { cookieStr, csrfToken } = await getGeMSession(isRetry);
+    const isAllDept =
+      !filters.department ||
+      filters.department.trim() === '' ||
+      filters.department.trim().toLowerCase() === 'all' ||
+      filters.department.trim().toLowerCase() === 'all departments';
+
+    // If specific department is chosen, query it; if All Departments, query Urban Development for the deep scan
+    // to catch local body omissions while location search brings all departments in that district.
+    const departmentQuery = isAllDept ? 'Urban Development and Environment Department' : filters.department!.trim();
+    const state = filters.selectedState?.trim() || 'Madhya Pradesh';
+    const district = filters.selectedDistrict?.trim() || 'Bhind';
+    const town = filters.selectedTown?.trim() || 'ALL';
+
+    const { townTokens } = getSearchTokensForSelection(state, district, town);
+    const availableTowns = getTownsForDistrict(state, district);
+
+    // If user provided an explicit custom targetTowns array, merge those in
+    if (Array.isArray(filters.targetTowns) && filters.targetTowns.length > 0) {
+      filters.targetTowns.forEach((t) => {
+        if (t && t.trim()) townTokens.push(t.trim().toLowerCase());
+      });
+    }
+
+    let fromDate = toGeMDateFormat(filters.bidEndFromMin || filters.bidEndFrom);
+    let toDate = toGeMDateFormat(filters.bidEndToMin || filters.bidEndTo);
+
+    if (!fromDate || !toDate) {
+      const now = new Date();
+      const past = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+      const future = new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
+      const fmt = (d: Date) => `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
+      if (!fromDate) fromDate = fmt(past);
+      if (!toDate) toDate = fmt(future);
+    }
+
+    const basePayload: Record<string, any> = {
+      searchType: 'ministry-search',
+      ministry: '',
+      buyerState: '',
+      organization: '',
+      department: departmentQuery,
+      category: filters.category || '',
+      bidEndFromMin: fromDate,
+      bidEndToMin: toDate,
+      page: 1,
+    };
+
+    const fetchPage = async (pageNo: number): Promise<any[]> => {
+      try {
+        const payload = { ...basePayload, page: pageNo };
+        const formData = new URLSearchParams();
+        formData.append('payload', JSON.stringify(payload));
+        formData.append('csrf_bd_gem_nk', csrfToken);
+
+        const res = await fetch('https://bidplus.gem.gov.in/search-bids', {
+          method: 'POST',
+          headers: {
+            ...AJAX_HEADERS,
+            Cookie: cookieStr,
+          },
+          body: formData.toString(),
+          signal: AbortSignal.timeout(15000),
+        });
+
+        const json = await res.json().catch(() => ({}));
+        return json?.response?.response?.docs || [];
+      } catch {
+        return [];
+      }
+    };
+
+    // Also prepare parallel GeM Location query for the district / town
+    const locPayload: Record<string, any> = {
+      searchType: 'con',
+      state_name_con: state.toUpperCase(),
+      city_name_con: (town && town !== 'ALL' ? town : district).toUpperCase(),
+      category: filters.category || '',
+      bidEndFromCon: fromDate,
+      bidEndToCon: toDate,
+      page: 1,
+    };
+    const locFormData = new URLSearchParams();
+    locFormData.append('payload', JSON.stringify(locPayload));
+    locFormData.append('csrf_bd_gem_nk', csrfToken);
+
+    const locFetchPromise = fetch('https://bidplus.gem.gov.in/search-bids', {
+      method: 'POST',
+      headers: {
+        ...AJAX_HEADERS,
+        Cookie: cookieStr,
+      },
+      body: locFormData.toString(),
+      signal: AbortSignal.timeout(15000),
+    })
+      .then((r) => r.json())
+      .catch(() => ({}));
+
+    // 1. Fetch Page 1 to know total number of department bids
+    const formData = new URLSearchParams();
+    formData.append('payload', JSON.stringify(basePayload));
+    formData.append('csrf_bd_gem_nk', csrfToken);
+
+    const response = await fetch('https://bidplus.gem.gov.in/search-bids', {
+      method: 'POST',
+      headers: {
+        ...AJAX_HEADERS,
+        Cookie: cookieStr,
+      },
+      body: formData.toString(),
+      signal: AbortSignal.timeout(20000),
+    });
+
+    if (response.status === 422 && !isRetry) {
+      return await searchDeepTownBids(filters, true);
+    }
+
+    const firstPageData = await response.json().catch(() => ({}));
+    const numFound = firstPageData?.response?.response?.numFound || 0;
+    const totalDeptPages = Math.min(Math.ceil(numFound / 10), 25); // Cap at 25 pages (250 bids)
+    const allDocs: any[] = [...(firstPageData?.response?.response?.docs || [])];
+
+    // 2. Concurrently fetch remaining department pages in batches of 5
+    if (totalDeptPages > 1) {
+      const remainingPages: number[] = [];
+      for (let p = 2; p <= totalDeptPages; p++) {
+        remainingPages.push(p);
+      }
+
+      const BATCH_SIZE = 5;
+      for (let i = 0; i < remainingPages.length; i += BATCH_SIZE) {
+        const batch = remainingPages.slice(i, i + BATCH_SIZE);
+        const batchResults = await Promise.all(batch.map((p) => fetchPage(p)));
+        for (const docs of batchResults) {
+          allDocs.push(...docs);
+        }
+      }
+    }
+
+    // Merge in location docs from GeM's internal location index
+    const locData = await locFetchPromise;
+    const locDocs: any[] = locData?.response?.response?.docs || [];
+    for (const ld of locDocs) {
+      // Mark as location-indexed
+      ld._fromLocationIndex = true;
+      allDocs.push(ld);
+    }
+
+    // 3. Filter documents matching town tokens
+    const matchedBids: GeMTender[] = [];
+    const seenBidIds = new Set<string>();
+
+    for (const raw of allDocs) {
+      const idKey = String(unwrap(raw.b_id, ''));
+      if (!idKey || seenBidIds.has(idKey)) continue;
+
+      const creator = String(unwrap(raw['b.b_created_by'], '')).toLowerCase();
+      const rawString = JSON.stringify(raw).toLowerCase();
+
+      let matchedTownName: string | null = null;
+
+      for (const token of townTokens) {
+        const t = token.toLowerCase().trim();
+        if (t.length < 3) continue;
+
+        // Smart regex: check creator username with prefix/boundary support
+        const creatorPattern = new RegExp(`(^|[^a-z0-9]|np|cmo|buycon|buyer|store|se|engineer)${t}([^a-z0-9]|\\d|$)`, 'i');
+        // Word boundary for full text
+        const textPattern = new RegExp(`\\b${t}\\b`, 'i');
+
+        if (creatorPattern.test(creator) || textPattern.test(rawString)) {
+          const canonical = availableTowns.find(
+            (at) => at.name.toLowerCase() === t || (at.aliases || []).includes(t)
+          );
+          matchedTownName = canonical ? canonical.name : (t.charAt(0).toUpperCase() + t.slice(1));
+          break;
+        }
+      }
+
+      // If doc came from GeM location index and no specific town matched
+      if (!matchedTownName && raw._fromLocationIndex) {
+        if (town === 'ALL') {
+          matchedTownName = district;
+        } else {
+          // If specific town was requested and doc came from location query for that town
+          matchedTownName = town;
+        }
+      }
+
+      if (matchedTownName) {
+        // If user specified a specific department, ensure the tender belongs to that department!
+        if (!isAllDept) {
+          const tenderDept = String(unwrap(raw.ba_official_details_deptName, '')).toLowerCase();
+          const tenderMin = String(unwrap(raw.ba_official_details_minName, '')).toLowerCase();
+          const tenderOrg = String(unwrap(raw.ba_official_details_orgName, '')).toLowerCase();
+          const targetDept = filters.department!.trim().toLowerCase();
+
+          const deptMatches =
+            tenderDept.includes(targetDept) ||
+            targetDept.includes(tenderDept) ||
+            tenderMin.includes(targetDept) ||
+            tenderOrg.includes(targetDept);
+
+          const keywords = targetDept
+            .split(/\s+/)
+            .filter((w) => w.length > 3 && !['and', 'the', 'for', 'department'].includes(w));
+          const kwMatches =
+            keywords.length > 0 &&
+            keywords.every(
+              (kw) => tenderDept.includes(kw) || tenderOrg.includes(kw) || tenderMin.includes(kw)
+            );
+
+          if (!deptMatches && !kwMatches) {
+            continue; // Exclude tenders from other departments (e.g. GAIL India Limited)
+          }
+        }
+
+        seenBidIds.add(idKey);
+        const tender = normalizeDoc(raw);
+        tender.townName = matchedTownName;
+        tender.districtName = district;
+        tender.placeDisplay = `${matchedTownName} (${district})`;
+        tender.creatorUsername = creator;
+        matchedBids.push(tender);
+      }
+    }
+
+    // Sort by publish date descending
+    matchedBids.sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
+
+    // Paginate results
+    const page = Number(filters.page) || 1;
+    const pageSize = 10;
+    const totalRecords = matchedBids.length;
+    const totalPages = Math.ceil(totalRecords / pageSize);
+    const pagedBids = matchedBids.slice((page - 1) * pageSize, page * pageSize);
+
+    return {
+      success: true,
+      totalRecords,
+      page,
+      pageSize,
+      totalPages,
+      bids: pagedBids,
+    };
+  } catch (error: any) {
+    if (!isRetry) {
+      return await searchDeepTownBids(filters, true);
+    }
+    return {
+      success: false,
+      totalRecords: 0,
+      page: 1,
       pageSize: 10,
       totalPages: 0,
       bids: [],

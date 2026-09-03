@@ -45,6 +45,11 @@ export async function GET(req: NextRequest) {
     const city_name_con = searchParams.get('city_name_con') || undefined;
     const boqtitle_con = searchParams.get('boqtitle_con') || undefined;
     const bidvalue = searchParams.get('bidvalue') || undefined;
+    const selectedState = searchParams.get('selectedState') || undefined;
+    const selectedDistrict = searchParams.get('selectedDistrict') || undefined;
+    const selectedTown = searchParams.get('selectedTown') || undefined;
+    const targetTownsParam = searchParams.get('targetTowns');
+    const targetTowns = targetTownsParam ? targetTownsParam.split(',').map((s) => s.trim()).filter(Boolean) : undefined;
 
     const filters: GeMSearchFilters = {
       searchType,
@@ -61,6 +66,10 @@ export async function GET(req: NextRequest) {
       city_name_con,
       boqtitle_con,
       bidvalue,
+      selectedState,
+      selectedDistrict,
+      selectedTown,
+      targetTowns,
       bidEndFromMin: bidEndFrom,
       bidEndToMin: bidEndTo,
       bidEndFromCon: bidEndFrom,
